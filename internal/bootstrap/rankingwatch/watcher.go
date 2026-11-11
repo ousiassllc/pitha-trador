@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
@@ -53,8 +54,16 @@ type Watcher struct {
 	Ingester  Ingester
 	List      *Watchlist
 	// MaxWatched is the watch list cap (broker.Capabilities.MaxStreamSymbols);
-	// zero means DefaultMaxWatched.
+	// zero means DefaultMaxWatched. It is the broker's hard limit: Settings can
+	// only lower the size below it, never raise it.
 	MaxWatched int
+	// Settings reads the Settings screen's watch controls (issue #1055) at the
+	// start of every cycle, so a saved change applies from the next one; nil
+	// means the plain MaxWatched and no observation symbol. The watch list size
+	// is Settings().MaxWatched limited to MaxWatched; the observation symbols
+	// (only while their switch is on) take the slots after the held symbols, so
+	// the list never exceeds that size.
+	Settings func(ctx context.Context) watchsettings.Settings
 	// Open reports whether t is inside a trading session; outside it no
 	// ranking is requested and PUSH registration and market-data ingestion
 	// cover the held symbols only, while the candidate list (List) keeps
@@ -84,7 +93,8 @@ func (w *Watcher) Cycle(ctx context.Context) {
 func (w *Watcher) cycle(ctx context.Context) {
 	now := w.now()
 	start := time.Now()
-	w.selector.Max = w.MaxWatched
+	limit, observed := w.watchControls(ctx)
+	w.selector.Max = limit
 	stocks, err := w.Universe.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -98,6 +108,12 @@ func (w *Watcher) cycle(ctx context.Context) {
 	}
 
 	held := w.heldSymbols(ctx)
+	if w.Settings != nil {
+		// A lowered Settings size never drops a held symbol from the watch
+		// list: its price feeds the position's exit, so the floor is the
+		// held count (up to the broker's cap).
+		w.selector.Max = max(w.selector.Max, min(len(unique(held)), w.brokerCap()))
+	}
 	var (
 		res            rankingResult
 		watch, screen  []string
@@ -108,12 +124,14 @@ func (w *Watcher) cycle(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		watch, added, removed = w.selector.Update(now, held, res.symbols)
+		watch, added, removed = w.selector.Update(now, pinned(held, observed, byCode), res.symbols)
 		screen = watch
 	} else {
 		// No ranking is requested outside the session: PUSH registration and
 		// market-data ingestion shrink to the held symbols, but the candidate
-		// list keeps the last watch list (screened from the stored data).
+		// list keeps the last watch list (screened from the stored data). The
+		// observation-only symbols (issue #1055) are not held and need no data
+		// outside the session, so they take no slot here.
 		res.offSession = true
 		watch, screen = w.selector.Retain(held)
 	}
@@ -121,6 +139,42 @@ func (w *Watcher) cycle(ctx context.Context) {
 	w.register(ctx, now, watch)
 	w.enqueue(ctx, now, watch, byCode)
 	w.health.report(now, res, len(held), len(watch), added, removed, time.Since(start))
+}
+
+// watchControls returns this cycle's watch list size (the Settings value
+// limited to the broker's cap MaxWatched) and the observation-only symbols.
+func (w *Watcher) watchControls(ctx context.Context) (limit int, observed []string) {
+	limit = w.MaxWatched
+	if w.Settings == nil {
+		return limit, nil
+	}
+	brokerCap := w.brokerCap()
+	set := w.Settings(ctx)
+	return watchsettings.ClampWatched(set.MaxWatched, brokerCap), set.Observed()
+}
+
+// brokerCap is the broker's watch list limit (MaxWatched, default 45).
+func (w *Watcher) brokerCap() int {
+	if w.MaxWatched <= 0 {
+		return DefaultMaxWatched
+	}
+	return w.MaxWatched
+}
+
+// pinned is the symbols that keep fixed slots: the held ones first, then the
+// observation-only ones the universe can ingest (Selector.Update truncates at
+// its cap, so the observation symbols are the first to give way).
+func pinned(held, observed []string, byCode map[string]domain.Instrument) []string {
+	if len(observed) == 0 {
+		return held
+	}
+	out := slices.Clone(held)
+	for _, sym := range observed {
+		if _, ok := byCode[sym]; ok {
+			out = append(out, sym)
+		}
+	}
+	return out
 }
 
 // heldSymbols reads the held symbols; a failed read keeps the previous ones,

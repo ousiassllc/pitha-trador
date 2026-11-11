@@ -127,6 +127,11 @@ type ScoutResponse struct {
 	AbnormalActivity float64  `json:"abnormal_activity"`
 	ModelID          string   `json:"model_id"`
 	RequestCost      *float64 `json:"request_cost,omitempty"`
+	// InputTokens and RequestBytes are the call's usage (json:"-", like
+	// TraderResponse's): the observation cost cap prices them
+	// (observation.Gate).
+	InputTokens  int `json:"-"`
+	RequestBytes int `json:"-"`
 }
 
 // TraderRequest is the input of Client.Trader: the same market state

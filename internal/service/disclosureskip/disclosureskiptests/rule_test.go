@@ -1,4 +1,4 @@
-package disclosureskip_test
+package disclosureskiptests
 
 import (
 	"testing"

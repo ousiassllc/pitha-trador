@@ -1,6 +1,7 @@
 package jev
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -129,6 +130,7 @@ type Scout struct {
 	thresholds     config.JevScoutConfig
 	news           NewsSource
 	recorder       ScoutRecorder
+	observation    ObservationGate
 	now            func() time.Time
 	snapshotMaxAge time.Duration
 }
@@ -152,6 +154,7 @@ func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots
 		thresholds:     thresholds,
 		news:           o.news,
 		recorder:       o.recorder,
+		observation:    o.observation,
 		now:            o.now,
 		snapshotMaxAge: o.snapshotMaxAge,
 	}
@@ -168,6 +171,14 @@ func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots
 // block Jev from being called (functional.md FR-RAG-4's cold-start
 // tolerance extends to any RAG failure, not only an empty index).
 func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, bool, error) {
+	decision, _, passed, err := s.evaluate(ctx, instrumentID, state, true)
+	return decision, passed, err
+}
+
+// evaluate is Evaluate that also returns Jev's raw answer (an observation call's
+// cost). indexRAG=false (observation, issue #1055) keeps the decision out of
+// the similar-case index the Trader prompt searches.
+func (s *Scout) evaluate(ctx context.Context, instrumentID int64, state ScoutState, indexRAG bool) (domain.JevDecision, ScoutResponse, bool, error) {
 	state = withNewsContext(state, s.news)
 	featureInput := ragFeatureInput(state)
 
@@ -178,17 +189,17 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
-		return domain.JevDecision{}, false, fmt.Errorf("jev: encode scout state for %q: %w", state.Symbol, err)
+		return domain.JevDecision{}, ScoutResponse{}, false, fmt.Errorf("jev: encode scout state for %q: %w", state.Symbol, err)
 	}
 
 	resp, latency, err := s.client.Scout(ctx, ScoutRequest{QuestionVersion: ScoutQuestionVersion, State: state, RAGContext: ragContext})
 	if err != nil {
-		return domain.JevDecision{}, false, fmt.Errorf("jev: scout evaluation for %q: %w", state.Symbol, err)
+		return domain.JevDecision{}, ScoutResponse{}, false, fmt.Errorf("jev: scout evaluation for %q: %w", state.Symbol, err)
 	}
 
 	responseJSON, err := json.Marshal(resp)
 	if err != nil {
-		return domain.JevDecision{}, false, fmt.Errorf("jev: encode scout response for %q: %w", state.Symbol, err)
+		return domain.JevDecision{}, ScoutResponse{}, false, fmt.Errorf("jev: encode scout response for %q: %w", state.Symbol, err)
 	}
 
 	decision := domain.JevDecision{
@@ -209,14 +220,16 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 
 	saved, err := s.decisions.Insert(ctx, decision)
 	if err != nil {
-		return domain.JevDecision{}, false, fmt.Errorf("jev: persist scout decision for %q: %w", state.Symbol, err)
+		return domain.JevDecision{}, ScoutResponse{}, false, fmt.Errorf("jev: persist scout decision for %q: %w", state.Symbol, err)
 	}
 
-	if err := s.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
-		slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
+	if indexRAG {
+		if err := s.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
+			slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
+		}
 	}
 
-	return saved, Passes(s.thresholds, resp), nil
+	return saved, resp, Passes(s.thresholds, resp), nil
 }
 
 // HandleJob processes one jev-scout queue job (ScoutJobPayload): it loads
@@ -237,6 +250,14 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return fmt.Errorf("jev: decode scout job payload: %w", err)
 	}
 
+	observed, err := s.isObserved(ctx, payload.Symbol)
+	if err != nil {
+		// Unknown standing: not "not observed" (it could be observation-only and
+		// must not reach an entry); skipped for this round, the next job re-reads it.
+		slog.Warn("jev: skip scout for this round, the observation standing could not be read; no entry from this round", "symbol", payload.Symbol, "error", err)
+		return cmp.Or(ctx.Err(), jobqueue.Skip(ObservationUnknownSkip)) // shutdown is not a skip
+	}
+
 	snapshots, err := s.snapshots.ListByInstrument(ctx, payload.InstrumentID, 1)
 	if err != nil {
 		return fmt.Errorf("jev: load latest snapshot for %q: %w", payload.Symbol, err)
@@ -249,6 +270,9 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return nil
 	}
 
+	if observed {
+		return s.handleObservation(ctx, payload, snapshots[0])
+	}
 	_, passed, err := s.Evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snapshots[0], s.now().UTC()))
 	s.record(payload.Symbol, passed, err)
 	if err != nil {

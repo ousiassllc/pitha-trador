@@ -40,6 +40,8 @@
 
 上限: 窓の中の学習行が 20,000 行（`metalabeldiag.MaxReadinessRows`）を超えたら `limit_exceeded`（部分の数字は返さない。期間を狭める）。応答時間は索引検索 1 回＋プロセス内の組み立てで、30 日・90 日の計測は `metalabeltests/readiness_perf_test.go`（`go test -v` が所要時間と `EXPLAIN QUERY PLAN` を出す）。
 
+見送り候補の反実仮想ラベル（issue #1052）: 夜間再学習が Settings の `metalabel.include_skipped_labels`（既定オフ）で`counterfactual_labels`の行を学習に足しているときも、この結果の件数・`funnel`は従来の学習行（`calibration_outcomes` の v2 ラベル）だけを数え、足した行は含めない（入出力の形は変えない）。
+
 返さない: `jev_decisions` の `state_json` / `response_json` と特徴量の値そのもの（特徴量名と件数だけ）、`calibration_outcomes` の価格・リターン、`metalabel_models` の中身。
 
 ### 3.24 `jev_models`
@@ -75,3 +77,4 @@ Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_
 | 1.2 | 2026-10-23 | §3.24 `jev_models` の「返さない」を実装に合わせて訂正。「`JEV_MODEL` を含む秘密は DB にも無い」は #885 以降は誤りで、モデル名は `jev_model_changes` に平文で残る（`secrets` の値は返さない。`jev_models` はこの表を読まず `jev_decisions` 由来のモデル ID だけを返す） | issue #885 |
 | 1.3 | 2026-10-22 | §3.23 に `excluded_prompt_versions` を追加。`funnel` と学習行は、再学習と同じくライブの Trader の版と同じコホートの判断だけを数える | issue #881 |
 | 1.4 | 2026-11-04 | §3.23 に `jev_model_id` を追加。再学習の学習・OOS と `funnel` の件数を、最後に答えた Jev の版だけに絞る（夜間再学習 `lr-20261104-090542` が train=1.13・OOS=1.14 混在で `llm_model_changed` になった件） | メタモデルの Jev 版絞り込み |
+| 1.5 | 2026-11-11 | §3.23 に、再学習が見送り候補の反実仮想ラベルを足していても（`metalabel.include_skipped_labels` オン）この結果は従来の学習行だけを数える旨を追記（入出力は変更なし） | issue #1052 |

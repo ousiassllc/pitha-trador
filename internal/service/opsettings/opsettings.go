@@ -26,6 +26,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 )
 
 // Store is the runtime_settings access Service needs;
@@ -94,8 +95,8 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 // ranking-watch snapshot max age, the log level and retention, the daily entry-halt thresholds, the
 // Paper operating capital and exposure limits, the
 // triple-barrier label settings, the meta-labeling settings, the market
-// regime settings, the broker settings, then the 立花 監視銘柄ソース
-// settings.
+// regime settings, the broker settings, the ranking watch size and
+// observation settings (issue #1055), then the 立花 監視銘柄ソース settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
@@ -114,6 +115,7 @@ func Keys() []string {
 	keys = append(keys, config.BrokerSettingKeys()...)
 	keys = append(keys, paperbootstrapsettings.Keys()...)
 	keys = append(keys, sleepguardsettings.Keys()...)
+	keys = append(keys, watchsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
@@ -131,6 +133,7 @@ const (
 	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
 	kindSource     // a 立花 監視銘柄ソース setting validated by tachibanasource.NormalizeTachibanaSourceSetting
 	kindMetaLabel  // a meta-labeling setting (JSON string, or the minimum EV number) validated by metalabelsettings
+	kindWatch      // the observation-only symbols (JSON string) validated by watchsettings
 	kindLog        // the log level (JSON string) or the log retention in days (JSON integer), validated by logsettings
 )
 
@@ -148,9 +151,11 @@ func kindOf(key string) kind {
 		return kindMetaLabel
 	case logsettings.IsKey(key):
 		return kindLog
+	case key == watchsettings.KeyObservationSymbols:
+		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || watchsettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -262,7 +267,7 @@ func decodeText(key, raw string) (string, error) {
 	switch kindOf(key) {
 	case kindEntryQuality:
 		return decodeString(key, raw)
-	case kindBroker, kindSource, kindMetaLabel, kindLog:
+	case kindBroker, kindSource, kindMetaLabel, kindLog, kindWatch:
 		return decodeBroker(key, raw)
 	}
 	var f float64

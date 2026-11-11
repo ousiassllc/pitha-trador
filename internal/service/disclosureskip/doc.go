@@ -16,7 +16,13 @@
 // hands a copy of each fetch to a background writer through a bounded queue
 // (store.go); Evaluator (evaluator.go) later reads the stored disclosures and
 // fetches and the jev_decisions rows (read only) and stores one verdict per
-// decision. No request is added to the feed, nothing is written from the
-// trading path, and a failure here is only logged: News Ingest's results,
-// Policy, Risk and Execution never see this package.
+// decision. A decision waits for a covering fetch for 60 minutes of trading
+// session time (session.go), so the lunch break and the close do not use the
+// wait up, and an unknown verdict stores its finer reason (rule.go,
+// UnknownDetail). News Ingest polls only the screener candidates and open
+// positions, so Followup (followup.go, issue #1053) makes the one request a
+// still-waiting decision needs for a symbol that dropped out of those, through
+// the RecordingFeed and without touching News Ingest's cache or Luna. Nothing
+// is written from the trading path, and a failure here is only logged: News
+// Ingest's results, Policy, Risk and Execution never see this package.
 package disclosureskip

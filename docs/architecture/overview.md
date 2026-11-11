@@ -98,6 +98,7 @@ pitha-trador/
 │   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
 │   │   ├── judgement/            # jev_decisions / policy_proposals（`DecisionRepository`, `ProposalRepository`）
 │   │   ├── calibration/          # calibration_outcomes / calibration_label_skips（`CalibrationRepository`。`judgement`から分離: linterlyのディレクトリ2000行制限、issue #601）
+│   │   ├── counterlabel/         # counterfactual_labels（`Repository`。ガードで見送った候補の反実仮想ラベル。取引に使わず、読むのは夜間再学習と記録部品だけ、issue #1052）
 │   │   ├── metalabel/            # metalabel_models / metalabel_predictions（`Repository`。メタラベリングのモデル版・OOS指標と判断ごとの予測、issue #757）
 │   │   ├── trading/              # trade_signals / paper_orders / positions（`SignalRepository`, `OrderRepository`, `PositionRepository`）
 │   │   ├── system/               # kill_switch_events / runtime_settings / secrets（`KillSwitchRepository`, `RuntimeSettingsRepository`, `SecretsRepository`）
@@ -127,7 +128,7 @@ pitha-trador/
 │   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）
 │   │   ├── symbolcache/          # ブローカー銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（`broker.SymbolInfoSource`。issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
-│   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト, evalflow/=Scout/Trader/News評価呼び出しテスト・#658）
+│   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト, evalflow/=Scout/Trader/News評価呼び出しテスト・#658、observation/=観察用銘柄のScout呼び出しの1日費用上限・失敗上限（`Gate`。通常の取引経路は参照しない。#1055））
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
 │   │   ├── policy/                # Policy Engine
 │   │   ├── risk/                  # Risk Engine（Kill Switch含む）。`Engine`のメソッド群（Check・状態遷移・監視・警告）は結合が強いため直下の1パッケージに保つ（#247）
@@ -149,7 +150,7 @@ pitha-trador/
 │   │   │   ├── closeflow/         # テスト専用: `Engine.Close`/`CloseAll`の回帰テスト（行数上限のためexecutionから分離、#248）
 │   │   │   └── latestdecision/    # テスト専用: 最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`と`execution.Engine.State`の`LatestTraderDecision`）の回帰テスト（行数上限のためexecution/judgementから分離、#496/#497/#499）
 │   │   ├── fillmodel/             # 約定モデル（FR-ENTRY-8。呼値・スプレッド・滑り・手数料。Paper Trading(`execution`)とBacktest Engineが共用する本番コード、#509。コストの値はSettingsの`cost.*`（`config/costsettings`、`SettingsSource`が読む）が唯一の出所で、ラベルのコスト（`calibration`）も同じ設定に従う、#779）
-│   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出（ラベル基準と実出口の整合の検知・比較は別パッケージ`exitalign/`、#774）
+│   │   ├── calibration/           # Outcome labeling（見送り候補の反実仮想ラベルは`counterfactual/`が同じバリア計算`Labeler.Compute`で記録、issue #1052）・Brier/Log Loss算出（ラベル基準と実出口の整合の検知・比較は別パッケージ`exitalign/`、#774）
 │   │   ├── metalabel/             # メタラベリングのモデル版・OOS指標の保存（`Store.SaveModel`/`LatestActiveModel`）と判断ごとの予測の記録（`RecordPrediction`）。有効モデル無しは見送り（issue #757）。二次モデルの純粋なコア（特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・EV算出と`Decide`のtake/skip・サイズ比（記録専用、issue #781）。issue #758）も同パッケージ
 │   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト。出口判定は`execution/exitcond`をPaperと共用、#775）（replayflow/=リプレイのテスト・#658、parity/=Paper実績との突き合わせ検証・metahistory/=その時点のメタモデル・simrisk/=Risk Engine再現・sensitivity/=コスト感度表・#779）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ（jevflow/=Jev経由ロール解決のテスト・#658）

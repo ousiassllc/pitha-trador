@@ -48,6 +48,8 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 		LiquidityOk:      result.Noul(qLiquidityOk),
 		AbnormalActivity: result.Noul(qAbnormalActivity),
 		ModelID:          result.Model,
+		InputTokens:      result.Usage.InputTokens,
+		RequestBytes:     result.RequestBytes,
 	}, latency, nil
 }
 

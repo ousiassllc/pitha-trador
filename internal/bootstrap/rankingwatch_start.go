@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 )
 
 // buildRankingWatch builds the ranking-driven watch list (functional.md
@@ -34,6 +35,8 @@ func (s *Services) buildRankingWatch() {
 		List:       s.watchlist,
 		Open:       marketcalendarOpen,
 		MaxWatched: caps.MaxStreamSymbols,
+		// Settings can lower the size below the broker's cap and add observation symbols (#1055); read every cycle.
+		Settings: func(ctx context.Context) watchsettings.Settings { return watchsettings.Load(ctx, s.Settings) },
 	}
 }
 
@@ -45,7 +48,7 @@ func (s *Services) startRankingWatch(ctx context.Context) {
 		return
 	}
 	slog.Info("bootstrap: ranking watch enabled (scan.full_scan_enabled is not true): the broker ranking drives the stream watch list",
-		"interval_seconds", int(rankingwatch.DefaultInterval/time.Second), "max_watched", s.Broker.Capabilities().MaxStreamSymbols,
+		"interval_seconds", int(rankingwatch.DefaultInterval/time.Second), "max_watched", watchsettings.ClampWatched(watchsettings.Load(ctx, s.Settings).MaxWatched, s.Broker.Capabilities().MaxStreamSymbols),
 		"max_replace_per_cycle", rankingwatch.MaxReplacePerCycle, "min_hold_minutes", int(rankingwatch.MinHold/time.Minute))
 	s.wg.Add(1)
 	go func() { defer s.wg.Done(); s.rankingWatcher.Run(ctx, rankingwatch.DefaultInterval) }()

@@ -27,6 +27,7 @@ const (
 	codeNoPaperTrades   = "no_paper_trades_today"
 	codeNoActiveModel   = "no_active_model"
 	codeMissingSession  = "missing_session"
+	codePartialSession  = "partial_session"
 	codeDailyGuard      = "daily_guard_halted"
 	codeKillSwitch      = "kill_switch_active"
 	codeRetrainSkipped  = "retrain_skipped"
@@ -40,7 +41,7 @@ func AttentionCodes() []string {
 	return []string{
 		codeNoPaperTrades, codeNoActiveModel,
 		domain.HealthAlertKabuNotLoggedIn, domain.HealthAlertKabuUnreachable, domain.HealthAlertMarketDataIdle,
-		codeMissingSession, codeDailyGuard, codeKillSwitch, codeRetrainSkipped, codeProposalStalled,
+		codeMissingSession, codePartialSession, codeDailyGuard, codeKillSwitch, codeRetrainSkipped, codeProposalStalled,
 	}
 }
 
@@ -207,6 +208,8 @@ func codeItem(code string, h Health) (homepanels.AttentionItem, bool) {
 		}, true
 	case codeMissingSession:
 		return warn("市況データが欠けている立会日があります: "+strings.Join(h.MissingSessionDates, ", "), "稼働ログで、その日のデータ取得ジョブを確認してください。", "", linkActivity)
+	case codePartialSession:
+		return warn("市況データが途中までしかない立会日があります: "+partialSessionDates(h.IntradayGaps), "開始が遅れた・場中に途切れた・前場か後場が無い日です。アプリが止まっていなかったか稼働ログで確認してください。", partialSessionHelp, linkActivity)
 	case codeDailyGuard:
 		return warn("本日の新規エントリーを停止しました（日次ガード）", "", dailyGuardHelp, linkDailyGuard)
 	case codeKillSwitch:
@@ -217,6 +220,19 @@ func codeItem(code string, h Health) (homepanels.AttentionItem, bool) {
 		return warn(fmt.Sprintf("処理が止まっている AI の注文提案が %d 件あります", h.StalledProposals), "一覧で状態を確認してください。", "受付後に処理が進んでいない提案です。", linkProposals)
 	}
 	return homepanels.AttentionItem{}, false
+}
+
+// partialSessionHelp explains the gap codes health_today reports.
+const partialSessionHelp = "late_start=開始の遅れ、morning_missing=前場が無い、afternoon_missing=後場が無い、mid_session_gap=場中の途切れ、early_end=早い終わり。" +
+	"スリープ防止（設定）は、PC のスリープによる欠けを防ぐための選択肢です（既定はオフ）。"
+
+// partialSessionDates lists the days with their gap codes, "2026-10-22 (morning_missing)".
+func partialSessionDates(gaps []IntradayGap) string {
+	parts := make([]string, len(gaps))
+	for i, g := range gaps {
+		parts[i] = g.Date + " (" + strings.Join(g.Codes, ", ") + ")"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // retrainDetail words why the newest nightly retraining was skipped.

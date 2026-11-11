@@ -61,6 +61,11 @@ type fakeSource struct {
 	// the version 2 ones (len(rows)); countErr fails the count.
 	v1Rows   int
 	countErr error
+	// skipped are the counterfactual labels of skipped candidates
+	// ListTrainingRowsWithSkipped adds to rows (issue #1052); withSkipped counts
+	// the calls, so a test can tell which listing a training used.
+	skipped     []repo.TrainingRow
+	withSkipped int
 }
 
 func (f *fakeSource) CountLabeledDecisions(context.Context, time.Time, time.Time) (repo.LabelVersionCounts, error) {
@@ -70,6 +75,12 @@ func (f *fakeSource) CountLabeledDecisions(context.Context, time.Time, time.Time
 func (f *fakeSource) ListTrainingRows(_ context.Context, from, to time.Time) ([]repo.TrainingRow, error) {
 	f.from, f.to = from, to
 	return f.rows, f.err
+}
+
+func (f *fakeSource) ListTrainingRowsWithSkipped(_ context.Context, from, to time.Time) ([]repo.TrainingRow, error) {
+	f.from, f.to = from, to
+	f.withSkipped++
+	return append(append([]repo.TrainingRow(nil), f.rows...), f.skipped...), f.err
 }
 
 type failingSaver struct{ err error }

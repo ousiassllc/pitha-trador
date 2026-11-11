@@ -22,6 +22,7 @@ type options struct {
 	recorder       ScoutRecorder
 	now            func() time.Time
 	snapshotMaxAge time.Duration
+	observation    ObservationGate // Scout-only (issue #1055)
 	// promptSettings and shadow are Trader-only (issue #872).
 	promptSettings jevshadowsettings.Store
 	shadow         ShadowSubmitter
@@ -54,6 +55,15 @@ func WithClock(now func() time.Time) Option {
 // issue #686). Scout only.
 func WithSnapshotMaxAge(d time.Duration) Option {
 	return func(o *options) { o.snapshotMaxAge = d }
+}
+
+// WithObservation makes Scout.HandleJob treat the symbols the gate names as
+// observation-only (issue #1055): it still asks Jev Scout, within the gate's
+// daily cost cap, but never enqueues the jev-trader job, so such a symbol can
+// never reach the Policy Engine, an order, Paper or Live. Scout only; without
+// it every symbol is handled as before.
+func WithObservation(gate ObservationGate) Option {
+	return func(o *options) { o.observation = gate }
 }
 
 // ScoutRecorder is told each Jev Scout verdict as it is reached, so the

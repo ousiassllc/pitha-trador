@@ -10,7 +10,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
-// Store reads and writes the disclosure skip tables (migration 000049) and
+// Store reads and writes the disclosure skip tables (migrations 000049 and
+// 000051) and
 // reads jev_decisions. It never writes anything but those tables.
 type Store struct {
 	db *sql.DB
@@ -179,6 +180,25 @@ WHERE symbol = ? AND fetched_at >= ? AND fetched_at <= ? ORDER BY fetched_at LIM
 	return out, nil
 }
 
+// HasSuccessfulFetch reports whether a successful fetch of symbol started at or
+// after from. Whether it covers a decision's window is the rule's business
+// (Evaluate); a fetch that did not cover it (the item limit) is not made
+// better by fetching again, so this is what tells the follow-up fetcher that
+// one more request would add nothing.
+func (s *Store) HasSuccessfulFetch(ctx context.Context, symbol string, from time.Time) (bool, error) {
+	var found int
+	err := s.db.QueryRowContext(ctx, `
+SELECT 1 FROM disclosure_fetches WHERE symbol = ? AND fetched_at >= ? AND outcome = 'ok' LIMIT 1`,
+		symbol, sqlutil.FormatTime(from)).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("disclosureskip: look up a successful fetch: %w", err)
+	}
+	return true, nil
+}
+
 // SaveRecord stores the verdict of d and its matches in one transaction. A
 // decision that already has a record is left as it is.
 func (s *Store) SaveRecord(ctx context.Context, d Decision, res Result, evaluatedAt time.Time) (err error) {
@@ -192,20 +212,23 @@ func (s *Store) SaveRecord(ctx context.Context, d Decision, res Result, evaluate
 		}
 	}()
 
-	var reason, covered sql.NullString
+	var reason, detail, covered sql.NullString
 	if res.Reason != "" {
 		reason = sql.NullString{String: string(res.Reason), Valid: true}
+	}
+	if res.Detail != "" {
+		detail = sql.NullString{String: string(res.Detail), Valid: true}
 	}
 	if res.CoveredBy != nil {
 		covered = sql.NullString{String: sqlutil.FormatTime(*res.CoveredBy), Valid: true}
 	}
 	var recordID int64
 	err = tx.QueryRowContext(ctx, `
-INSERT INTO disclosure_skip_records (jev_decision_id, symbol, decided_at, verdict, unknown_reason, window_from, covered_by_fetch_at, rule_version, evaluated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO disclosure_skip_records (jev_decision_id, symbol, decided_at, verdict, unknown_reason, unknown_detail, window_from, covered_by_fetch_at, rule_version, evaluated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (jev_decision_id) DO NOTHING
 RETURNING id`,
-		d.ID, d.Symbol, sqlutil.FormatTime(d.At), string(res.Verdict), reason, sqlutil.FormatTime(res.WindowFrom), covered, RuleVersion,
+		d.ID, d.Symbol, sqlutil.FormatTime(d.At), string(res.Verdict), reason, detail, sqlutil.FormatTime(res.WindowFrom), covered, RuleVersion,
 		sqlutil.FormatTime(evaluatedAt)).Scan(&recordID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return tx.Commit() // already recorded

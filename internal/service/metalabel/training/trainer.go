@@ -23,6 +23,10 @@ const DefaultLookback = 90 * 24 * time.Hour
 // implements it.
 type TrainingSource interface {
 	ListTrainingRows(ctx context.Context, from, to time.Time) ([]repo.TrainingRow, error)
+	// ListTrainingRowsWithSkipped is ListTrainingRows plus the counterfactual
+	// labels of skipped candidates (issue #1052); Train reads it only while the
+	// Settings switch metalabel.include_skipped_labels is on.
+	ListTrainingRowsWithSkipped(ctx context.Context, from, to time.Time) ([]repo.TrainingRow, error)
 	CountLabeledDecisions(ctx context.Context, from, to time.Time) (repo.LabelVersionCounts, error)
 }
 
@@ -187,7 +191,12 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	if err != nil {
 		return repo.Model{}, err
 	}
-	stored, err := t.source.ListTrainingRows(ctx, from, now)
+	list := t.source.ListTrainingRows
+	if settings.IncludeSkippedLabels { // off by default: selection bias (issue #1052)
+		list = t.source.ListTrainingRowsWithSkipped
+		slog.WarnContext(ctx, "metalabel: "+metalabelsettings.KeyIncludeSkippedLabels+" is on: training with the counterfactual labels of skipped candidates; adoption, AUC and EV describe a mixed population")
+	}
+	stored, err := list(ctx, from, now)
 	if err != nil {
 		return repo.Model{}, fmt.Errorf("metalabel: load training rows: %w", err)
 	}

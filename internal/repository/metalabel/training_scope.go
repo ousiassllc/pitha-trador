@@ -27,6 +27,12 @@ type TrainingScope struct {
 	// (training.cutoffGate) would reject the result as llm_model_changed.
 	// Empty: every model.
 	JevModelID string
+	// IncludeSkippedLabels adds, to the rows of ListTrainingRowsFrom, the
+	// counterfactual labels of skipped candidates (counterfactual_labels, issue
+	// #1052). false (the zero value, and the default of the Settings switch
+	// metalabel.include_skipped_labels) leaves the row set exactly as it was.
+	// It is not a SQL condition: Where ignores it.
+	IncludeSkippedLabels bool
 }
 
 // ResolveTrainingScope returns the scope of the decisions made before to:

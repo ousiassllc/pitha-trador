@@ -1,6 +1,9 @@
 package sessiondiag
 
-import "github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessionrecord"
+)
 
 // MaxDays is the longest span session_diagnostics reads: the last this-many
 // JST days of the period (issue #850). A longer period (the default is 30
@@ -34,6 +37,10 @@ const (
 	// its watch list in memory and never writes watch_lists, so the empty table
 	// says nothing about the runtime watch list (issue #914).
 	ObsWatchListNotApplicable = "watch_list_not_applicable"
+	// ObsIntradayGap: the day's record (Day.Recorded) shows an incomplete
+	// session although snapshots exist: a missing 前場/後場, a late start, a long
+	// hole or an early end (issue #1054; the codes are in Recorded.gap_codes).
+	ObsIntradayGap = "intraday_gap"
 	// ObsOtherQueuesIdle: no job of any other queue finished on the day,
 	// which is what a stopped app looks like.
 	ObsOtherQueuesIdle = "other_queues_idle"
@@ -81,8 +88,15 @@ type Day struct {
 	// succeeded-job retention has deleted them).
 	OtherQueueJobsFinished *int `json:"other_queue_jobs_finished"`
 	// WatchList is null only when it could not be read in time (Incomplete).
-	WatchList    *WatchListDay `json:"watch_list"`
-	Observations []string      `json:"observations"`
+	WatchList *WatchListDay `json:"watch_list"`
+	// Recorded is the day's record the app made after the close
+	// (session_diagnostics_daily, issue #1054): gap kind and codes, first and
+	// last snapshot, and the warning codes seen that day. It outlives the job
+	// retention, so it is present when the counts above are null. Null when
+	// the day was not recorded (or, with Incomplete naming "daily_records",
+	// not read in time).
+	Recorded     *sessionrecord.Diagnostic `json:"recorded"`
+	Observations []string                  `json:"observations"`
 }
 
 // Retention are the retention windows that make a count null.
@@ -115,7 +129,7 @@ type Diagnostics struct {
 	// items listed in Incomplete were not read, and the fields they feed are
 	// null (a null is then "not read", not "deleted by the retention").
 	// Incomplete names them: "current", "market_data_jobs", "other_queue_jobs",
-	// "watch_lists", "snapshot_rows:<JST date>" and
+	// "watch_lists", "daily_records", "snapshot_rows:<JST date>" and
 	// "succeeded_without_snapshot:<JST date>" and "broker_provider". Both are empty/false when
 	// everything was read.
 	TimedOut   bool     `json:"timed_out"`
@@ -124,6 +138,7 @@ type Diagnostics struct {
 
 const sessionDiagnosticsNote = "Counts come from the database only. The kabu login state and app starts of past days are not stored " +
 	"(health_alerts holds the alerts active now, health_alert_checks only the last check): see current, and read " +
+	"recorded (the daily record the app keeps past the job retention: gap kind and codes, the warning codes it saw and how many session minutes it was watching) and " +
 	"other_queue_jobs_finished and market_data_jobs as indirect signs of whether the app ran. A null count was deleted by the retention, unless timed_out is true and incomplete names it."
 
 // jstDay is the JST date of a stored finished_at, as an SQL expression.

@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -40,6 +41,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/observation"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
@@ -116,8 +118,8 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 
 	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
-	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath)
 	s.newsEnabled = feedOn && luna.Configured()
+	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath, s.newsEnabled)
 	newswire.LogIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
 	newsOpts := []newsfeed.Option{newsfeed.WithSessionGate(marketcalendarOpen), newsfeed.WithErrorObserver(s.Activity.ObserveNewsFeedError)}
@@ -132,7 +134,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots, rag.WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
-		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
+		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener), jev.WithObservation(observation.New(s.Settings, rankingwatch.Held{Positions: s.Positions, Orders: s.Orders}, nil)), // observation-only symbols: Scout only, never Trader, unless held (#1055)
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, shadow.TraderOptions(db, s.Jev, s.Settings, s.News)...)
 }
