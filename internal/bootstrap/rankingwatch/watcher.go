@@ -108,6 +108,12 @@ func (w *Watcher) cycle(ctx context.Context) {
 	}
 
 	held := w.heldSymbols(ctx)
+	if w.Settings != nil {
+		// A lowered Settings size never drops a held symbol from the watch
+		// list: its price feeds the position's exit, so the floor is the
+		// held count (up to the broker's cap).
+		w.selector.Max = max(w.selector.Max, min(len(unique(held)), w.brokerCap()))
+	}
 	var (
 		res            rankingResult
 		watch, screen  []string
@@ -140,12 +146,17 @@ func (w *Watcher) watchControls(ctx context.Context) (limit int, observed []stri
 	if w.Settings == nil {
 		return limit, nil
 	}
-	brokerCap := w.MaxWatched
-	if brokerCap <= 0 {
-		brokerCap = DefaultMaxWatched
-	}
+	brokerCap := w.brokerCap()
 	set := w.Settings(ctx)
 	return watchsettings.ClampWatched(set.MaxWatched, brokerCap), set.Observed()
+}
+
+// brokerCap is the broker's watch list limit (MaxWatched, default 45).
+func (w *Watcher) brokerCap() int {
+	if w.MaxWatched <= 0 {
+		return DefaultMaxWatched
+	}
+	return w.MaxWatched
 }
 
 // pinned is the symbols that keep fixed slots: the held ones first, then the

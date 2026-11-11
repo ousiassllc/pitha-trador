@@ -115,3 +115,23 @@ func TestWatcher_ObservationSymbolsYieldToHeldSymbols(t *testing.T) {
 		t.Errorf("watch = %v, want both held + the first observation symbol only", watch)
 	}
 }
+
+// A Settings size below the number of held symbols never drops a held symbol
+// from the watch list (its price feeds the position's exit).
+func TestWatcher_LoweredSizeNeverDropsAHeldSymbol(t *testing.T) {
+	r := newRig(t, universeOf(20)...)
+	r.w.MaxWatched = 45
+	r.held.symbols = []string{"U000", "U001", "U002", "U003", "U004", "U005", "U006", "U007"}
+	r.useSettings(watchsettings.Settings{MaxWatched: 5})
+	r.src.set([]string{"U010", "U011"}, nil, false)
+	r.cycle()
+	watch := r.reg.sets[0]
+	for _, sym := range r.held.symbols {
+		if !slices.Contains(watch, sym) {
+			t.Errorf("held %s missing from the watch list %v", sym, watch)
+		}
+	}
+	if len(watch) != len(r.held.symbols) {
+		t.Errorf("watch = %d symbols, want exactly the 8 held ones (no ranked symbol fits)", len(watch))
+	}
+}
