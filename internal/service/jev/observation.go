@@ -10,13 +10,11 @@ import (
 )
 
 // ObservationGate is what Scout needs to run observation-only symbols (issue
-// #1055): symbols that are watched and asked on Jev Scout to collect
-// evaluation data but are never traded. *observation.Gate implements it.
+// #1055): watched and asked on Jev Scout for evaluation data, never traded.
 type ObservationGate interface {
 	// Observed reports whether symbol is an observation-only symbol now.
 	Observed(ctx context.Context, symbol string) (bool, error)
-	// Admit reports whether one more observation call may be made now. When it
-	// may not, reason says why (a cost cap or failure cap of the day).
+	// Admit reports whether one more observation call may be made now (else why).
 	Admit(ctx context.Context) (ok bool, reason string, err error)
 	// RecordCall counts a completed observation call (resp is Jev's answer) and
 	// RecordFailure a failed one, against the day's caps.
@@ -34,8 +32,7 @@ func (s *Scout) isObserved(ctx context.Context, symbol string) (bool, error) {
 	}
 	observed, err := s.observation.Observed(ctx, symbol)
 	if err != nil {
-		// Unknown standing: do neither (a retry decides), rather than treat an
-		// observation symbol as a tradable one.
+		// Unknown standing: a retry decides; never treat it as tradable.
 		return false, fmt.Errorf("jev: read the observation symbols for %q: %w", symbol, err)
 	}
 	return observed, nil
@@ -55,9 +52,8 @@ func (s *Scout) handleObservation(ctx context.Context, payload ScoutJobPayload, 
 		slog.Info("jev: skip observation scout, daily cap reached", "symbol", payload.Symbol, "reason", reason)
 		return jobqueue.Skip(ObservationCapSkip)
 	}
-	// Not reported to the ScoutRecorder: the Scanner Dashboard's Scout stage
-	// counts the candidates that go on to Trader, which these never do.
-	_, resp, _, err := s.evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snap, s.now().UTC()))
+	// Not reported to the ScoutRecorder: its Scout stage counts candidates that reach Trader.
+	_, resp, _, err := s.evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snap, s.now().UTC()), false)
 	if err != nil {
 		if recErr := s.observation.RecordFailure(ctx); recErr != nil {
 			slog.Error("jev: record a failed observation call", "symbol", payload.Symbol, "error", recErr)

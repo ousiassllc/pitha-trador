@@ -170,13 +170,14 @@ func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots
 // block Jev from being called (functional.md FR-RAG-4's cold-start
 // tolerance extends to any RAG failure, not only an empty index).
 func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, bool, error) {
-	decision, _, passed, err := s.evaluate(ctx, instrumentID, state)
+	decision, _, passed, err := s.evaluate(ctx, instrumentID, state, true)
 	return decision, passed, err
 }
 
-// evaluate is Evaluate that also returns Jev's raw answer (for the cost an
-// observation call is counted at).
-func (s *Scout) evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, ScoutResponse, bool, error) {
+// evaluate is Evaluate that also returns Jev's raw answer (an observation call's
+// cost). indexRAG=false (observation, issue #1055) keeps the decision out of
+// the similar-case index the Trader prompt searches.
+func (s *Scout) evaluate(ctx context.Context, instrumentID int64, state ScoutState, indexRAG bool) (domain.JevDecision, ScoutResponse, bool, error) {
 	state = withNewsContext(state, s.news)
 	featureInput := ragFeatureInput(state)
 
@@ -221,8 +222,10 @@ func (s *Scout) evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 		return domain.JevDecision{}, ScoutResponse{}, false, fmt.Errorf("jev: persist scout decision for %q: %w", state.Symbol, err)
 	}
 
-	if err := s.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
-		slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
+	if indexRAG {
+		if err := s.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
+			slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
+		}
 	}
 
 	return saved, resp, Passes(s.thresholds, resp), nil

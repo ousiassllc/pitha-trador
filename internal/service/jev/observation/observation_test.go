@@ -2,6 +2,7 @@ package observation_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -36,6 +37,7 @@ type rig struct {
 	settings *system.RuntimeSettingsRepository
 	insts    map[string]domain.Instrument
 	calls    *atomic.Int32
+	db       *sql.DB
 	gate     *observation.Gate
 }
 
@@ -57,7 +59,7 @@ func newRig(t *testing.T, withGate bool, symbols ...string) *rig {
 
 	snapshots := market.NewSnapshotRepository(db)
 	instruments := market.NewInstrumentRepository(db)
-	r := &rig{jobs: jobqueue.NewJobRepository(db), settings: system.NewRuntimeSettingsRepository(db), insts: map[string]domain.Instrument{}, calls: &calls}
+	r := &rig{jobs: jobqueue.NewJobRepository(db), settings: system.NewRuntimeSettingsRepository(db), insts: map[string]domain.Instrument{}, calls: &calls, db: db}
 	for _, sym := range symbols {
 		inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: sym, Name: sym + " Inc", Market: "TSE Prime", IsActive: true})
 		if err != nil {
@@ -150,6 +152,34 @@ func TestScout_ObservationSymbolCallsJevButNeverReachesTrader(t *testing.T) {
 	}
 	if got := r.traderJobs(t); len(got) != 1 || got[0] != "6758" {
 		t.Errorf("jev-trader jobs = %v, want [6758]", got)
+	}
+}
+
+// An observation call's answer stays out of the similar-case index the live
+// Trader prompt searches (jev_decision_vectors): only an ordinary symbol's
+// Scout decision is indexed.
+func TestScout_ObservationDecisionIsNotIndexedForRAG(t *testing.T) {
+	r := newRig(t, true, "7203", "6758")
+	r.observe(t, "7203")
+	vectors := func() int {
+		var n int
+		if err := r.db.QueryRow(`SELECT COUNT(*) FROM jev_decision_vectors`).Scan(&n); err != nil {
+			t.Fatalf("count jev_decision_vectors: %v", err)
+		}
+		return n
+	}
+
+	if err := r.handle(t, "7203"); err != nil {
+		t.Fatalf("HandleJob(observation symbol) = %v", err)
+	}
+	if got := vectors(); got != 0 {
+		t.Errorf("jev_decision_vectors = %d after an observation call, want 0", got)
+	}
+	if err := r.handle(t, "6758"); err != nil {
+		t.Fatalf("HandleJob(ordinary symbol) = %v", err)
+	}
+	if got := vectors(); got != 1 {
+		t.Errorf("jev_decision_vectors = %d after an ordinary call, want 1", got)
 	}
 }
 
