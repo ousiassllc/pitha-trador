@@ -127,7 +127,7 @@ pitha-trador/
 │   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）
 │   │   ├── symbolcache/          # ブローカー銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（`broker.SymbolInfoSource`。issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
-│   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト, evalflow/=Scout/Trader/News評価呼び出しテスト・#658）
+│   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト, evalflow/=Scout/Trader/News評価呼び出しテスト・#658、observation/=観察用銘柄のScout呼び出しの1日費用上限・失敗上限（`Gate`。通常の取引経路は参照しない。#1055））
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
 │   │   ├── policy/                # Policy Engine
 │   │   ├── risk/                  # Risk Engine（Kill Switch含む）。`Engine`のメソッド群（Check・状態遷移・監視・警告）は結合が強いため直下の1パッケージに保つ（#247）

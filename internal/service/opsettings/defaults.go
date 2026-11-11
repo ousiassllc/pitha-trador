@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 )
 
 // defaultText is what applies to key while nothing is stored.
@@ -69,6 +70,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		return paperbootstrapsettings.Text(paperbootstrapsettings.Default)
 	case sleepguardsettings.IsKey(key):
 		return sleepguardsettings.Text(sleepguardsettings.Default)
+	case watchsettings.IsKey(key):
+		return watchDefaultText(key)
 	case regimesettings.IsKey(key):
 		text, _ := regimesettings.Default().Text(key)
 		return text
@@ -76,4 +79,18 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		v, _ := config.FastScreenerSettingValue(s.screener, key)
 		return formatNumber(v)
 	}
+}
+
+// watchDefaultText is what applies to a watchsettings key while nothing is
+// stored: today's behaviour (the full kabu watch list, no observation symbol).
+func watchDefaultText(key string) string {
+	switch key {
+	case watchsettings.KeyMaxWatched:
+		return strconv.Itoa(watchsettings.DefaultMaxWatched)
+	case watchsettings.KeyObservationEnabled:
+		return "0"
+	case watchsettings.KeyObservationSymbols:
+		return ""
+	}
+	return formatNumber(watchsettings.DefaultObservationDailyCostCapUSD)
 }

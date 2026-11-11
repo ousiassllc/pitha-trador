@@ -26,6 +26,8 @@ Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.set
 
 Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`で書けるのは`jev.shadow.enabled`と`jev.shadow.candidate_version`の2キーだけ（issue #929）で、ほかは書けない）。
 
+監視銘柄数と観察用銘柄（issue #1055。FR-SCHED-12）は`scan.ranking_watch.max_symbols`（JSON 整数 1〜45。無ければ 45）・`scan.observation.enabled`（JSON 整数 `1`/`0`。無い・壊れていれば無効）・`scan.observation.symbols`（JSON 文字列。銘柄コードのカンマ区切り、最大 10 件）・`jev.observation.daily_cost_cap_usd`（JSON 数値。無ければ 0.10 USD）を使い、観察用の呼び出しの当日の使用量は`jev.observation.usage`（`{"date","calls","failures","cost_usd"}`。アプリが書く記録）に持つ。どれも MCP の`settings_set`では書けず、`jev.observation.usage`以外は Settings 画面で変える。新しいテーブルは増やさない。
+
 Paper 実績 MCP の注文案の受け付け（issue #827）はキー`mcp.order_proposals_enabled`（JSON の整数`1`=受け付ける・`0`=受け付けない。**行が無いときも、`1`/`0`以外の壊れた値のときも受け付けない**＝既定オフ。書き込み許可とは既定が逆）。オンにできるのは Settings 画面（`POST /settings/mcp/order-proposals`）だけで、MCP は`order_proposals_disable`でオフにだけできる。`settings_set`のホワイトリストには入らない（`key_not_allowed`）。切り替えは`mcp_settings_audit`に残る。
 
 ## secrets

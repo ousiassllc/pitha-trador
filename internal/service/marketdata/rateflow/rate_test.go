@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
@@ -215,3 +216,39 @@ func maxInWindow(stamps []time.Time, window time.Duration) int {
 	}
 	return maxN
 }
+
+// issue #1055: the information API limiter does not depend on how many symbols
+// are watched. A full-size watch list (the broker's stream cap) polled for
+// several rounds, and a limiter asked for more than the official cap, both stay
+// at or under the limit of the 1-second window: the watch size setting has no
+// way to loosen it.
+func TestClient_GetBoard_FullWatchListStaysUnderTheLimit(t *testing.T) {
+	server := tokenAndBoardServer(t, func(w http.ResponseWriter, r *http.Request) { writeOKBoard(w, "7203") })
+	defer server.Close()
+
+	for name, requested := range map[string]int{"default 8/s": infolimit.DefaultMaxPerSecond, "more than the official cap": 1000} {
+		t.Run(name, func(t *testing.T) {
+			limit := min(requested, infolimit.OfficialMaxPerSecond)
+			clock := infolimit.NewManualClock(time.Time{})
+			client := issuedClient(t, server, clock, requested)
+			stamps := make([]time.Time, 0, 3*kabuWatchCap)
+			for range 3 { // three rounds over a full watch list
+				for i := range kabuWatchCap {
+					if _, err := client.GetBoard(context.Background(), fmt.Sprintf("%04d", i), marketdata.ExchangeTSE); err != nil {
+						t.Fatalf("GetBoard: %v", err)
+					}
+					stamps = append(stamps, clock.Now())
+				}
+			}
+			if got := maxInWindow(stamps, time.Second); got > limit {
+				t.Errorf("max GetBoard in any 1s window = %d, want <= %d", got, limit)
+			}
+			if got := client.RateLimitStats().LimitPerSecond; got != limit {
+				t.Errorf("limiter = %d/s, want %d/s", got, limit)
+			}
+		})
+	}
+}
+
+// kabuWatchCap is the kabu ranking watch list's largest size (45).
+const kabuWatchCap = watchsettings.MaxKabuWatched

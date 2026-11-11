@@ -245,9 +245,14 @@ func TestClient_Scout_MapsOfficialResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scout: %v", err)
 	}
+	// The usage (not part of the recorded response) is what the observation cost
+	// cap prices (issue #1055): the wire's usage.input_tokens and the body size.
+	if resp.InputTokens != 1534 || resp.RequestBytes <= 0 {
+		t.Errorf("Scout() usage = %d tokens, %d bytes; want 1534 tokens and the request size", resp.InputTokens, resp.RequestBytes)
+	}
 	want := jev.ScoutResponse{
 		InterestingNow: 0.81, MomentumQuality: jev.MomentumQualityStrong, LiquidityOk: 0.92, AbnormalActivity: 0.33,
-		ModelID: "jev-1.13.0",
+		ModelID: "jev-1.13.0", InputTokens: resp.InputTokens, RequestBytes: resp.RequestBytes,
 	}
 	if resp != want {
 		t.Errorf("Scout() = %+v, want %+v (request_cost must stay nil: the API reports tokens only)", resp, want)

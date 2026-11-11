@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -38,6 +39,11 @@ func TestBuildServices_RankingWatchIsDefaultAndFullScanOptIn(t *testing.T) {
 
 			if got := svc.rankingWatcher != nil; got != tc.wantWatch {
 				t.Errorf("ranking watcher built = %v, want %v", got, tc.wantWatch)
+			}
+			if w := svc.rankingWatcher; w != nil { // issue #1055: nothing stored means 45 and no observation symbol
+				if set := w.Settings(context.Background()); w.MaxWatched != 45 || set.MaxWatched != 45 || len(set.Observed()) != 0 {
+					t.Errorf("watcher cap %d, settings %+v; want 45 and no observation symbol", w.MaxWatched, set)
+				}
 			}
 			if got := svc.candidates.Watch != nil; got != tc.wantWatch {
 				t.Errorf("candidate refresh follows the watch list = %v, want %v", got, tc.wantWatch)
