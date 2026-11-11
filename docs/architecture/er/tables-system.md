@@ -150,6 +150,27 @@ erDiagram
 | id | integer | PK, CHECK (`= 1`) | 常に1 |
 | checked_at | text | NOT NULL | 検知の最終確認時刻（UTC） |
 
+## session_diagnostics_daily（立会日ごとのセッションのそろい、issue #1054）
+
+立会日 1 日 1 行の短い診断。成功ジョブは 7 日、`health_alerts` は「いま出ている警告」しか持たないため、1 週間より前の欠けは原因をたどれなかった。この表はそれより長く残す（保持期間の削除対象にしない。1 日 1 行で小さい）。書くのはアプリの `internal/service/sessiongap.Recorder`（`healthalert.Detector` と同じ `healthalertwire.Watch` が走らせる）だけで、読むのは Paper 実績 MCP（`health_today` / `collection_status` / `session_diagnostics`）と、`health_today` を読む Home の「要対応」である（マイグレーション000052）。取引・Risk・Policy・Jev のプロンプトは読まない。価格・出来高・生データは持たず、件数・時刻・固定コードだけである。欠けた日の市況を後から埋めることはしない。行に書くのは、その時点の `market_snapshots` が示す事実だけである。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| session_date | text | PK, CHECK (`length = 10`) | 東証の立会日（JST の YYYY-MM-DD）。休業日（土日・祝日・年末年始）の行は作らない |
+| gap_kind | text | NOT NULL, CHECK (`'in_progress'` / `'none'` / `'whole_day'` / `'intraday'` / `'insufficient_history'`) | `in_progress`＝当日の観測中（判定前。読み手は無視する）。`none`＝そろっている。`whole_day`＝終日 0 件（それ以前のスナップショットはある）。`intraday`＝日中の欠け。`insufficient_history`＝0 件でそれ以前のスナップショットも無い（履歴の始まりより前。#814。実欠けではない） |
+| gap_codes_json | text | NOT NULL, 既定 `'[]'` | 日中の欠けの固定コード（JSON 配列）: `morning_missing`（前場が無い）/ `afternoon_missing`（後場が無い）/ `late_start`（立会の始まりから 5 分を超えて遅れて開始）/ `mid_session_gap`（立会中に 5 分を超える途切れ）/ `early_end`（立会の終わりの 5 分以上前に終了）。5 分は `healthalert.IdleThreshold` |
+| gaps_json | text | NOT NULL, 既定 `'[]'` | 欠けた区間（JSON 配列。`{code, from, to, minutes}`。`from`/`to` は UTC RFC3339。最大 10 件） |
+| alert_codes_json | text | NOT NULL, 既定 `'[]'` | その日アプリが見た健康警告の固定コード（`health_alerts` の `code`。立会外では警告が消えるので、観測中に積み上げる）。アプリが止まっていた間の警告は残らない（空でも「警告が無かった」とは限らない。`watch_checks`で見る） |
+| watch_checks | integer | NOT NULL, 既定 0, CHECK (`>= 0`) | アプリが立会中（9:00〜11:30・12:30〜15:30）に観測した回数（1 分に 1 回）。0 や極端に少ない日はアプリが止まっていた手がかり |
+| snapshot_rows | integer | NOT NULL, 既定 0 | 立会内の `market_snapshots` の行数 |
+| snapshot_minutes | integer | NOT NULL, 既定 0 | 立会内でスナップショットが 1 件以上ある分の数 |
+| first_snapshot_at / last_snapshot_at | text | NULL可 | 最初／最後のスナップショットの分（UTC）。0 件なら NULL |
+| longest_gap_minutes | integer | NOT NULL, 既定 0 | 立会内の最長の途切れ（分。立会の端を含む） |
+| market_data_jobs_succeeded / market_data_jobs_failed | integer | NULL可 | その日に終わった `market-data` ジョブの数（確定時点の `jobs`）。ジョブの保持期間（成功 7 日）より古い日を確定した場合は NULL（0 は「消えた」の意味にならないため） |
+| recorded_at | text | NOT NULL | 最後に書いた時刻（UTC） |
+
+確定のしかた: 見張りの窓（取引日の 08:45〜15:30）でアプリが 1 分ごとに行を `in_progress` で作り・更新し（警告コードと確認回数を積む）、大引けの 5 分後に確定する。起動時には、確定していない前営業日と「観測中」のまま残った日（アプリが閉じ時刻より前に止まった日）を、そのときの `market_snapshots` から確定する。確定した行は書き換えない。DB のバックアップ先が無い（#890）と、この記録も他の表と同じく失われる。
+
 ## mcp_settings_audit（Paper 実績 MCP の設定変更の監査ログ、issue #806・#807）
 
 MCP の設定ツール（`settings_set` / `settings_write_enable` / `settings_write_disable`）と Settings 画面の、ホワイトリストのキーの変更・書き込み許可の切り替え、注文案の受け付けスイッチ（`mcp.order_proposals_enabled`。issue #827。`order_proposals_disable`ツールと Settings 画面）の切り替えを 1 変更 1 行で記録する（マイグレーション000040。`docs/architecture/paper-results-mcp.md` §7.4）。`settings_audit`と`settings_diff`、Settings の MCP カードが読む。追記のみ（更新・削除しない）。

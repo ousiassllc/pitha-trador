@@ -40,3 +40,4 @@
 | 1.33 | 2026-10-26 | §5 `session_diagnostics` が `broker.provider` を 1 キーだけ読んで監視リストの観察を切り替える旨を追記。読み取り・書き込みのツール数は変わらない | issue #914 |
 | 1.34 | 2026-10-29 | §6 と §7.1 のホワイトリストに Jev のシャドーの 2 キー（`jev.shadow.enabled`・`jev.shadow.candidate_version`）を足し 19 → 21 キーにした（Settings 画面と同じ `jevprompt.Service` で検証して保存。候補なしの有効化は MCP では `invalid_value`）。§7.4 に、画面での 2 キーの変更は監査ログに残らず `settings_diff` の「変更前」がずれうる制限を追記。ライブの版・費用の上限・失敗回数の上限・止めた記録・失敗回数・クールダウンは入れない。ツール数は変わらない | issue #929 |
 | 1.35 | 2026-10-30 | §5 の読み取りのツールに `disclosure_skip_summary`（適時開示による見送りルールの記録の集計。読み取り専用。API 仕様は `paper-results-mcp-disclosure-skip.md` §3.31）を追加し、ツール数を 14 / 合計 33 に（§1 の「合計 31」は実際の 32 と合っていなかったので、33 に直した） | issue #935 |
+| 1.36 | 2026-11-11 | §5 に立会日のそろい（#1054）を追加: `health_today` に日中の欠け `intraday_gaps[]` と要対応コード `partial_session`、`collection_status` に `session_gaps`、`session_diagnostics` の各日に `recorded`。アプリが立会後に残す日次記録 `session_diagnostics_daily`（マイグレーション000052）を読む。読み取り専用のまま。ツール数は変わらない | issue #1054 |

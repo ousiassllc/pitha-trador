@@ -35,3 +35,39 @@ func (c Calendar) SessionStart(t time.Time) (time.Time, bool) {
 	}
 	return time.Date(t.Year(), t.Month(), t.Day(), start/60, start%60, 0, 0, JST), true
 }
+
+// Session is one trading session of a day: [Open, Close).
+type Session struct {
+	Open, Close time.Time
+}
+
+// Sessions returns the two sessions (前場 09:00-11:30, 後場 12:30-15:30 JST) of
+// t's JST date, in order, or nil when that date is not a trading day.
+func (c Calendar) Sessions(t time.Time) []Session {
+	if !c.IsTradingDay(t) {
+		return nil
+	}
+	t = t.In(JST)
+	at := func(minutes int) time.Time {
+		return time.Date(t.Year(), t.Month(), t.Day(), minutes/60, minutes%60, 0, 0, JST)
+	}
+	return []Session{{Open: at(morningOpen), Close: at(morningClose)}, {Open: at(afternoonOpen), Close: at(afternoonClose)}}
+}
+
+// previousTradingDaySearchDays bounds PreviousTradingDay's scan, for the same
+// reason as nextOpenSearchDays.
+const previousTradingDaySearchDays = 31
+
+// PreviousTradingDay returns 00:00 JST of the last trading day strictly before
+// t's JST date, or false when none lies within the scan bound.
+func (c Calendar) PreviousTradingDay(t time.Time) (time.Time, bool) {
+	t = t.In(JST)
+	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, JST)
+	for range previousTradingDaySearchDays {
+		day = day.AddDate(0, 0, -1)
+		if c.IsTradingDay(day) {
+			return day, true
+		}
+	}
+	return time.Time{}, false
+}
