@@ -104,9 +104,7 @@ func (l *Labeler) loadBarriers(ctx context.Context) (barriersettings.Barriers, e
 // (calrepo.OutcomeLabelJobPayload): it loads the identified jev_decisions
 // row and the market_snapshots bars after the Jev response, and persists the
 // triple-barrier calibration_outcomes row (FR-CAL-4). Its signature matches
-// internal/service/scheduler.Handler, so it can be registered directly:
-// scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling,
-// labeler.HandleJob).
+// internal/service/scheduler.Handler (JobQueueOutcomeLabeling's handler).
 //
 // The label is measured from an executable entry reference price on the
 // first bar at or after the Jev response (the decision's created_at, within
@@ -119,30 +117,37 @@ func (l *Labeler) loadBarriers(ctx context.Context) (barriersettings.Barriers, e
 // is no longer "wrong"). A direction-NONE decision has no side to price, so
 // it records the raw price path with no barrier fields.
 //
-// If the bars do not (yet) cover the path - no entry bar, or the last bar is
-// more than HorizonBarTolerance before the timeout - HandleJob never records
-// a shortened window and never fails the job (issue #710). Within
-// horizonDataGrace of the latest the data could land it persists nothing and
-// returns jobqueue.Defer: the job goes back to pending and is retried after
-// horizonRetryInterval; the pair also stays in PendingLabels. Past the grace
-// period the gap is permanent (lunch break, close, outage): HandleJob
-// records the pair as unlabelable (CalibrationRepository.MarkUnlabelable;
-// still no calibration_outcomes row) and returns jobqueue.Skip, so the job
-// ends succeeded with a "skipped:" note and PendingLabels stops returning
-// the pair (issue #481).
+// If the bars do not (yet) cover the path, HandleJob never records a shortened
+// window and never fails the job (issue #710, #481): see shortWindow.
 func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload calrepo.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("calibration: decode outcome-labeling job payload: %w", err)
 	}
-
-	decision, err := l.decisions.Get(ctx, payload.JevDecisionID)
+	decision, outcome, gap, err := l.Compute(ctx, payload.JevDecisionID, payload.HorizonMinutes)
 	if err != nil {
-		return fmt.Errorf("calibration: load jev decision %d: %w", payload.JevDecisionID, err)
+		return err
+	}
+	if gap != "" {
+		return l.shortWindow(ctx, decision, payload.HorizonMinutes, ResponseTime(decision), gap)
+	}
+	if _, err := l.outcomes.Insert(ctx, outcome); err != nil {
+		return fmt.Errorf("calibration: persist outcome for decision %d (horizon %dm): %w", payload.JevDecisionID, payload.HorizonMinutes, err)
+	}
+	return nil
+}
+
+// Compute is HandleJob's label without its persistence, shared with the
+// counterfactual label of a skipped candidate (issue #1052): the decision and
+// its outcome, or the non-empty reason the bars do not cover the path.
+func (l *Labeler) Compute(ctx context.Context, jevDecisionID int64, horizonMinutes int) (decision domain.JevDecision, outcome domain.CalibrationOutcome, gap string, err error) {
+	decision, err = l.decisions.Get(ctx, jevDecisionID)
+	if err != nil {
+		return decision, outcome, "", fmt.Errorf("calibration: load jev decision %d: %w", jevDecisionID, err)
 	}
 	barriers, err := l.loadBarriers(ctx)
 	if err != nil {
-		return fmt.Errorf("calibration: load triple-barrier settings: %w", err)
+		return decision, outcome, "", fmt.Errorf("calibration: load triple-barrier settings: %w", err)
 	}
 
 	direction := domain.JevDirectionNone
@@ -151,29 +156,28 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	if l.costs != nil {
 		if barriers, err = costsettings.LabelBarriers(ctx, l.costs, barriers, direction); err != nil {
-			return fmt.Errorf("calibration: load cost settings: %w", err)
+			return decision, outcome, "", fmt.Errorf("calibration: load cost settings: %w", err)
 		}
 	}
 	// The label cost the settings imply must still leave a valid barrier set
 	// (cost below the stop-loss): fail the job rather than write a label whose
 	// stop-loss sits on the profit side.
 	if err := barriers.Validate(); err != nil {
-		return fmt.Errorf("calibration: effective triple-barrier settings are invalid: %w", err)
+		return decision, outcome, "", fmt.Errorf("calibration: effective triple-barrier settings are invalid: %w", err)
 	}
 	responseAt := ResponseTime(decision)
-	timeout := time.Duration(payload.HorizonMinutes) * time.Minute
+	timeout := time.Duration(horizonMinutes) * time.Minute
 	// +1s margin: SnapshotRepository.ListByInstrumentRange's `to` bound is
 	// exclusive, so this still includes a bar landing exactly on the latest
 	// timeout boundary.
 	window, err := l.snapshots.ListByInstrumentRange(ctx, decision.InstrumentID, responseAt, responseAt.Add(EntryWaitTolerance+timeout+time.Second))
 	if err != nil {
-		return fmt.Errorf("calibration: load market snapshots for decision %d: %w", payload.JevDecisionID, err)
+		return decision, outcome, "", fmt.Errorf("calibration: load market snapshots for decision %d: %w", jevDecisionID, err)
 	}
 
 	entryIdx, entryRef := FindEntry(window, direction, responseAt)
 	if entryIdx < 0 {
-		return l.shortWindow(ctx, decision, payload.HorizonMinutes, responseAt,
-			"no bar with an executable entry quote within "+EntryWaitTolerance.String()+" of the Jev response")
+		return decision, outcome, "no bar with an executable entry quote within " + EntryWaitTolerance.String() + " of the Jev response", nil
 	}
 	deadline := window[entryIdx].Timestamp.Add(timeout)
 	path := window[entryIdx+1:]
@@ -185,16 +189,13 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		if len(path) > 0 {
 			reason = fmt.Sprintf("market data ends at %s, short of the timeout (lunch break, close, or data gap)", path[len(path)-1].Timestamp.Format(time.RFC3339))
 		}
-		return l.shortWindow(ctx, decision, payload.HorizonMinutes, responseAt, reason)
+		return decision, outcome, reason, nil
 	}
 
-	outcome := labelPath(path, entryRef, direction, barriers)
+	outcome = labelPath(path, entryRef, direction, barriers)
 	outcome.JevDecisionID = decision.ID
-	outcome.HorizonMinutes = payload.HorizonMinutes
-	if _, err := l.outcomes.Insert(ctx, outcome); err != nil {
-		return fmt.Errorf("calibration: persist outcome for decision %d (horizon %dm): %w", payload.JevDecisionID, payload.HorizonMinutes, err)
-	}
-	return nil
+	outcome.HorizonMinutes = horizonMinutes
+	return decision, outcome, "", nil
 }
 
 // labelPath computes the calibration_outcomes row (without its identity) for
@@ -245,15 +246,14 @@ func labelPath(path []domain.Snapshot, entryRef float64, direction string, barri
 	return outcome
 }
 
-// shortWindow handles a window that does not reach the horizon, without
-// ever failing the job (issue #710): while the data may still land (within
-// horizonDataGrace of the latest the data could land: the Jev response +
-// EntryWaitTolerance + horizon) it returns
-// jobqueue.Defer, so the scheduler puts the job back to pending (retried at
-// the next scan cadence); once the grace has passed the gap is permanent
-// and it records the skip marker and returns jobqueue.Skip, which ends the
-// job as succeeded with a "skipped:" note. Either way no calibration_outcomes
-// row is written, so a shortened horizon is never recorded (FR-CAL-4).
+// shortWindow handles a window that does not reach the horizon, without ever
+// failing the job (issue #710): while the data may still land (within
+// horizonDataGrace of the Jev response + EntryWaitTolerance + horizon) it
+// returns jobqueue.Defer, so the job goes back to pending and is retried; once
+// the grace has passed the gap is permanent and it records the skip marker and
+// returns jobqueue.Skip (succeeded, "skipped:" note). Either way no
+// calibration_outcomes row is written, so a shortened horizon is never recorded
+// (FR-CAL-4).
 func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, responseAt time.Time, reason string) error {
 	horizon := time.Duration(horizonMinutes) * time.Minute
 	now := l.now()

@@ -20,7 +20,7 @@ import (
 )
 
 // onOffKeys are the settings drawn as a switch (issue #1014).
-var onOffKeys = []string{paperbootstrapsettings.Key, regimesettings.KeyABEnabled, sleepguardsettings.Key}
+var onOffKeys = []string{paperbootstrapsettings.Key, regimesettings.KeyABEnabled, sleepguardsettings.Key, metalabelsettings.KeyIncludeSkippedLabels}
 
 // rowHTML returns the markup of key's SettingFieldRow form out of a page body.
 func rowHTML(t *testing.T, body, key string) string {

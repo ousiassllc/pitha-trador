@@ -10,17 +10,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/repository/counterlabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/service/calibration/counterfactual"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
@@ -47,6 +51,9 @@ type Job struct {
 	trainer  *training.Trainer
 	settings *system.RuntimeSettingsRepository
 	now      func() time.Time
+	// counterfactual records the counterfactual labels of skipped candidates
+	// before each retraining (issue #1052).
+	counterfactual *counterfactual.Recorder
 }
 
 // New returns the Job of db reading its settings (model, calibration, retrain
@@ -68,6 +75,14 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	j.trainer = training.NewTrainer(repo, store, j.load,
 		training.WithPolicyChanges(judgement.NewProposalRepository(db)), training.WithSkipRecorder(store),
 		training.WithTrainedCohort(liveCohort(settings)))
+	// The non-trading counterfactual labels of the skipped candidates the
+	// per-minute labeling left behind (issue #1052): the same barrier code and
+	// settings as the live labeling, stored apart from calibration_outcomes.
+	outcomes := calrepo.NewCalibrationRepository(db)
+	labeler := calibration.NewLabeler(judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db), outcomes,
+		calibration.WithBarrierSettings(settings), calibration.WithCostSettings(settings))
+	j.counterfactual = counterfactual.New(counterlabel.NewRepository(db), labeler, outcomes, j.load, calibration.TimeoutHorizons(settings)).
+		WithClock(func() time.Time { return j.now() })
 	return j
 }
 
@@ -98,6 +113,12 @@ func (j *Job) Run(ctx context.Context) error {
 	}
 	if !due {
 		return maintenance.ErrSkipped
+	}
+	// Recording is a by-product of the retraining time: a failure is logged and
+	// never stops the retraining, which does not depend on it while
+	// metalabel.include_skipped_labels is off (the default).
+	if _, err := j.counterfactual.Run(ctx); err != nil {
+		slog.WarnContext(ctx, "metalabeljob: counterfactual labels of skipped candidates not recorded", "error", err)
 	}
 	return j.trainer.Retrain(ctx)
 }
