@@ -43,6 +43,7 @@
 | Policy Engine（ロング） | `/settings/operations#modal-policy-long` | ロングのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 取引ルール |
 | Policy Engine（ショート） | `/settings/operations#modal-policy-short` | ショートのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 取引ルール |
 | データの鮮度（ランキング監視） | `/settings/operations#modal-snapshot-age` | Jev の判断と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）を編集します。 | 取引ルール |
+| 監視銘柄数と観察用銘柄（kabu ランキング監視） | `/settings/operations#modal-ranking-watch` | kabu のランキング監視の監視銘柄数（1〜45。上限は登録枠 50 件のうち REST 用に 5 件を空けた 45 件で、超える値は保存できず理由を表示します）、取引には乗せず市況取得と Jev Scout だけを行う観察用銘柄（既定オフ）、その Jev 呼び出しの 1 日の費用上限（観察用の呼び出しだけを止めます）を編集します。情報 API のレート上限（8 件/秒）は外れません。 | 取引ルール |
 | Paper ブートストラップ | `/settings/operations#modal-paper-bootstrap` | メタモデル未採用の間だけ Paper で旧ルールのエントリーを許し、ラベルを貯めるスイッチ（既定は無効、Live では必ず無効）を編集します。 | 取引ルール |
 | スリープ防止 | `/settings/maintenance#modal-sleep-guard` | 取引日の 08:45〜大引けだけ PC を自動でスリープさせないスイッチ（既定は無効。Windows のみ。時間外とアプリ終了時は OS の設定に戻ります）を編集します。 | システム |
 | キャリブレーションのラベル（トリプルバリア） | `/settings/results#modal-triple_barrier` | 判断に正解・不正解のラベルを付ける利確・損切り幅と時間切れを編集します。 | 予測モデル |

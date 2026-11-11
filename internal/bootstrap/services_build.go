@@ -40,6 +40,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/observation"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
@@ -132,7 +133,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots, rag.WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
-		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
+		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener), jev.WithObservation(observation.New(s.Settings, nil)), // observation-only symbols: Scout only, never Trader (#1055)
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, shadow.TraderOptions(db, s.Jev, s.Settings, s.News)...)
 }

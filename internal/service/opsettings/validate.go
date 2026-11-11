@@ -25,6 +25,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
+	"github.com/ousiassllc/pitha-trador/internal/config/watchsettings"
 )
 
 // encode parses raw (already trimmed, non-empty) for key into the JSON
@@ -85,6 +86,12 @@ func encode(key, raw string) (string, error) {
 			return "", &InvalidValueError{Reason: fmt.Sprintf("%q は整数ではありません", raw)}
 		}
 		value = n
+	case kindWatch:
+		v, err := watchsettings.NormalizeSymbols(raw)
+		if err != nil {
+			return "", &InvalidValueError{Reason: err.Error()}
+		}
+		value = v
 	case kindEntryQuality:
 		value = raw // the allowed values are checked with the effective config
 	case kindInteger:
@@ -224,6 +231,11 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
+	case watchsettings.IsKey(key):
+		// Each value stands alone: only its own range is checked. The watch
+		// size is refused above the kabu stream cap; the information API limiter
+		// is not a setting and is untouched by any of these.
+		return validateWatch(key, encoded)
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}
@@ -260,4 +272,24 @@ func invalidIf(err error) error {
 		return nil
 	}
 	return &InvalidValueError{Reason: strings.ReplaceAll(err.Error(), "\n", "; ")}
+}
+
+// validateWatch checks one watchsettings value (issue #1055) the way the
+// application will read it back.
+func validateWatch(key, encoded string) error {
+	var err error
+	switch key {
+	case watchsettings.KeyMaxWatched:
+		_, err = watchsettings.ParseMaxWatched(encoded)
+	case watchsettings.KeyObservationEnabled:
+		_, err = watchsettings.ParseEnabled(encoded)
+	case watchsettings.KeyObservationSymbols:
+		_, err = watchsettings.ParseSymbols(encoded)
+	default:
+		_, err = watchsettings.ParseCap(encoded)
+	}
+	if err != nil {
+		return &InvalidValueError{Reason: err.Error()}
+	}
+	return nil
 }

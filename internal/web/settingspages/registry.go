@@ -155,6 +155,7 @@ var dialogs = []Dialog{
 	{PageOperations, "modal-policy-long", nil},
 	{PageOperations, "modal-policy-short", nil},
 	{PageOperations, "modal-snapshot-age", nil},
+	{PageOperations, "modal-ranking-watch", nil},
 	{PageOperations, "modal-paper-bootstrap", nil},
 
 	// リスク・資金 (資産ごとの予算枠 was its own page until issue #895)
