@@ -69,10 +69,12 @@ func TestClassifyJudgesSessionCompletenessNotJustWholeDayZero(t *testing.T) {
 			wantKind: sessiongap.KindIntraday, wantCodes: []string{sessiongap.CodeMidSessionGap}},
 		{name: "ends early", date: d, morning: minutes(d, "09:00", "11:30"), afternoon: minutes(d, "12:30", "14:10"), hasEarlier: true,
 			wantKind: sessiongap.KindIntraday, wantCodes: []string{sessiongap.CodeEarlyEnd}},
-		{name: "a short stretch within the tolerance is no gap", date: d, morning: minutes(d, "09:05", "11:30"),
-			afternoon: cat(minutes(d, "12:30", "13:00"), minutes(d, "13:05", "15:25")), hasEarlier: true, wantKind: sessiongap.KindNone},
-		{name: "just beyond the tolerance is a gap", date: d, morning: minutes(d, "09:06", "11:30"), afternoon: minutes(d, "12:30", "15:30"),
+		{name: "a short stretch within the tolerance is no gap", date: d, morning: minutes(d, "09:15", "11:30"),
+			afternoon: cat(minutes(d, "12:30", "13:00"), minutes(d, "13:15", "15:15")), hasEarlier: true, wantKind: sessiongap.KindNone},
+		{name: "just beyond the tolerance is a gap", date: d, morning: minutes(d, "09:16", "11:30"), afternoon: minutes(d, "12:30", "15:30"),
 			hasEarlier: true, wantKind: sessiongap.KindIntraday, wantCodes: []string{sessiongap.CodeLateStart}},
+		{name: "an 11-minute start delay is within the 15-minute tolerance", date: d, morning: minutes(d, "09:11", "11:30"),
+			afternoon: minutes(d, "12:30", "15:30"), hasEarlier: true, wantKind: sessiongap.KindNone},
 		{name: "first day of the history: the part before collection began is no gap", date: d, afternoon: minutes(d, "12:30", "15:30"),
 			wantKind: sessiongap.KindNone},
 		{name: "first day of the history: a hole after it still is", date: d, morning: cat(minutes(d, "10:12", "10:40"), minutes(d, "11:00", "11:30")),
@@ -109,5 +111,76 @@ func TestClassifyReportsTheSpansOfTheGaps(t *testing.T) {
 	}
 	if !o.FirstAt.Equal(day(date).Add(9*time.Hour+23*time.Minute)) || !o.LastAt.Equal(day(date).Add(15*time.Hour+29*time.Minute)) {
 		t.Errorf("first/last = %v / %v", o.FirstAt, o.LastAt)
+	}
+}
+
+// The tolerance is 15 minutes (issue #1054): a stretch of up to 15 minutes is no
+// gap, a longer one always is, wherever it sits and however the rest of the day
+// looks. Every start and length of a hole is tried in each session, so a hole
+// beyond the tolerance cannot slip through at an edge or in the middle.
+func TestClassifyGapsAreExactlyThoseBeyondFifteenMinutes(t *testing.T) {
+	d := "2026-10-22"
+	sessions := []struct{ name, open, closeAt string }{{"morning", "09:00", "11:30"}, {"afternoon", "12:30", "15:30"}}
+	for si, s := range sessions {
+		window := minutes(d, s.open, s.closeAt)
+		for start := 0; start < len(window); start += 7 {
+			for length := 1; start+length <= len(window); length += 3 {
+				// Drop minutes [start, start+length) of this session.
+				kept := slices.Concat(window[:start], window[start+length:])
+				morning, afternoon := minutes(d, "09:00", "11:30"), minutes(d, "12:30", "15:30")
+				if si == 0 {
+					morning = kept
+				} else {
+					afternoon = kept
+				}
+				if len(kept) == 0 {
+					continue // a whole session: covered by TestClassifyTheMissingSessionIsAlwaysDetected
+				}
+				o := sessiongap.Classify(day(d), morning, afternoon, true)
+				// The hole is bounded by the session edges or by kept minutes, so its
+				// length is the dropped minutes exactly.
+				wantGap := time.Duration(length)*time.Minute > sessiongap.Tolerance
+				if got := o.Kind == sessiongap.KindIntraday; got != wantGap {
+					t.Fatalf("%s: %d minutes dropped from minute %d: kind %s (gaps %+v), want a gap = %v", s.name, length, start, o.Kind, o.Gaps, wantGap)
+				}
+			}
+		}
+	}
+}
+
+// A whole session missing is never a small gap: the hole is 150 or 180 minutes,
+// ten times the tolerance, and it is reported whichever session is gone, with
+// history, whatever the other session looks like.
+func TestClassifyTheMissingSessionIsAlwaysDetected(t *testing.T) {
+	d := "2026-10-22"
+	full := func(from, to string) []time.Time { return minutes(d, from, to) }
+	cases := []struct {
+		name               string
+		morning, afternoon []time.Time
+		wantCode           string
+		wantMinutes        int
+	}{
+		{"the whole morning session", nil, full("12:30", "15:30"), sessiongap.CodeMorningMissing, 150},
+		{"the whole afternoon session", full("09:00", "11:30"), nil, sessiongap.CodeAfternoonMissing, 180},
+		{"the morning session of a day that has only the last afternoon minutes", nil, full("15:00", "15:30"), sessiongap.CodeMorningMissing, 150},
+		{"the afternoon session of a day that has only the first morning minutes", full("09:00", "09:30"), nil, sessiongap.CodeAfternoonMissing, 180},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o := sessiongap.Classify(day(d), tc.morning, tc.afternoon, true)
+			if o.Kind != sessiongap.KindIntraday || !slices.Contains(o.Codes, tc.wantCode) {
+				t.Fatalf("Classify = %s %v, want intraday with %s", o.Kind, o.Codes, tc.wantCode)
+			}
+			found := false
+			for _, g := range o.Gaps {
+				found = found || (g.Code == tc.wantCode && g.Minutes == tc.wantMinutes)
+			}
+			if !found {
+				t.Errorf("gaps = %+v, want %s of %d minutes", o.Gaps, tc.wantCode, tc.wantMinutes)
+			}
+			if o.LongestGapMinutes < tc.wantMinutes {
+				t.Errorf("LongestGapMinutes = %d, want at least %d", o.LongestGapMinutes, tc.wantMinutes)
+			}
+		})
 	}
 }

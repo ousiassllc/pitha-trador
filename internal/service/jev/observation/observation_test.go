@@ -39,6 +39,7 @@ type rig struct {
 	calls    *atomic.Int32
 	db       *sql.DB
 	gate     *observation.Gate
+	held     *fakeHeld
 }
 
 func newRig(t *testing.T, withGate bool, symbols ...string) *rig {
@@ -59,7 +60,7 @@ func newRig(t *testing.T, withGate bool, symbols ...string) *rig {
 
 	snapshots := market.NewSnapshotRepository(db)
 	instruments := market.NewInstrumentRepository(db)
-	r := &rig{jobs: jobqueue.NewJobRepository(db), settings: system.NewRuntimeSettingsRepository(db), insts: map[string]domain.Instrument{}, calls: &calls, db: db}
+	r := &rig{held: &fakeHeld{}, jobs: jobqueue.NewJobRepository(db), settings: system.NewRuntimeSettingsRepository(db), insts: map[string]domain.Instrument{}, calls: &calls, db: db}
 	for _, sym := range symbols {
 		inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: sym, Name: sym + " Inc", Market: "TSE Prime", IsActive: true})
 		if err != nil {
@@ -75,7 +76,7 @@ func newRig(t *testing.T, withGate bool, symbols ...string) *rig {
 	now := func() time.Time { return barAt.Add(10 * time.Second) }
 	opts := []jev.Option{jev.WithClock(now)}
 	if withGate {
-		r.gate = observation.New(r.settings, now)
+		r.gate = observation.New(r.settings, r.held, now)
 		opts = append(opts, jev.WithObservation(r.gate))
 	}
 	decisions := judgement.NewDecisionRepository(db)
@@ -252,7 +253,7 @@ func TestGate_CapResetsOnTheNextJSTDay(t *testing.T) {
 	if ok, _, err := r.gate.Admit(ctx); err != nil || ok {
 		t.Fatalf("Admit over the cap = %v, %v; want refused", ok, err)
 	}
-	tomorrow := observation.New(r.settings, func() time.Time { return barAt.Add(24 * time.Hour) })
+	tomorrow := observation.New(r.settings, r.held, func() time.Time { return barAt.Add(24 * time.Hour) })
 	if ok, _, err := tomorrow.Admit(ctx); err != nil || !ok {
 		t.Errorf("Admit on the next day = %v, %v; want admitted", ok, err)
 	}

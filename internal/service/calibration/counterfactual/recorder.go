@@ -90,7 +90,8 @@ func (r *Recorder) WithClock(now func() time.Time) *Recorder {
 }
 
 // Run records the counterfactual labels due as of now and returns how many it
-// recorded. Nothing is recorded (0, nil) while the LLM cutoff is a placeholder.
+// recorded. Nothing is recorded (0, nil) while the LLM cutoff is a placeholder;
+// with an unverified cutoff the labels are recorded and marked cutoff_unverified.
 func (r *Recorder) Run(ctx context.Context) (int, error) {
 	s, err := r.settings(ctx)
 	if err != nil {
@@ -100,6 +101,9 @@ func (r *Recorder) Run(ctx context.Context) (int, error) {
 		slog.InfoContext(ctx, "counterfactual: labels of skipped candidates not recorded: the LLM cutoff is still a placeholder", "llm_cutoff", s.LLMCutoff)
 		return 0, nil
 	}
+	// An unverified cutoff (a date, but no recorded Jev model) still records, but
+	// every label of the run is marked: training and evaluation leave them out.
+	unverified := s.CutoffStatus() == metalabelsettings.CutoffUnverified
 	cutoff, err := s.LLMCutoffTime()
 	if err != nil {
 		return 0, fmt.Errorf("counterfactual: %w", err)
@@ -118,7 +122,7 @@ func (r *Recorder) Run(ctx context.Context) (int, error) {
 			return recorded, fmt.Errorf("counterfactual: %w", err)
 		}
 		for _, target := range targets {
-			ok, err := r.record(ctx, target, horizon, s.LLMCutoff, now)
+			ok, err := r.record(ctx, target, horizon, s.LLMCutoff, unverified, now)
 			if err != nil {
 				return recorded, err
 			}
@@ -135,7 +139,7 @@ func (r *Recorder) Run(ctx context.Context) (int, error) {
 
 // record labels one target; false when there is nothing to record (the window
 // never reaches the horizon: the pair is marked, never retried).
-func (r *Recorder) record(ctx context.Context, target counterlabel.Target, horizon int, llmCutoff string, now time.Time) (bool, error) {
+func (r *Recorder) record(ctx context.Context, target counterlabel.Target, horizon int, llmCutoff string, unverified bool, now time.Time) (bool, error) {
 	decision, outcome, gap, err := r.labeler.Compute(ctx, target.JevDecisionID, horizon)
 	if err != nil {
 		return false, err
@@ -151,7 +155,7 @@ func (r *Recorder) record(ctx context.Context, target counterlabel.Target, horiz
 			"jev_decision_id", target.JevDecisionID, "horizon_minutes", horizon, "reason", gap)
 		return false, nil
 	}
-	if err := r.store.Insert(ctx, counterlabel.Label{Target: target, Outcome: outcome, LLMCutoff: llmCutoff, CreatedAt: now}); err != nil {
+	if err := r.store.Insert(ctx, counterlabel.Label{Target: target, Outcome: outcome, LLMCutoff: llmCutoff, CutoffUnverified: unverified, CreatedAt: now}); err != nil {
 		return false, fmt.Errorf("counterfactual: %w", err)
 	}
 	return true, nil

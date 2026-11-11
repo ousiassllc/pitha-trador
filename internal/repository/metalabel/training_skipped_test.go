@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository/counterlabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 )
 
@@ -135,7 +137,8 @@ func TestListTrainingRowsWithSkipped_AddsOnlyUnlabeledSkippedLongShort(t *testin
 }
 
 // The calibration_outcome_origins view tells an entered decision's label from a
-// skipped one and a no-direction one, without changing calibration_outcomes.
+// skipped one (by guard, or with no signal at all) and a no-direction one,
+// without changing calibration_outcomes.
 func TestCalibrationOutcomeOrigins_MarksEnteredSkippedAndNoDirection(t *testing.T) {
 	f := newSkippedFixture(t)
 	var inst int64
@@ -152,8 +155,8 @@ func TestCalibrationOutcomeOrigins_MarksEnteredSkippedAndNoDirection(t *testing.
 	}
 	want := map[int64][2]string{
 		f.entered:    {"entered", ""},
-		f.skipped:    {"skipped", "entry_quality_below_threshold"},
-		f.doubleBoth: {"skipped", ""},
+		f.skipped:    {"guard_skipped", "entry_quality_below_threshold"},
+		f.doubleBoth: {"no_signal", ""},
 		noneLabeled:  {"no_direction", "jev_none"},
 	}
 	rows, err := f.db.Query(`SELECT jev_decision_id, origin, COALESCE(reject_reason, '') FROM calibration_outcome_origins`)
@@ -178,5 +181,99 @@ func TestCalibrationOutcomeOrigins_MarksEnteredSkippedAndNoDirection(t *testing.
 	}
 	if len(got) != before {
 		t.Fatalf("the view has %d rows, calibration_outcomes %d: it must be one row per outcome", len(got), before)
+	}
+}
+
+// A counterfactual label recorded under an unverified LLM cutoff is kept in the
+// table but is neither a training row nor an out-of-sample row: both are cut
+// from the one list ListTrainingRowsWithSkipped returns. The same label counts
+// as soon as it is not marked.
+func TestListTrainingRowsWithSkipped_LeavesOutLabelsRecordedUnderAnUnverifiedCutoff(t *testing.T) {
+	f := newSkippedFixture(t)
+	rows := func() []int64 {
+		t.Helper()
+		got, err := f.r.ListTrainingRowsWithSkipped(context.Background(), f.base, f.to)
+		if err != nil {
+			t.Fatalf("ListTrainingRowsWithSkipped: %v", err)
+		}
+		return ids(got)
+	}
+	if got := rows(); !slices.Contains(got, f.counter) {
+		t.Fatalf("rows = %v, want the unmarked counterfactual label of %d in", got, f.counter)
+	}
+	if _, err := f.db.Exec(`UPDATE counterfactual_labels SET cutoff_unverified = 1 WHERE jev_decision_id = ?`, f.counter); err != nil {
+		t.Fatal(err)
+	}
+	got := rows()
+	if slices.Contains(got, f.counter) {
+		t.Fatalf("rows = %v: the label recorded under an unverified cutoff is still a row", got)
+	}
+	if want := []int64{f.entered, f.skipped, f.doubleBoth}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("rows = %v, want only the calibration_outcomes rows %v", got, want)
+	}
+	var kept int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM counterfactual_labels WHERE jev_decision_id = ?`, f.counter).Scan(&kept); err != nil || kept != 1 {
+		t.Fatalf("the marked label is kept in the table: rows = %d, %v", kept, err)
+	}
+}
+
+// The skip kinds of the Go classifier and of the view are one rule: every case
+// below is classified the same by SkipKindOf and by calibration_outcome_origins.
+func TestCalibrationOutcomeOrigins_SkipKindsAgreeWithTheRecorderClassification(t *testing.T) {
+	f := newSkippedFixture(t)
+	var inst int64
+	if err := f.db.QueryRow(`SELECT id FROM instruments LIMIT 1`).Scan(&inst); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name      string
+		hasSignal bool
+		reason    string
+		want      string
+	}{
+		{"no signal", false, "", counterlabel.SkipNoSignal},
+		{"a guard", true, "entry_quality_below_threshold", counterlabel.SkipGuardSkipped},
+		{"the meta model", true, "meta_skip: low_ev", counterlabel.SkipGuardSkipped},
+		{"a signal without a reason", true, "", counterlabel.SkipGuardSkipped},
+		{"the Risk Engine", true, "risk_engine_rejected: bucket_budget_exceeded: used 1.2M of 1.0M", counterlabel.SkipRiskRejected},
+		{"the Risk Engine without a detail", true, "risk_engine_rejected", counterlabel.SkipRiskRejected},
+		{"a reason that only starts the same", true, "risk_engine_rejectedx", counterlabel.SkipGuardSkipped},
+	}
+	decided := map[int64]string{}
+	for i, tc := range cases {
+		at := f.base.Add(time.Duration(10+i) * time.Hour)
+		id := insertTrainingDecision(t, f.db, inst, "7203", at, "LONG", "trader")
+		insertOutcome(t, f.db, id, 15, 2, 1.0)
+		if tc.hasSignal {
+			insertSignal(t, f.db, inst, id, at, false, tc.reason)
+		}
+		decided[id] = tc.name
+		if got := counterlabel.SkipKindOf(tc.hasSignal, tc.reason); got != tc.want {
+			t.Errorf("%s: SkipKindOf = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+	rows, err := f.db.Query(`SELECT jev_decision_id, origin FROM calibration_outcome_origins`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	got := map[string]string{}
+	for rows.Next() {
+		var id int64
+		var origin string
+		if err := rows.Scan(&id, &origin); err != nil {
+			t.Fatal(err)
+		}
+		if name, ok := decided[id]; ok {
+			got[name] = origin
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		if got[tc.name] != tc.want {
+			t.Errorf("%s: view origin = %q, want %q", tc.name, got[tc.name], tc.want)
+		}
 	}
 }

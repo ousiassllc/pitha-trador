@@ -129,9 +129,11 @@ func (w *Watcher) cycle(ctx context.Context) {
 	} else {
 		// No ranking is requested outside the session: PUSH registration and
 		// market-data ingestion shrink to the held symbols, but the candidate
-		// list keeps the last watch list (screened from the stored data).
+		// list keeps the last watch list (screened from the stored data). The
+		// observation-only symbols (issue #1055) are not held and need no data
+		// outside the session, so they take no slot here.
 		res.offSession = true
-		watch, screen = w.selector.Retain(pinned(held, observed, byCode))
+		watch, screen = w.selector.Retain(held)
 	}
 	w.List.Set(screen)
 	w.register(ctx, now, watch)

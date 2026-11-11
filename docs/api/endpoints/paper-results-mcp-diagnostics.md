@@ -68,7 +68,7 @@
 
 `collection_status`・`health_today`・`session_diagnostics` が読む、アプリの日次記録 `session_diagnostics_daily`（マイグレーション000052。`docs/architecture/er/tables-system.md`）と、その判定。記録はアプリが大引けの 5 分後に 1 日 1 行で確定し、起動時に前営業日を確定する。成功ジョブの 7 日削除より長く残り、件数・時刻・固定コードだけで価格は持たない。MCP は読むだけで、記録の無い日を MCP が書き足すことも、欠けた日の市況を後から埋めることもしない。
 
-判定は立会（前場 09:00〜11:30・後場 12:30〜15:30 JST。`marketcalendar.TSE.Sessions`）ごとに、スナップショットのある分を並べ、立会の始まりと最初の分・連続する 2 分・最後の分と立会の終わりが 5 分（`healthalert.IdleThreshold`）を超えて空いていれば欠けとする。休業日（2026-10-12、11-03 など）と土日は立会が無いので数えない。履歴の最初の日は、収集が始まる前の部分を欠けとしない。
+判定は立会（前場 09:00〜11:30・後場 12:30〜15:30 JST。`marketcalendar.TSE.Sessions`）ごとに、スナップショットのある分を並べ、立会の始まりと最初の分・連続する 2 分・最後の分と立会の終わりが 15 分（`sessiongap.Tolerance`。市況データ停止の警告 `healthalert.IdleThreshold`＝5 分とは別の値）を超えて空いていれば欠けとする。休業日（2026-10-12、11-03 など）と土日は立会が無いので数えない。履歴の最初の日は、収集が始まる前の部分を欠けとしない。
 
 `collection_status.session_gaps`（期間全体）:
 
@@ -80,6 +80,6 @@
 
 | フィールド | 定義 |
 |------------|------|
-| `intraday_gaps[]` | 同じ期間の東証立会日のうち、スナップショットはあるが立会がそろっていない日（issue #1054）。要素は `date`、`codes[]`（`morning_missing` 前場が無い / `afternoon_missing` 後場が無い / `late_start` 立会の始まりから 5 分を超えて遅れて開始 / `mid_session_gap` 立会中に 5 分を超える途切れ / `early_end` 立会の終わりの 5 分以上前に終了）、`gaps[]`（`code`・`from`・`to`・`minutes`）。終日 0 件の日は含めず `missing_session_dates[]` に出る（種別は重ならない）。日次記録がある日は記録から、無い日（アプリが止まっていて記録できなかった前営業日など）は読んだ時点の `market_snapshots` から判定するので、再起動後や MCP を読んだときにも出る。休業日は数えない。該当が無ければ `[]` |
+| `intraday_gaps[]` | 同じ期間の東証立会日のうち、スナップショットはあるが立会がそろっていない日（issue #1054）。要素は `date`、`codes[]`（`morning_missing` 前場が無い / `afternoon_missing` 後場が無い / `late_start` 立会の始まりから 15 分を超えて遅れて開始 / `mid_session_gap` 立会中に 15 分を超える途切れ / `early_end` 立会の終わりの 15 分以上前に終了）、`gaps[]`（`code`・`from`・`to`・`minutes`）。終日 0 件の日は含めず `missing_session_dates[]` に出る（種別は重ならない）。日次記録がある日は記録から、無い日（アプリが止まっていて記録できなかった前営業日など）は読んだ時点の `market_snapshots` から判定するので、再起動後や MCP を読んだときにも出る。休業日は数えない。該当が無ければ `[]` |
 
 要対応コード `partial_session`: `intraday_gaps[]` が空でない（#1054。終日欠けの `missing_session` とは別のコードで、履歴不足は含まない）。外部通知は無く、Home の要対応と本ツールにだけ出る

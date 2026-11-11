@@ -251,7 +251,10 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 
 	observed, err := s.isObserved(ctx, payload.Symbol)
 	if err != nil {
-		return err
+		// Unknown standing: not "not observed" (it could be observation-only and
+		// must not reach an entry); skipped for this round, the next job re-reads it.
+		slog.Warn("jev: skip scout for this round, the observation standing could not be read; no entry from this round", "symbol", payload.Symbol, "error", err)
+		return jobqueue.Skip(ObservationUnknownSkip)
 	}
 
 	snapshots, err := s.snapshots.ListByInstrument(ctx, payload.InstrumentID, 1)

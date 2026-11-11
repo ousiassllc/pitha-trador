@@ -184,3 +184,36 @@ func TestEvaluator_OnlyUnknownRecordsHaveADetail(t *testing.T) {
 		}
 	}
 }
+
+// An application that was down when a decision's give-up time passed still
+// records the decision after the restart, for 5 hours past the give-up time and
+// no longer (then it is "not recorded"). The give-up time is in session time, so
+// a Friday-afternoon decision, whose give-up time is Monday morning, is not
+// dropped over the weekend: the limit is never shorter than the old 6 hours.
+func TestEvaluator_RecordsADecisionAfterARestartUpToFiveHoursPastItsGiveUpTime(t *testing.T) {
+	cases := []struct {
+		name    string
+		decided time.Time
+		restart time.Time
+		want    bool
+	}{
+		{"same session, 4h59m past the give-up time", jstAt(10, 14, 10, 0, 0), jstAt(10, 14, 15, 59, 0), true},
+		{"same session, 5h01m past the give-up time", jstAt(10, 14, 10, 0, 0), jstAt(10, 14, 16, 1, 0), false},
+		{"Friday decision, Monday 14:29 (give-up time 09:30)", jstAt(10, 16, 15, 0, 0), jstAt(10, 19, 14, 29, 0), true},
+		{"Friday decision, Monday 14:31", jstAt(10, 16, 15, 0, 0), jstAt(10, 19, 14, 31, 0), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := openDB(t)
+			store := disclosureskip.NewStore(conn)
+			ev := disclosureskip.NewEvaluator(store, weekdaysOnly, disclosureskip.WithEvaluatorClock(func() time.Time { return tc.restart }))
+			insertDecision(t, conn, 1, "trader", "LONG", tc.decided)
+			if err := ev.Cycle(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := recordOf(t, conn, 1); ok != tc.want {
+				t.Fatalf("recorded = %v, want %v", ok, tc.want)
+			}
+		})
+	}
+}

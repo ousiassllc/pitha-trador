@@ -58,6 +58,9 @@ type followupRig struct {
 	eval     *disclosureskip.Evaluator
 	now      time.Time
 	written  chan struct{}
+	// gate holds the writer back while the test holds its write lock: the
+	// recording feed stores a fetch asynchronously, and this is a slow write.
+	gate sync.RWMutex
 }
 
 func newFollowupRig(t *testing.T, start time.Time, items ...assist.NewsItem) (*followupRig, *sql.DB) {
@@ -67,6 +70,8 @@ func newFollowupRig(t *testing.T, start time.Time, items ...assist.NewsItem) (*f
 	r.inner = &swappableFeed{items: map[string][]assist.NewsItem{sym: items}}
 	clock := func() time.Time { return r.now }
 	sink := sinkFunc(func(ctx context.Context, ev disclosureskip.FetchEvent) error {
+		r.gate.RLock()
+		defer r.gate.RUnlock()
 		err := r.store.WriteFetch(ctx, ev)
 		r.written <- struct{}{}
 		return err

@@ -12,7 +12,8 @@ import (
 // ObservationGate is what Scout needs to run observation-only symbols (issue
 // #1055): watched and asked on Jev Scout for evaluation data, never traded.
 type ObservationGate interface {
-	// Observed reports whether symbol is an observation-only symbol now.
+	// Observed reports whether symbol is observation-only now (never a held one).
+	// An error means the standing is unknown.
 	Observed(ctx context.Context, symbol string) (bool, error)
 	// Admit reports whether one more observation call may be made now (else why).
 	Admit(ctx context.Context) (ok bool, reason string, err error)
@@ -22,27 +23,23 @@ type ObservationGate interface {
 	RecordFailure(ctx context.Context) error
 }
 
-// ObservationCapSkip is the note of a jev-scout job skipped because the
-// observation daily cap was reached (jobqueue.Skip).
-const ObservationCapSkip = "observation daily cap reached; no Jev call was made"
+// Notes of a jev-scout job skipped (jobqueue.Skip): the observation daily cap was
+// reached / the symbol's observation standing could not be read.
+const (
+	ObservationCapSkip     = "observation daily cap reached; no Jev call was made"
+	ObservationUnknownSkip = "observation standing unknown; skipped this round (no Jev call, no entry)"
+)
 
 func (s *Scout) isObserved(ctx context.Context, symbol string) (bool, error) {
 	if s.observation == nil {
 		return false, nil
 	}
-	observed, err := s.observation.Observed(ctx, symbol)
-	if err != nil {
-		// Unknown standing: a retry decides; never treat it as tradable.
-		return false, fmt.Errorf("jev: read the observation symbols for %q: %w", symbol, err)
-	}
-	return observed, nil
+	return s.observation.Observed(ctx, symbol)
 }
 
 // handleObservation runs one jev-scout job of an observation-only symbol: the
-// Scout call itself (the evaluation data is the point) under the observation
-// daily cap, and nothing after it. The jev-trader job is never enqueued, so no
-// observation symbol reaches Policy, an order, Paper or Live. A day's cap
-// stops these calls only; Scout and Trader of every other symbol are not gated.
+// Scout call under the observation daily cap and nothing after it (no jev-trader
+// job, so no Policy, order, Paper or Live). The cap stops these calls only.
 func (s *Scout) handleObservation(ctx context.Context, payload ScoutJobPayload, snap domain.Snapshot) error {
 	ok, reason, err := s.observation.Admit(ctx)
 	if err != nil {

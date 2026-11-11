@@ -13,6 +13,7 @@ package observation
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -28,9 +29,16 @@ type Settings interface {
 	Set(ctx context.Context, key, value string, updatedAt time.Time) error
 }
 
+// HeldSource lists the symbols with an open position or a pending order
+// (rankingwatch.Held implements it).
+type HeldSource interface {
+	HeldSymbols(ctx context.Context) ([]string, error)
+}
+
 // Gate implements jev.ObservationGate over runtime_settings.
 type Gate struct {
 	settings Settings
+	held     HeldSource
 	now      func() time.Time
 	// mu serializes the read-modify-write of the day's usage row.
 	mu sync.Mutex
@@ -38,25 +46,34 @@ type Gate struct {
 
 var _ jev.ObservationGate = (*Gate)(nil)
 
-// New returns a Gate over settings; now defaults to time.Now.
-func New(settings Settings, now func() time.Time) *Gate {
+// New returns a Gate over settings and the held symbols; now defaults to
+// time.Now. held is required: it is what keeps a symbol that is held from
+// being treated as observation-only.
+func New(settings Settings, held HeldSource, now func() time.Time) *Gate {
 	if now == nil {
 		now = time.Now
 	}
-	return &Gate{settings: settings, now: now}
+	return &Gate{settings: settings, held: held, now: now}
 }
 
-// Observed reports whether symbol is in the effective observation set: the
-// switch is on and the symbol is listed. The settings are read on every call,
-// so a change applies to the next job.
+// Observed reports whether symbol is observation-only now: the switch is on,
+// the symbol is listed, and it is not held. A symbol with an open position or a
+// pending order is never observation-only, listed or not: it goes through the
+// normal Scout, Trader and exit path so the position keeps being managed. The
+// settings are read on every call, so a change applies to the next job. The
+// held symbols are read only for a listed symbol, so every other symbol costs
+// no extra read; a failed read is returned (the caller skips the symbol for
+// that round) rather than guessed.
 func (g *Gate) Observed(ctx context.Context, symbol string) (bool, error) {
 	set := watchsettings.Load(ctx, g.settings)
-	for _, s := range set.Observed() {
-		if s == symbol {
-			return true, nil
-		}
+	if !slices.Contains(set.Observed(), symbol) {
+		return false, nil
 	}
-	return false, nil
+	held, err := g.held.HeldSymbols(ctx)
+	if err != nil {
+		return false, fmt.Errorf("observation: read the held symbols: %w", err)
+	}
+	return !slices.Contains(held, symbol), nil
 }
 
 // Admit reports whether one more observation call may be made today (JST): the

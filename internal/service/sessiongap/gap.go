@@ -17,7 +17,6 @@ package sessiongap
 import (
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/healthalert"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
@@ -60,10 +59,13 @@ const (
 )
 
 // Tolerance is the longest stretch of a session without a snapshot that is not
-// a gap: the market_data_idle threshold (healthalert.IdleThreshold), so a hole
-// the in-app alert would have raised is a hole here too. The snapshot minute is
-// the unit, so a hole is counted from the end of the last covered minute.
-const Tolerance = healthalert.IdleThreshold
+// a gap. It is 15 minutes: a stretch of up to 15 minutes (a restart, a short
+// broker outage, a late login) does not make the day incomplete, while a whole
+// session (150 or 180 minutes) or a long hole always does. It is independent of
+// the market_data_idle alert (healthalert.IdleThreshold, 5 minutes), which is a
+// live warning, not a record of a day. The snapshot minute is the unit, so a
+// hole is counted from the end of the last covered minute.
+const Tolerance = 15 * time.Minute
 
 // maxGaps caps the spans recorded for one day.
 const maxGaps = 10

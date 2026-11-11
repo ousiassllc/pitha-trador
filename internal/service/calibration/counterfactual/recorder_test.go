@@ -211,3 +211,75 @@ type fixedTargets struct {
 func (f fixedTargets) PendingTargets(context.Context, int, time.Time, time.Time, int) ([]counterlabel.Target, error) {
 	return []counterlabel.Target{f.target}, nil
 }
+
+// Risk Engine rejections, Policy guard skips and decisions with no signal at all
+// are recorded in their own skip_kind, not as one "skipped".
+func TestRecorder_SeparatesRiskRejectionsFromGuardSkips(t *testing.T) {
+	e := newEnv(t)
+	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+	risk := e.decision(t, base, domain.JevDirectionLong)
+	e.signal(t, risk.ID, base, false, "risk_engine_rejected: bucket_budget_exceeded: used 1.2M of 1.0M")
+	guard := e.decision(t, base.Add(time.Hour), domain.JevDirectionLong)
+	e.signal(t, guard.ID, base.Add(time.Hour), false, "entry_quality_below_threshold")
+	none := e.decision(t, base.Add(2*time.Hour), domain.JevDirectionShort)
+	for _, d := range []domain.JevDecision{risk, guard, none} {
+		e.bars(t, d.Timestamp, tpBars)
+	}
+
+	if n, err := e.recorder.Run(context.Background()); err != nil || n != 3 {
+		t.Fatalf("Run = (%d, %v), want 3", n, err)
+	}
+	want := map[int64][2]string{
+		risk.ID:  {"risk_rejected", "risk_engine_rejected: bucket_budget_exceeded: used 1.2M of 1.0M"},
+		guard.ID: {"guard_skipped", "entry_quality_below_threshold"},
+		none.ID:  {"no_signal", ""},
+	}
+	for id, w := range want {
+		var kind, reason string
+		if err := e.db.QueryRow(`SELECT skip_kind, reject_reason FROM counterfactual_labels WHERE jev_decision_id = ?`, id).Scan(&kind, &reason); err != nil {
+			t.Fatal(err)
+		}
+		if kind != w[0] || reason != w[1] {
+			t.Errorf("decision %d: skip_kind %q reject_reason %q, want %q / %q", id, kind, reason, w[0], w[1])
+		}
+	}
+}
+
+// With a cutoff that has a date but no recorded Jev model the recorder keeps
+// recording, and marks the labels; a confirmed cutoff leaves them unmarked.
+func TestRecorder_MarksLabelsRecordedUnderAnUnverifiedCutoff(t *testing.T) {
+	e := newEnv(t)
+	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+	e.decision(t, base, domain.JevDirectionLong)
+	e.decision(t, base.Add(time.Hour), domain.JevDirectionLong)
+	e.bars(t, base, tpBars)
+	e.bars(t, base.Add(time.Hour), tpBars)
+	unverified := func() int {
+		return e.count(t, `SELECT COUNT(*) FROM counterfactual_labels WHERE cutoff_unverified = 1`)
+	}
+
+	e.settings.LLMCutoffModel = "" // a date, no model: unverified
+	if s := e.settings.CutoffStatus(); s != metalabelsettings.CutoffUnverified {
+		t.Fatalf("cutoff status = %q, want unverified (the test's premise)", s)
+	}
+	if n, err := e.recorder.Run(context.Background()); err != nil || n != 2 {
+		t.Fatalf("Run = (%d, %v), want recording to go on under an unverified cutoff", n, err)
+	}
+	if got := unverified(); got != 2 {
+		t.Fatalf("%d labels marked cutoff_unverified, want both", got)
+	}
+
+	// Once the model is recorded, later labels are not marked; the marked ones stay marked.
+	e.settings.LLMCutoffModel = "m"
+	later := e.decision(t, base.Add(2*time.Hour), domain.JevDirectionLong)
+	e.bars(t, later.Timestamp, tpBars)
+	if n, err := e.recorder.Run(context.Background()); err != nil || n != 1 {
+		t.Fatalf("Run = (%d, %v), want 1", n, err)
+	}
+	if got := unverified(); got != 2 {
+		t.Fatalf("%d labels marked cutoff_unverified, want still only the first two", got)
+	}
+	if got := e.count(t, `SELECT COUNT(*) FROM counterfactual_labels WHERE jev_decision_id = ? AND cutoff_unverified = 0`, later.ID); got != 1 {
+		t.Fatalf("the label recorded under a confirmed cutoff is marked")
+	}
+}

@@ -16,6 +16,10 @@ import (
 // labels (TrainingScope.IncludeSkippedLabels). A decision that has a
 // triple-barrier calibration_outcomes row with a net return is left out, so it
 // can never be a row twice: the row ListTrainingRowsFrom reads is the one used.
+// Labels recorded while the LLM cutoff was unverified (cutoff_unverified = 1: a
+// date, but no recorded Jev model) are kept in the table and left out here, so
+// neither the training nor the out-of-sample evaluation, which split these
+// rows, ever sees them.
 func listSkippedLabelRows(ctx context.Context, q Querier, from, to time.Time, scope TrainingScope) ([]TrainingRow, error) {
 	scopeCond, scopeArgs := scope.Where()
 	if scopeCond != "" {
@@ -31,7 +35,7 @@ SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.res
 FROM counterfactual_labels c
 JOIN jev_decisions d ON d.id = c.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT')
-	AND c.label_version = ?`+scopeCond+`
+	AND c.label_version = ? AND c.cutoff_unverified = 0`+scopeCond+`
 	AND d.timestamp >= ? AND d.timestamp < ?
 	AND NOT EXISTS (SELECT 1 FROM calibration_outcomes o
 		WHERE o.jev_decision_id = d.id AND o.label_version = ? AND o.net_return_bps IS NOT NULL)

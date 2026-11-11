@@ -135,3 +135,38 @@ func TestWatcher_LoweredSizeNeverDropsAHeldSymbol(t *testing.T) {
 		t.Errorf("watch = %d symbols, want exactly the 8 held ones (no ranked symbol fits)", len(watch))
 	}
 }
+
+// Outside the session only the held symbols are registered for PUSH and
+// ingested; an observation-only symbol (issue #1055) is not held and takes no
+// slot, however the switch is set, and comes back with the next session.
+func TestWatcher_ObservationSymbolsAreNotWatchedOutsideTheSession(t *testing.T) {
+	r := newRig(t, universeOf(10)...)
+	r.w.MaxWatched = 45
+	r.held.symbols = []string{"U000"}
+	r.useSettings(watchsettings.Settings{MaxWatched: 45, ObservationEnabled: true, ObservationSymbols: []string{"U005"}})
+	r.src.set([]string{"U001"}, nil, false)
+	r.cycle()
+	if got := r.reg.sets[len(r.reg.sets)-1]; !slices.Contains(got, "U005") {
+		t.Fatalf("setup: in the session the observation symbol must be watched, registered = %v", got)
+	}
+
+	open := r.w.Open
+	r.w.Open = closed
+	r.cycle()
+	if last := r.reg.sets[len(r.reg.sets)-1]; !slices.Equal(last, []string{"U000"}) {
+		t.Errorf("registered = %v outside the session, want the held symbol only", last)
+	}
+	if got := r.lastEnqueued(); !slices.Equal(got, []string{"U000"}) {
+		t.Errorf("enqueued = %v outside the session, want the held symbol only (no market data for U005)", got)
+	}
+	if r.list.Contains("U005") {
+		t.Error("the observation symbol is on the candidate list outside the session")
+	}
+
+	r.w.Open = open
+	r.src.set([]string{"U001"}, nil, false)
+	r.cycle()
+	if got := r.reg.sets[len(r.reg.sets)-1]; !slices.Contains(got, "U005") {
+		t.Errorf("registered = %v in the next session, want the observation symbol back", got)
+	}
+}

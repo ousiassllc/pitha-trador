@@ -160,7 +160,7 @@ erDiagram
 |-------|-----|------|------|
 | session_date | text | PK, CHECK (`length = 10`) | 東証の立会日（JST の YYYY-MM-DD）。休業日（土日・祝日・年末年始）の行は作らない |
 | gap_kind | text | NOT NULL, CHECK (`'in_progress'` / `'none'` / `'whole_day'` / `'intraday'` / `'insufficient_history'`) | `in_progress`＝当日の観測中（判定前。読み手は無視する）。`none`＝そろっている。`whole_day`＝終日 0 件（それ以前のスナップショットはある）。`intraday`＝日中の欠け。`insufficient_history`＝0 件でそれ以前のスナップショットも無い（履歴の始まりより前。#814。実欠けではない） |
-| gap_codes_json | text | NOT NULL, 既定 `'[]'` | 日中の欠けの固定コード（JSON 配列）: `morning_missing`（前場が無い）/ `afternoon_missing`（後場が無い）/ `late_start`（立会の始まりから 5 分を超えて遅れて開始）/ `mid_session_gap`（立会中に 5 分を超える途切れ）/ `early_end`（立会の終わりの 5 分以上前に終了）。5 分は `healthalert.IdleThreshold` |
+| gap_codes_json | text | NOT NULL, 既定 `'[]'` | 日中の欠けの固定コード（JSON 配列）: `morning_missing`（前場が無い）/ `afternoon_missing`（後場が無い）/ `late_start`（立会の始まりから 15 分を超えて遅れて開始）/ `mid_session_gap`（立会中に 15 分を超える途切れ）/ `early_end`（立会の終わりの 15 分以上前に終了）。15 分は `sessiongap.Tolerance`（市況データ停止の警告 `healthalert.IdleThreshold`＝5 分とは別） |
 | gaps_json | text | NOT NULL, 既定 `'[]'` | 欠けた区間（JSON 配列。`{code, from, to, minutes}`。`from`/`to` は UTC RFC3339。最大 10 件） |
 | alert_codes_json | text | NOT NULL, 既定 `'[]'` | その日アプリが見た健康警告の固定コード（`health_alerts` の `code`。立会外では警告が消えるので、観測中に積み上げる）。アプリが止まっていた間の警告は残らない（空でも「警告が無かった」とは限らない。`watch_checks`で見る） |
 | watch_checks | integer | NOT NULL, 既定 0, CHECK (`>= 0`) | アプリが立会中（9:00〜11:30・12:30〜15:30）に観測した回数（1 分に 1 回）。0 や極端に少ない日はアプリが止まっていた手がかり |
