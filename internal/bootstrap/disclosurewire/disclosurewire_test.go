@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
+	"github.com/ousiassllc/pitha-trador/internal/service/disclosureskip"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 )
 
@@ -80,7 +81,7 @@ func TestWire_RecordsTheNewsIngestFetchAndEvaluatesTheDecision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	feed, wire := Wrap(newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: srv.URL}), false, path)
+	feed, wire := Wrap(newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: srv.URL}), false, path, false)
 	wire.every = 10 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -118,10 +119,10 @@ func TestWire_RecordsTheNewsIngestFetchAndEvaluatesTheDecision(t *testing.T) {
 // is and records nothing; a nil Wire does nothing at Start.
 func TestWrap_LeavesCustomFeedsAndMissingPathsAlone(t *testing.T) {
 	inner := newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: "http://127.0.0.1:1"})
-	if feed, wire := Wrap(inner, true, "/tmp/x.db"); feed != newsfeed.Feed(inner) || wire != nil {
+	if feed, wire := Wrap(inner, true, "/tmp/x.db", true); feed != newsfeed.Feed(inner) || wire != nil {
 		t.Fatalf("custom feed: got %v, %v", feed, wire)
 	}
-	if feed, wire := Wrap(inner, false, ""); feed != newsfeed.Feed(inner) || wire != nil {
+	if feed, wire := Wrap(inner, false, "", true); feed != newsfeed.Feed(inner) || wire != nil {
 		t.Fatalf("no path: got %v, %v", feed, wire)
 	}
 	var wg sync.WaitGroup
@@ -134,7 +135,7 @@ func TestWrap_LeavesCustomFeedsAndMissingPathsAlone(t *testing.T) {
 func TestWire_StartWithoutADatabaseSwitchesTheRecordOff(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"items":[]}`)) }))
 	t.Cleanup(srv.Close)
-	feed, wire := Wrap(newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: srv.URL}), false, filepath.Join(t.TempDir(), "missing.db"))
+	feed, wire := Wrap(newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: srv.URL}), false, filepath.Join(t.TempDir(), "missing.db"), false)
 	var wg sync.WaitGroup
 	wire.Start(context.Background(), &wg)
 	wg.Wait()
@@ -142,4 +143,56 @@ func TestWire_StartWithoutADatabaseSwitchesTheRecordOff(t *testing.T) {
 	if err != nil || len(items) != 0 {
 		t.Fatalf("Fetch = %v, %v", items, err)
 	}
+}
+
+// With News Ingest running, the Wire also follows up the symbol of a decision
+// that left News Ingest's targets: one request through the recording feed (so it
+// is recorded), no News Ingest involved. Without News Ingest (NEWS_FEED_ENABLED
+// off, no Luna) the Wire has no Followup at all, so nothing is requested.
+func TestWire_FollowsUpAWaitingDecisionOnlyWhenNewsIngestRuns(t *testing.T) {
+	jst := time.FixedZone("JST", 9*3600)
+	decided := time.Date(2026, 10, 14, 10, 0, 0, 0, jst) // a Wednesday
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	path := filepath.Join(t.TempDir(), "pitha.db")
+	app, err := sqlitedb.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	if _, err := app.Exec(`INSERT INTO instruments (id, symbol, name, market, is_active) VALUES (1, '7203', 'x', 'TSE Prime', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.Exec(`INSERT INTO jev_decisions (id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
+		question_version, response_json, direction, confidence, latency_ms, model_id)
+		VALUES (1, 1, '7203', ?, 'trader', 'h', '{}', 'trader-v3', '{}', 'LONG', 0.7, 5, 'm')`, sqlutil.FormatTime(decided)); err != nil {
+		t.Fatal(err)
+	}
+
+	client := newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: srv.URL})
+	if _, off := Wrap(client, false, path, false); off.followup {
+		t.Fatal("the Wire follows up although News Ingest is not running")
+	}
+	_, wire := Wrap(client, false, path, true)
+	if !wire.followup {
+		t.Fatal("the Wire does not follow up although News Ingest is running")
+	}
+	wire.every = 10 * time.Millisecond
+	// The Followup's clock is inside the session, ten minutes after the decision.
+	wire.followupOpts = []disclosureskip.FollowupOption{disclosureskip.WithFollowupClock(func() time.Time { return decided.Add(10 * time.Minute) })}
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wire.Start(ctx, &wg)
+
+	waitUntil(t, "the follow-up request", func() bool { return requests.Load() >= 1 })
+	waitUntil(t, "the recorded follow-up fetch", func() bool {
+		return count(t, app, `SELECT COUNT(*) FROM disclosure_fetches WHERE symbol = '7203' AND outcome = 'ok'`) >= 1
+	})
+	cancel()
+	wg.Wait()
 }

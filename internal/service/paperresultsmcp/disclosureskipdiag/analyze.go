@@ -14,7 +14,7 @@ import (
 const (
 	skipText    = "判断の時刻以前の開示のうち、判断日の当日か直前の東証営業日の15:00以降に出た決算短信・業績予想の修正（上方・下方とも）が 1 件以上ある"
 	noSkipText  = "やのしんの取得が窓（直前の東証営業日 15:00 JST から判断時刻まで）を覆っていて、対象の開示が 0 件"
-	unknownText = "取得が失敗・欠け・件数上限で窓に届かず、対象の開示も見つからなかった。「該当なし」ではない"
+	unknownText = "取得が失敗・欠け・件数上限で窓に届かず、対象の開示も見つからなかった。「該当なし」ではない。理由は unknown_reasons（no_fetch / incomplete_fetch と、その内訳 details）"
 	selectText  = "判断ごとに label_version=2 で net_return_bps がある行のうち新しい1行（entry_quality_whatif・メタモデルの学習行と同じ規則）。ラベルのない判断は unlabeled に数え、集計に入れない"
 	winText     = "net_return_bps > 0（コスト控除後。entry_quality_whatif・メタモデルの学習と同じ定義）。win_rate = wins / labeled。jev_calibration の hit_rate（was_direction_correct）とは別の定義"
 )
@@ -34,7 +34,7 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, a Args) (Data, error
 		RowsFrom: from, RowsTo: to,
 		PromptVersions: PromptScope{Only: a.PromptVersion, Excluded: append([]string{}, a.Foreign...)},
 		Rule:           Rule{Versions: []int{}, Skip: skipText, NoSkip: noSkipText, Unknown: unknownText},
-		UnknownReasons: []Bucket{}, SkipKinds: []Bucket{},
+		UnknownReasons: []ReasonBucket{}, SkipKinds: []Bucket{},
 		Labels: Labels{LabelVersion: domain.CalibrationLabelVersionTripleBarrier, Selection: selectText, Win: winText},
 	}
 	if a.PromptVersion != "" {
@@ -51,9 +51,7 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, a Args) (Data, error
 		return Data{}, err
 	}
 	var err error
-	if out.UnknownReasons, err = buckets(ctx, q, `
-SELECT r.unknown_reason, COUNT(*) FROM disclosure_skip_records r JOIN jev_decisions d ON d.id = r.jev_decision_id
-WHERE r.verdict = 'unknown' AND `+where+` GROUP BY r.unknown_reason ORDER BY r.unknown_reason`, args); err != nil {
+	if out.UnknownReasons, err = unknownReasons(ctx, q, where, args); err != nil {
 		return Data{}, err
 	}
 	if out.SkipKinds, err = buckets(ctx, q, `
@@ -123,6 +121,43 @@ func group(count, labeled, wins int, sum float64) Group {
 	g.WinRate = &rate
 	g.NetReturn = &NetReturn{Mean: sum / float64(labeled), Sum: sum}
 	return g
+}
+
+// unknownReasons counts the unknown records per reason and, within each, per
+// stored detail (NULL: no breakdown). Only codes and counts leave the database.
+func unknownReasons(ctx context.Context, q query.Q, where string, args []any) ([]ReasonBucket, error) {
+	rows, err := q.QueryContext(ctx, `
+SELECT r.unknown_reason, r.unknown_detail, COUNT(*) FROM disclosure_skip_records r JOIN jev_decisions d ON d.id = r.jev_decision_id
+WHERE r.verdict = 'unknown' AND `+where+` GROUP BY r.unknown_reason, r.unknown_detail ORDER BY r.unknown_reason, r.unknown_detail`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query: disclosure skip unknown reasons: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := []ReasonBucket{}
+	for rows.Next() {
+		var (
+			reason string
+			detail sql.NullString
+			count  int
+		)
+		if err := rows.Scan(&reason, &detail, &count); err != nil {
+			return nil, fmt.Errorf("query: scan disclosure skip unknown reason: %w", err)
+		}
+		if len(out) == 0 || out[len(out)-1].Code != reason {
+			out = append(out, ReasonBucket{Code: reason, Details: []Bucket{}})
+		}
+		b := &out[len(out)-1]
+		b.Count += count
+		code := UnclassifiedDetail
+		if detail.Valid {
+			code = detail.String
+		}
+		b.Details = append(b.Details, Bucket{Code: code, Count: count})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query: disclosure skip unknown reasons: %w", err)
+	}
+	return out, nil
 }
 
 func buckets(ctx context.Context, q query.Q, stmt string, args []any) ([]Bucket, error) {

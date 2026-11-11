@@ -68,6 +68,21 @@ type Bucket struct {
 	Count int    `json:"count"`
 }
 
+// ReasonBucket is the count of one unknown reason (no_fetch, incomplete_fetch)
+// and its breakdown: Details are the finer reasons stored with the record when
+// it was finalized (disclosureskip.UnknownDetail), so they stay readable after
+// the 7-day fetch rows are pruned. Records finalized before the breakdown
+// existed count under UnclassifiedDetail.
+type ReasonBucket struct {
+	Code    string   `json:"code"`
+	Count   int      `json:"count"`
+	Details []Bucket `json:"details"`
+}
+
+// UnclassifiedDetail is the detail code of the unknown records that carry no
+// breakdown (finalized before migration 000051; they are not backfilled).
+const UnclassifiedDetail = "unclassified"
+
 // Labels says how the outcome labels were chosen.
 type Labels struct {
 	LabelVersion int    `json:"label_version"`
@@ -83,8 +98,9 @@ type Data struct {
 	Rule           Rule        `json:"rule"`
 	Population     Population  `json:"population"`
 	Verdicts       Verdicts    `json:"verdicts"`
-	// UnknownReasons splits Verdicts.Unknown by why (no_fetch, incomplete_fetch).
-	UnknownReasons []Bucket `json:"unknown_reasons"`
+	// UnknownReasons splits Verdicts.Unknown by why (no_fetch, incomplete_fetch),
+	// each with its breakdown (Details).
+	UnknownReasons []ReasonBucket `json:"unknown_reasons"`
 	// SkipKinds counts the skip decisions per kind of matching disclosure (a
 	// decision with matches of both kinds is in both).
 	SkipKinds []Bucket `json:"skip_kinds"`

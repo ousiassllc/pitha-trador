@@ -35,20 +35,27 @@ type Wire struct {
 	every  time.Duration // evaluateInterval; tests shorten it
 	feed   *disclosureskip.RecordingFeed
 	sink   *lazySink
+	// followup: also run the Followup (issue #1053). Only when News Ingest runs,
+	// so that a stopped News Ingest (NEWS_FEED_ENABLED=off, no Luna) sends no
+	// request at all, as before.
+	followup     bool
+	followupOpts []disclosureskip.FollowupOption // tests
 }
 
 // Wrap returns the feed News Ingest should poll and the Wire that runs its
 // background part. The record is made for the default やのしん feed only (the
 // index it is built on: newest-first, item-limited); with a custom feed
 // (customFeed) or without a database path, feed is returned as it is and the
-// Wire does nothing.
-func Wrap(feed newsfeed.Feed, customFeed bool, dbPath string) (newsfeed.Feed, *Wire) {
+// Wire does nothing. newsIngest says News Ingest runs: only then does the Wire
+// make the follow-up requests of the symbols that left News Ingest's targets
+// (disclosureskip.Followup).
+func Wrap(feed newsfeed.Feed, customFeed bool, dbPath string, newsIngest bool) (newsfeed.Feed, *Wire) {
 	if customFeed || dbPath == "" {
 		return feed, nil
 	}
 	sink := &lazySink{}
 	recording := disclosureskip.NewRecordingFeed(feed, newsfeed.YanoshinLimit, sink)
-	return recording, &Wire{dbPath: dbPath, every: evaluateInterval, feed: recording, sink: sink}
+	return recording, &Wire{dbPath: dbPath, every: evaluateInterval, feed: recording, sink: sink, followup: newsIngest}
 }
 
 // Start opens the record's database connection and launches its goroutines on
@@ -71,6 +78,11 @@ func (w *Wire) Start(ctx context.Context, wg *sync.WaitGroup) {
 	running.Add(2)
 	go func() { defer running.Done(); w.feed.Run(ctx) }()
 	go func() { defer running.Done(); evaluator.Run(ctx, w.every) }()
+	if w.followup {
+		followup := disclosureskip.NewFollowup(store, w.feed, marketcalendar.TSE, w.followupOpts...)
+		running.Add(1)
+		go func() { defer running.Done(); followup.Run(ctx, w.every) }()
+	}
 	wg.Add(1)
 	go func() { defer wg.Done(); running.Wait(); closeQuietly(conn) }()
 	slog.Info("bootstrap: disclosure skip record enabled (record only; it never affects trading)")

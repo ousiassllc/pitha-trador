@@ -1,8 +1,10 @@
 package disclosureskiptests
 
 import (
+	"database/sql"
 	"math"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -36,7 +38,11 @@ func TestSummaryCountsVerdictsAndLabels(t *testing.T) {
 		v.Unknown.NetReturn == nil || !near(&v.Unknown.NetReturn.Sum, 5) {
 		t.Errorf("unknown = %+v", v.Unknown)
 	}
-	if want := []disclosureskipdiag.Bucket{{Code: "incomplete_fetch", Count: 1}, {Code: "no_fetch", Count: 1}}; !slices.Equal(d.UnknownReasons, want) {
+	want := []disclosureskipdiag.ReasonBucket{
+		{Code: "incomplete_fetch", Count: 1, Details: []disclosureskipdiag.Bucket{{Code: "unclassified", Count: 1}}},
+		{Code: "no_fetch", Count: 1, Details: []disclosureskipdiag.Bucket{{Code: "lunch_break", Count: 1}}},
+	}
+	if !reflect.DeepEqual(d.UnknownReasons, want) {
 		t.Errorf("unknown reasons = %+v, want %+v", d.UnknownReasons, want)
 	}
 	if want := []disclosureskipdiag.Bucket{{Code: "earnings", Count: 1}, {Code: "forecast_revision", Count: 2}}; !slices.Equal(d.SkipKinds, want) {
@@ -48,6 +54,49 @@ func TestSummaryCountsVerdictsAndLabels(t *testing.T) {
 	if !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4", "trader-v5"}) {
 		t.Errorf("excluded versions = %v", d.PromptVersions.Excluded)
 	}
+}
+
+// The unknown reasons keep no_fetch / incomplete_fetch and break each down by
+// the detail stored with the record when it was finalized: the breakdown is read
+// from the record, not recomputed from the fetch rows (which are pruned after 7
+// days), so it is the same with the fetch table empty. A record without a detail
+// (finalized before the breakdown) counts as unclassified.
+func TestSummaryBreaksUnknownReasonsDown(t *testing.T) {
+	path, w := seed(t)
+	for i, spec := range []struct{ reason, detail string }{
+		{"no_fetch", "dropped_from_candidates"}, {"no_fetch", "dropped_from_candidates"}, {"no_fetch", "fetch_failed"},
+		{"no_fetch", "within_fetch_lag"}, {"no_fetch", "after_close"}, {"incomplete_fetch", "item_limit"},
+	} {
+		id := 20 + i
+		decision(t, w, id, "LONG", "trader-v3", decidedAt)
+		record(t, w, id, decidedAt, "unknown", spec.reason)
+		detail(t, w, id, spec.detail)
+	}
+	if n := countRows(t, w, "disclosure_fetches"); n != 0 {
+		t.Fatalf("disclosure_fetches has %d rows; the breakdown must not depend on them", n)
+	}
+	d := newTestServer(t, path, "").call(t, args(nil)).data(t)
+	want := []disclosureskipdiag.ReasonBucket{
+		{Code: "incomplete_fetch", Count: 2, Details: []disclosureskipdiag.Bucket{{Code: "unclassified", Count: 1}, {Code: "item_limit", Count: 1}}},
+		{Code: "no_fetch", Count: 6, Details: []disclosureskipdiag.Bucket{
+			{Code: "after_close", Count: 1}, {Code: "dropped_from_candidates", Count: 2}, {Code: "fetch_failed", Count: 1},
+			{Code: "lunch_break", Count: 1}, {Code: "within_fetch_lag", Count: 1}}},
+	}
+	if !reflect.DeepEqual(d.UnknownReasons, want) {
+		t.Errorf("unknown reasons = %+v\nwant %+v", d.UnknownReasons, want)
+	}
+	if d.Verdicts.Unknown.Count != 8 {
+		t.Errorf("unknown count = %d, want 8 (the breakdown sums to it)", d.Verdicts.Unknown.Count)
+	}
+}
+
+func countRows(t *testing.T, w *sql.DB, table string) int {
+	t.Helper()
+	var n int
+	if err := w.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // A group without a labeled decision has a null win rate and net return, not zero.

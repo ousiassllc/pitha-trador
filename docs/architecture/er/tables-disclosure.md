@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（適時開示による見送りルールの記録）
 
-`docs/architecture/er.md` から分割した章。対象: `disclosure_items` / `disclosure_fetches` / `disclosure_skip_records` / `disclosure_skip_matches`（マイグレーション `000049`。issue #935）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様は `docs/architecture/disclosure-skip.md`。
+`docs/architecture/er.md` から分割した章。対象: `disclosure_items` / `disclosure_fetches` / `disclosure_skip_records` / `disclosure_skip_matches`（マイグレーション `000049`。issue #935。`disclosure_skip_records.unknown_detail` はマイグレーション `000051`。issue #1053）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様は `docs/architecture/disclosure-skip.md`。
 
 4 表とも**記録だけ**で、取引・Policy・Risk・発注・Jev のプロンプトのどれも読まない。書くのは、News Ingest の取得結果を横取りする記録部品と、判断を後追いで評価する評価部品（どちらも専用の DB 接続。`DBWriteFailures` に触れない）だけ。`jev_decisions` と `calibration_outcomes` は読むだけで、既存の列・制約は変えない。日時は UTC の RFC3339（小数秒 9 桁固定）。
 
@@ -34,6 +34,7 @@ erDiagram
         text decided_at
         text verdict
         text unknown_reason
+        text unknown_detail
         text window_from
         text covered_by_fetch_at
         integer rule_version
@@ -80,7 +81,7 @@ News Ingest の 1 回の取得の成否。取得の穴を「該当なし」と�
 
 ## disclosure_skip_records
 
-Jev のエントリー候補の判断（`jev_decisions` の `decision_type='trader'` かつ `direction` が `LONG` / `SHORT`）1 件につき 1 行。`jev_decision_id` は UNIQUE。INDEX `(decided_at)`。判断から最大 60 分は行が無い（覆う取得を待つ）。
+Jev のエントリー候補の判断（`jev_decisions` の `decision_type='trader'` かつ `direction` が `LONG` / `SHORT`）1 件につき 1 行。`jev_decision_id` は UNIQUE。INDEX `(decided_at)`。判断から最大 60 分（立会時間の分で数える。昼休み・場後・休場日は数えない）は行が無い（覆う取得を待つ）。
 
 | カラム | 型 | 制約 | 説明 |
 |--------|-----|------|------|
@@ -90,6 +91,7 @@ Jev のエントリー候補の判断（`jev_decisions` の `decision_type='trad
 | decided_at | text | NOT NULL | 判断の時刻（`jev_decisions.timestamp`）。ルールの `t` |
 | verdict | text | NOT NULL, CHECK (`skip` / `no_skip` / `unknown`) | 該当 / 非該当 / 不明 |
 | unknown_reason | text | CHECK (`no_fetch` / `incomplete_fetch`) | `unknown` のときだけ入る（`verdict = 'unknown'` と同値） |
+| unknown_detail | text | CHECK (NULL、または `verdict = 'unknown'` で `fetch_failed` / `lunch_break` / `after_close` / `within_fetch_lag` / `dropped_from_candidates` / `no_fetch_at_all` / `undated_items` / `item_limit`) | `unknown_reason` の内訳（マイグレーション `000051`、issue #1053）。確定のときに保存するので、`disclosure_fetches` が 7 日で消えても残る。NULL は「内訳なし」（この列ができる前の行と `unknown` 以外の行。後追いで付け直さない）。`no_fetch` の内訳は `fetch_failed` / `lunch_break` / `after_close` / `within_fetch_lag` / `dropped_from_candidates` / `no_fetch_at_all`、`incomplete_fetch` の内訳は `undated_items` / `item_limit` |
 | window_from | text | NOT NULL | 窓の始まり（判断日の直前の東証営業日の 15:00 JST）。窓は `[window_from, decided_at]` |
 | covered_by_fetch_at | text | | 窓を覆った取得の時刻。覆えていなければ NULL（`skip` は覆えていなくても確定する） |
 | rule_version | integer | NOT NULL | ルールの版（`disclosureskip.RuleVersion`） |
