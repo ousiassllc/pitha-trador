@@ -14,12 +14,12 @@ import (
 // periodTools are the tools taking the from/to period arguments (thirteen since
 // metalabel_training_readiness / jev_models, issues #848 / #849,
 // session_diagnostics, issue #850, entry_quality_whatif, issue #911, and
-// disclosure_skip_summary, issue #935); health_today
+// disclosure_skip_summary, issue #935, jev_trial_compare / jev_trial_cost, issue #1060); health_today
 // (issue #808) takes none, so it is called separately (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
-	"metalabel_training_readiness", "jev_models", "session_diagnostics", "entry_quality_whatif", "disclosure_skip_summary",
+	"metalabel_training_readiness", "jev_models", "session_diagnostics", "entry_quality_whatif", "disclosure_skip_summary", "jev_trial_compare", "jev_trial_cost",
 }
 
 const healthToday = "health_today"
