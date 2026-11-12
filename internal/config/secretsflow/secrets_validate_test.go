@@ -32,7 +32,7 @@ func TestNormalizeSecretValue_BlankIsErrEmpty(t *testing.T) {
 func TestNormalizeSecretValue_URLKeysRequireHTTPOrHTTPSWithHost(t *testing.T) {
 	urlKeys := []string{
 		config.KeyJevBaseURL, config.KeySlackWebhookURL, config.KeyLunaBaseURL,
-		config.KeyNewsFeedURL, config.KeySolBaseURL, config.KeyOpusBaseURL,
+		config.KeyNewsFeedURL, config.KeySolBaseURL, config.KeyOpusBaseURL, config.KeyOpenRouterBaseURL,
 	}
 	for _, key := range urlKeys {
 		for _, ok := range []string{"http://localhost:8080", "https://example.com/path?x=1", "HTTPS://Example.com"} {
@@ -54,7 +54,7 @@ func TestNormalizeSecretValue_URLKeysRequireHTTPOrHTTPSWithHost(t *testing.T) {
 func TestNormalizeSecretValue_CredentialKeysRejectControlCharacters(t *testing.T) {
 	credentialKeys := []string{
 		config.KeyJevAPIKey, config.KeyKabuAPIPassword, config.KeyLunaAPIKey,
-		config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey, config.KeyJevModel,
+		config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey, config.KeyOpenRouterAPIKey, config.KeyJevModel,
 	}
 	for _, key := range credentialKeys {
 		for _, bad := range []string{"ab\ncd", "ab\r\ncd", "ab\tcd", "ab\x00cd", "ab\x7fcd"} {
@@ -75,8 +75,8 @@ func TestNormalizeSecretValue_EveryAllowedKeyIsClassified(t *testing.T) {
 			urls++
 		}
 	}
-	if urls != 6 {
-		t.Errorf("URL keys among allowed keys = %d, want 6", urls)
+	if urls != 7 {
+		t.Errorf("URL keys among allowed keys = %d, want 7", urls)
 	}
 	if config.IsURLSecretKey("NOT_A_KEY") {
 		t.Errorf("unknown key classified as URL key")

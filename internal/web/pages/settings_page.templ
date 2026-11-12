@@ -31,6 +31,9 @@ type SettingsProps struct {
 	// JevPrompt shows the Jev prompt card and modal (issue #872); false (no
 	// service wired) hides them.
 	JevPrompt bool
+	// JevTrial shows the model-comparison trial card and modal; false (no
+	// service wired) hides them.
+	JevTrial bool
 	// Links are the page's links to screens outside Settings.
 	Links []settingspages.Link
 }
@@ -155,6 +158,20 @@ templ SettingsPage(props SettingsProps) {
 					</ul>
 				</section>
 			}
+			if props.JevTrial && props.Has("modal-jev-trial") {
+				<section aria-labelledby="settings-jev-trial-heading">
+					<h2 id="settings-jev-trial-heading" class="mb-6 text-2xl font-semibold text-ink">モデル比較</h2>
+					<ul class="flex flex-col gap-3" data-testid="jev-trial-list">
+						@molecules.SettingsCard(molecules.SettingsCardProps{
+							ID:          "jev-trial",
+							ModalID:     "modal-jev-trial",
+							Name:        "モデル比較トライアル",
+							ActionLabel: "開く",
+							Status:      settingsHelp("help-settings-jev-trial", "モデル比較トライアルの説明", "ライブの判断と同じ入力を別のモデルにも送って答えを比べます（Paper のみ・既定オフ）。有効化・アーム・費用上限・状態を確認・設定できます。答えは取引にも学習にも使いません。"),
+						})
+					</ul>
+				</section>
+			}
 			if props.hasSystem() {
 				<section aria-labelledby="settings-system-heading">
 					<h2 id="settings-system-heading" class="mb-6 text-2xl font-semibold text-ink">システム</h2>
@@ -240,6 +257,14 @@ templ SettingsPage(props SettingsProps) {
 				// (internal/web/organisms/jevprompt) on load; its forms swap this
 				// element's content in place.
 				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+			}
+		}
+		if props.JevTrial && props.Has("modal-jev-trial") {
+			@molecules.Modal("modal-jev-trial", "モデル比較トライアル") {
+				// Filled in by `GET /settings/jev-trial-panel`
+				// (internal/web/organisms/jevtrial) on load; its form swaps this
+				// element's content in place.
+				<div id="jev-trial-panel" hx-get="/settings/jev-trial-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 			}
 		}
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>

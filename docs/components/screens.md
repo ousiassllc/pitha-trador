@@ -67,9 +67,11 @@
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
+| OpenRouter（モデル比較） | `/settings/integrations#modal-openrouter` | モデル比較トライアルが比較対象のモデルを呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
 | MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開し、許可した基本設定だけを変更できる MCP サーバーの有効化・API キーの設定と、起動・停止・再起動、MCP からの設定変更の許可（既定オン）と監査ログの確認ができます。 | 外部連携・AI |
+| モデル比較トライアル | `/settings/integrations#modal-jev-trial` | ライブの判断と同じ入力を別のモデル（アーム）にも送って答えを比べる試験（Paper のみ・既定オフ）の有効化・アーム（JSON）・全体の 1 日の費用上限・状態（今日と累計の費用、アームごとの費用と上限・失敗回数・停止の理由）を確認・設定します。オンにできるのはこの画面だけです。アームの答えは取引にも学習にも使われません。 | 外部連携・AI |
 | API ドキュメント（Swagger） | `/swagger` | JSON API の仕様を確認します（SWAGGER_ENABLED=true のときだけ表示されます）。 | 外部連携・AI (SWAGGER_ENABLED=true のときのみ) |
 | アップデート | `/settings/maintenance#modal-update` | 現在のバージョンと最終確認結果を確認し、新しいバージョンを確認します。 | システム |
 | エラーログ | `/settings/maintenance#modal-error-log` | 調査・共有のためにエラーログをダウンロードします。 | システム |
@@ -112,3 +114,4 @@
 | 1.12 | 2026-10-23 | ホームの保有ポジション・今日の損益が`closed_at`の無い全行を数えるよう修正、損失上限に達したら「損失上限に達しました」と表示、見送り理由はエントリー品質が最多と同数でも最低エントリー品質を併記 | issue #896（#899の上に積む。レビュー修正） |
 | 1.13 | 2026-10-24 | 全画面の説明文・制約・注意書きを項目名の横のヘルプマーク（`atoms.HelpMark`。マウス・フォーカス・タップで開く）へ移し、Issue・PR・FRの番号や設定キー名・内部コードの画面表示を削除。止まっている理由・エラー・警告・Live/Paperの区別・危ない操作の確認文は短い一文で画面に残す。設定の接続先・項目は日本語ラベルだけにし、キー名はヘルプの中に入れた。MCPカードの名称は「MCP」 | issue #902 |
 | 1.14 | 2026-10-26 | 画面の表記ルール（§3）を追加。決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの内部コードを日本語名で表示し、Risk/Jevパネル・予測の精度の英語見出しを日本語化、ヘルプから設定キー名・MCPツール名を除去、ホームのスキャン状況の項目名を平易にした。注文提案詳細の「#n」を「n 番」に、「あいりの見込み」を「AIの見込み」に、空の状態の文を統一 | issue #904 |
+| 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |

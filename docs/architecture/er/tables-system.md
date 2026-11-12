@@ -24,7 +24,7 @@ erDiagram
 
 Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.settings_write_enabled`（JSON の整数`1`=許可・`0`=禁止。行が無いときは許可。`1`/`0`以外は禁止として扱う）。アプリ（Settings の MCP カード）と MCP プロセスが同じ行を読み書きする（`internal/config/mcpwritesettings`）。MCP がこの表へ書けるのは、`mcpwritesettings.Keys()`のホワイトリストのキーとこのスイッチだけ。
 
-Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`で書けるのは`jev.shadow.enabled`と`jev.shadow.candidate_version`の2キーだけ（issue #929）で、ほかは書けない）。
+Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`で書けるのは`jev.shadow.enabled`と`jev.shadow.candidate_version`の2キーだけ（issue #929）で、ほかは書けない）。意思決定モデル比較のトライアル（issue #1059）は別系統のキー`jev.trial.enabled`（既定は無効）・`jev.trial.arms`（既定は空）・`jev.trial.daily_cost_cap_usd`（既定 0.10 USD）・`jev.trial.halt`・アームごとの`jev.trial.halt.<arm>`/`jev.trial.failures.<arm>`/`jev.trial.throttle.<arm>`を使う（`jev.shadow.*`とは重ならない。詳細は`er/tables-jev-trial.md`。**MCPの`settings_set`では1キーも書けない**。有効化はSettings画面だけ）。
 
 監視銘柄数と観察用銘柄（issue #1055。FR-SCHED-12）は`scan.ranking_watch.max_symbols`（JSON 整数 1〜45。無ければ 45）・`scan.observation.enabled`（JSON 整数 `1`/`0`。無い・壊れていれば無効）・`scan.observation.symbols`（JSON 文字列。銘柄コードのカンマ区切り、最大 10 件）・`jev.observation.daily_cost_cap_usd`（JSON 数値。無ければ 0.10 USD）を使い、観察用の呼び出しの当日の使用量は`jev.observation.usage`（`{"date","calls","failures","cost_usd"}`。アプリが書く記録）に持つ。どれも MCP の`settings_set`では書けず、`jev.observation.usage`以外は Settings 画面で変える。新しいテーブルは増やさない。
 
@@ -45,7 +45,7 @@ erDiagram
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
-| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の17個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
+| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の19個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`（モデル比較トライアル専用。任意で、Setup Guard の必須には入れない。issue #1059）, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
 | encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
 

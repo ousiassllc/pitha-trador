@@ -139,3 +139,4 @@
 | 1.132 | 2026-10-30 | `flows.md` §10 の起動フローで、News Ingest のティッカーの名前を実装（`newswire.RunPoll`）に合わせて直した（`newsIngestTicker` は存在しない）。判断・発注・設定の既定値は変えない | issue #935 |
 | 1.133 | 2026-11-11 | §5.2 に監視銘柄数の設定（`scan.ranking_watch.max_symbols`。上限は登録枠の45件で、情報APIのリミッタは外れない）と観察用銘柄を、§6 に Jev の 1 日の費用上限（シャドー・観察用の別枠）を追記。判断・発注・設定の既定値は変えない | issue #1055 |
 | 1.134 | 2026-11-13 | §6（`integrations.md`）に、トライアル専用のワイヤ層拡張（緩い検証`systemone.DecodeTrial`・可変`Endpoint`・リクエストの`provider`・トライアル専用クライアント`trialwire`）を追記。`jev.Client`・ライブの検証・接続先・既定値は変えない | issue #1058 |
+| 1.135 | 2026-11-13 | §6 に意思決定モデル比較のトライアルを追加（`integrations-jev-trial.md`新設。合成`ShadowSubmitter`・Paper 専用・既定オフ・アーム別の費用の出所と上限・402/403/429/529 の停止・隔離テスト） | issue #1059 |

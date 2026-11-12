@@ -111,6 +111,15 @@ var settingsConnections = []connection{
 			{config.KeyOpusBaseURL, "接続先 URL（任意）"},
 		},
 	},
+	{
+		id:          "openrouter",
+		name:        "OpenRouter（モデル比較）",
+		description: "モデル比較トライアルが、比較対象のモデルを呼び出すための OpenRouter への接続です（任意）。入力しなくてもアプリは通常どおり動きます。売買判断を行う Jev の接続とは別です。",
+		fields: []settingsField{
+			{config.KeyOpenRouterAPIKey, "API キー（任意）"},
+			{config.KeyOpenRouterBaseURL, "接続先 URL（任意）"},
+		},
+	},
 }
 
 // defaultedKeys are the override-only keys whose unset state is the normal
@@ -119,6 +128,7 @@ var settingsConnections = []connection{
 var defaultedKeys = []string{
 	config.KeyJevBaseURL, config.KeyJevModel,
 	config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+	config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
 	config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 }

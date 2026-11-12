@@ -3,23 +3,25 @@ package settings
 import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 )
 
 // settingsHints is the per-key input guidance shown under a Settings
 // field. Only keys whose expected format is easy to get wrong have one.
 var settingsHints = map[string]string{
-	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はホスト名のみ入力してください（/v1/systemone などのパスは付けないでください）。",
+	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はAPI のルートを入力してください（/v1/systemone などのエンドポイントのパスは付けないでください）。",
 	config.KeyJevModel:   "未設定の場合は既定値 " + jev.DefaultModel + " を使用します。",
 
 	config.KeyTachibanaDemoAuthID:         "デモ環境の認証ID（立花証券の利用設定画面で自動発行されます）。保存済みの値は表示しません。",
 	config.KeyTachibanaProdAuthID:         "本番環境の認証ID（立花証券の利用設定画面で自動発行されます）。保存済みの値は表示しません。",
 	config.KeyTachibanaDemoSecondPassword: "デモ発注スモーク（任意）専用です。本番環境では読み込みも送信もしません。本番の第二暗証番号は保存できません。",
 
-	config.KeyLunaBaseURL:     assistOverrideHint("Luna", "/v1/classify"),
-	config.KeySolBaseURL:      assistOverrideHint("Sol", "/v1/analyze"),
-	config.KeyOpusBaseURL:     assistOverrideHint("Opus", "/v1/review"),
-	config.KeyNewsFeedURL:     "未設定の場合はやのしん TDnet WebAPI（https://webapi.yanoshin.jp/）を使用します。差し替える場合は {\"items\":[{id,headline,body,published_at}]} を返す GET エンドポイントの URL を入力してください（?symbol= が付きます）。",
-	config.KeyNewsFeedEnabled: "未設定または on でニュース取り込みを行います。off を保存すると停止します（再起動後に反映）。",
+	config.KeyLunaBaseURL:       assistOverrideHint("Luna", "/v1/classify"),
+	config.KeySolBaseURL:        assistOverrideHint("Sol", "/v1/analyze"),
+	config.KeyOpusBaseURL:       assistOverrideHint("Opus", "/v1/review"),
+	config.KeyNewsFeedURL:       "未設定の場合はやのしん TDnet WebAPI（https://webapi.yanoshin.jp/）を使用します。差し替える場合は {\"items\":[{id,headline,body,published_at}]} を返す GET エンドポイントの URL を入力してください（?symbol= が付きます）。",
+	config.KeyNewsFeedEnabled:   "未設定または on でニュース取り込みを行います。off を保存すると停止します（再起動後に反映）。",
+	config.KeyOpenRouterBaseURL: "未設定の場合は OpenRouter の公開エンドポイント（" + trialwire.DefaultBaseURL + "）を使用します。API のルートを入力してください（/v1/systemone などのエンドポイントのパスは付けないでください）。",
 }
 
 // assistOverrideHint is the hint of a role's BASE_URL override: an unset role

@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
+	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
@@ -83,6 +84,7 @@ func newEngine(t *testing.T, s secrets) *gin.Engine {
 		router.WithBrokerSession(tachibanaSession{}),
 		router.WithMCPSettings(mcp),
 		router.WithJevPromptSettings(jevprompt.New(jevDB)),
+		router.WithJevTrialSettings(jevtrial.New(jevDB)),
 	)
 }
 

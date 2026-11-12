@@ -62,6 +62,9 @@ type SettingsHandler struct {
 	// jevPrompt shows the Jev prompt card (issue #872); the panel itself is
 	// served by internal/web/handler/jevprompt.
 	jevPrompt bool
+	// jevTrial shows the model-comparison trial card; the panel itself is
+	// served by internal/web/handler/jevtrial.
+	jevTrial bool
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -80,6 +83,14 @@ func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
 // on the Settings screen; call it only when the panel routes are registered.
 func (h *SettingsHandler) WithJevPromptSettings() *SettingsHandler {
 	h.jevPrompt = true
+	return h
+}
+
+// WithJevTrialSettings shows the model-comparison trial card (modal
+// `modal-jev-trial`) on the Settings screen; call it only when the panel routes
+// are registered.
+func (h *SettingsHandler) WithJevTrialSettings() *SettingsHandler {
+	h.jevTrial = true
 	return h
 }
 

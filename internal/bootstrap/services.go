@@ -197,7 +197,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
-	svc.buildJevPipeline(state.DB, state.Strategy)
+	svc.buildJevPipeline(state.DB, state.Strategy, secrets)
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig, runtimePolicy)

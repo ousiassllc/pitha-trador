@@ -18,6 +18,8 @@ var ConnectionItemNames = map[string]string{ //nolint:gosec // G101: names of th
 	"SOL_BASE_URL":                   "Sol の接続先 URL",
 	"OPUS_API_KEY":                   "Opus の API キー",
 	"OPUS_BASE_URL":                  "Opus の接続先 URL",
+	"OPENROUTER_API_KEY":             "モデル比較（トライアル）用の OpenRouter API キー",
+	"OPENROUTER_BASE_URL":            "モデル比較（トライアル）用の OpenRouter 接続先 URL",
 	"TACHIBANA_DEMO_AUTH_ID":         "立花証券の認証ID（デモ）",
 	"TACHIBANA_PROD_AUTH_ID":         "立花証券の認証ID（本番）",
 	"TACHIBANA_DEMO_SECOND_PASSWORD": "立花証券の第二暗証番号（デモ）",
