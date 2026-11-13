@@ -77,10 +77,14 @@ func TestPaymentRequiredHaltsTheWholeTrialForTheDay(t *testing.T) {
 	a2 := e.addArm("a2", answer(okResp(), 3000))
 	e.enable(defaultArm("a1"), defaultArm("a2"))
 
+	// The arms of one decision run in parallel: a2 may or may not have passed its
+	// check before a1's 402 landed, so it is called once or not at all for the first
+	// decision; for the second decision neither is called.
 	e.evaluate()
+	firstA2 := a2.calls()
 	e.evaluate()
-	if a1.calls() != 1 || a2.calls() != 1 {
-		t.Fatalf("calls a1=%d a2=%d, want 1 each: a 402 stops every arm at once", a1.calls(), a2.calls())
+	if a1.calls() != 1 || firstA2 > 1 || a2.calls() != firstA2 {
+		t.Fatalf("calls a1=%d a2=%d (%d after the first decision), want a1 once and a2 not again: a 402 stops every arm", a1.calls(), a2.calls(), firstA2)
 	}
 	if h := e.halt(jevtrialsettings.KeyHalt); h == nil || h.Reason != jevtrialsettings.HaltReasonPaymentRequired || h.Status != 402 {
 		t.Fatalf("halt = %+v", h)
@@ -90,8 +94,8 @@ func TestPaymentRequiredHaltsTheWholeTrialForTheDay(t *testing.T) {
 	}
 	e.advance(24 * time.Hour)
 	e.evaluate()
-	if a1.calls() != 2 || a2.calls() != 2 {
-		t.Fatalf("calls a1=%d a2=%d, want 2 each the next JST day", a1.calls(), a2.calls())
+	if a1.calls() != 2 || a2.calls() != firstA2+1 {
+		t.Fatalf("calls a1=%d a2=%d, want 2 and %d the next JST day", a1.calls(), a2.calls(), firstA2+1)
 	}
 }
 
