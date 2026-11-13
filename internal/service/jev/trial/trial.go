@@ -93,6 +93,14 @@ type Trial struct {
 	// throttledUntil is the end of an arm's cooldown after a 429/529, kept in
 	// memory so it holds even when the throttle record cannot be written.
 	throttledUntil map[string]time.Time
+	// halted holds the JST day of a 402/403 stop per key (KeyHalt for the whole
+	// trial, HaltKey(arm) for an arm), in memory, so such a stop holds even when
+	// its record cannot be written (the cost caps are re-derived from stored
+	// rows, these two are not).
+	halted map[string]string
+	// closeMu orders Submit's wg.Add against Close's wg.Wait.
+	closeMu sync.Mutex
+	closed  bool
 }
 
 var _ jev.ShadowSubmitter = (*Trial)(nil)
@@ -107,7 +115,7 @@ func New(results Results, settings Settings, callers func(jevtrialsettings.Arm) 
 	t := &Trial{results: results, settings: settings, callers: callers, mode: mode, now: now,
 		slots: make(chan struct{}, maxInFlight), base: base, cancel: cancel,
 		minInterval: jevtrialsettings.MinCallInterval, pace: time.Now,
-		lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}}
+		lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}, halted: map[string]string{}}
 	for _, opt := range opts {
 		opt(t)
 	}
@@ -123,10 +131,16 @@ func New(results Results, settings Settings, callers func(jevtrialsettings.Arm) 
 // in its own goroutine, in parallel; each gets the same inputs and none sees
 // another's answer.
 func (t *Trial) Submit(live domain.JevDecision, state jev.ScoutState, ragContext rag.Context) {
-	if t == nil || t.mode != metalabelsettings.ModePaper || t.base.Err() != nil {
+	if t == nil || t.mode != metalabelsettings.ModePaper {
+		return
+	}
+	t.closeMu.Lock()
+	if t.closed {
+		t.closeMu.Unlock()
 		return
 	}
 	t.wg.Add(1)
+	t.closeMu.Unlock()
 	go func() {
 		defer t.wg.Done()
 		defer func() {
@@ -138,6 +152,10 @@ func (t *Trial) Submit(live domain.JevDecision, state jev.ScoutState, ragContext
 		cfg := jevtrialsettings.Load(ctx, t.settings)
 		cancel()
 		if !cfg.Enabled || len(cfg.Arms) == 0 {
+			return
+		}
+		if cfg.ReadErr != nil {
+			slog.Warn("jev trial: the settings could not be read in full; not calling any arm", "decision_id", live.ID, "error", cfg.ReadErr)
 			return
 		}
 		for _, arm := range cfg.Arms {
@@ -180,6 +198,9 @@ func (t *Trial) Close() {
 	if t == nil {
 		return
 	}
+	t.closeMu.Lock()
+	t.closed = true
+	t.closeMu.Unlock()
 	t.cancel()
 	t.wg.Wait()
 }

@@ -67,6 +67,10 @@ func TestParseArms_RejectsInvalidArms(t *testing.T) {
 		"cap above max":       {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","daily_cost_cap_usd":1000}]`, "daily_cost_cap_usd"},
 		"negative list price": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","list_price_usd_per_mtok":-1}]`, "list_price"},
 		"bad data collection": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","data_collection":"maybe"}]`, "data_collection"},
+		"trailing data":       {`[` + valid + `] garbage`, "exactly one"},
+		"two arrays":          {`[` + valid + `][` + valid + `]`, "exactly one"},
+		"provider_only empty": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","provider_only":[""]}]`, "provider_only"},
+		"provider_only bad":   {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","provider_only":["a b"]}]`, "provider_only"},
 		"duplicate ids":       {`[` + valid + `,` + valid + `]`, "twice"},
 		"too many arms":       {"[" + strings.Repeat(valid+",", jevtrialsettings.MaxArms) + valid + "]", "at most"},
 	} {
@@ -126,4 +130,31 @@ func TestLoadArm_ReadsTheArmsOwnRecordsOnly(t *testing.T) {
 	if c.Halt != nil || c.Failures != nil || c.Throttle != nil {
 		t.Errorf("LoadArm(c) = %+v, want nothing: another arm's records must not leak", c)
 	}
+}
+
+func TestLoad_AFailedReadIsReportedNotTakenAsNoRecord(t *testing.T) {
+	store := fakeStore{}
+	s := jevtrialsettings.Load(context.Background(), failingStore{fakeStore: store, key: jevtrialsettings.KeyHalt})
+	if s.ReadErr == nil || s.Halt != nil {
+		t.Errorf("Load = %+v, want ReadErr set", s)
+	}
+	a := jevtrialsettings.LoadArm(context.Background(), failingStore{fakeStore: store, key: jevtrialsettings.ThrottleKey("a")}, "a")
+	if a.ReadErr == nil {
+		t.Error("LoadArm did not report the failed read")
+	}
+	if ok := jevtrialsettings.LoadArm(context.Background(), store, "a"); ok.ReadErr != nil {
+		t.Errorf("a clean read reported %v", ok.ReadErr)
+	}
+}
+
+type failingStore struct {
+	fakeStore
+	key string
+}
+
+func (f failingStore) Get(ctx context.Context, key string) (string, bool, error) {
+	if key == f.key {
+		return "", false, errors.New("boom")
+	}
+	return f.fakeStore.Get(ctx, key)
 }

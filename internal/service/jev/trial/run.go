@@ -55,7 +55,7 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 		if err == nil {
 			// An answered (possibly billed) call that could not be stored is
 			// counted as a failure, so it still bounds the day.
-			t.countFailure(arm.ID, jevshadowsettings.Day(now))
+			t.countFailure(arm.ID, jevshadowsettings.Day(end))
 		}
 		return fmt.Errorf("jev trial: persist the row of arm %q: %w", arm.ID, errors.Join(insertErr, err))
 	}
@@ -74,7 +74,12 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 func (t *Trial) mayCall(ctx context.Context, cfg jevtrialsettings.Settings, arm jevtrialsettings.Arm, now time.Time) (ok bool, err error) {
 	day := jevshadowsettings.Day(now)
 	st := jevtrialsettings.LoadArm(ctx, t.settings, arm.ID)
-	if cfg.Halt.HaltOn(day) || st.Halt.HaltOn(day) {
+	if st.ReadErr != nil {
+		// "No record" is not the safe side when the read failed: a stopped arm
+		// would be called.
+		return false, fmt.Errorf("jev trial: read the stop records of arm %q (not calling it): %w", arm.ID, st.ReadErr)
+	}
+	if cfg.Halt.HaltOn(day) || st.Halt.HaltOn(day) || t.haltHeld(jevtrialsettings.KeyHalt, day) || t.haltHeld(jevtrialsettings.HaltKey(arm.ID), day) {
 		return false, nil
 	}
 	if st.Throttle.ActiveAt(now) || t.throttleHeld(arm.ID, now) {

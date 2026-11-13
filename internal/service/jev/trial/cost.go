@@ -2,6 +2,7 @@ package trial
 
 import (
 	"math"
+	"net/http"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
@@ -45,17 +46,19 @@ func AnsweredCost(arm jevtrialsettings.Arm, resp trialwire.Response, requestByte
 	return Cost{Source: jevtrial.CostUnknown, CountedUSD: worstCaseUSD(tokens)}
 }
 
-// FailedCost counts a call that returned no answer set. The cost is always
-// unknown (nil, never 0 USD).
+// FailedCost counts a call that returned no answer set; status is the HTTP
+// status of the vendor's error answer, 0 when there was none. The cost is
+// always unknown (nil, never 0 USD).
 //
-// An HTTP error status means the vendor answered without running the model:
-// that is assumed not to be billed (an assumption, not a measurement), so it
-// counts 0 against the caps; the day's failure counter and the 402/403/429/529
-// stops bound such calls instead. Any other failure (timeout, transport error,
-// an answer that is not a valid answer set) may have been billed, so it counts
-// at the worst-case price over the estimated input tokens of the request.
-func FailedCost(vendorAnsweredWithError bool, requestBytes int) Cost {
-	if vendorAnsweredWithError {
+// A 4xx answer (and 429/529) means the vendor refused the request before running
+// the model: that is assumed not to be billed (an assumption, not a measurement),
+// so it counts 0 against the caps; the day's failure counter and the 402/403/
+// 429/529 stops bound such calls instead. Any other failure (a 5xx or 413 that
+// may come after the model ran, a timeout, a transport error, an answer that is
+// not a valid answer set) may have been billed, so it counts at the worst-case
+// price over the estimated input tokens of the request.
+func FailedCost(status, requestBytes int) Cost {
+	if (status >= 400 && status < 500 && status != http.StatusRequestEntityTooLarge) || status == 529 {
 		return Cost{Source: jevtrial.CostUnknown}
 	}
 	return Cost{Source: jevtrial.CostUnknown, CountedUSD: worstCaseUSD(shadow.EstimateInputTokens(requestBytes))}

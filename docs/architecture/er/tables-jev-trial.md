@@ -40,7 +40,7 @@ erDiagram
 | requested_model | varchar(100) | NOT NULL, CHECK 空でない | リクエストに送ったモデル id |
 | served_model / served_provider / response_id | varchar | NOT NULL, 既定 '' | 応答が返したモデル・実際に処理したプロバイダー・応答 id。応答が無い行は空（OpenRouter は処理元を切り替えうるので、送ったモデルと別に残す） |
 | status | varchar(8) | NOT NULL, CHECK IN | `ok`＝全問に答えた／`failed`＝応答が得られなかった（通信・HTTP エラー・不正な応答）／`refused`＝全問を拒否／`partial`＝一部の質問を拒否 |
-| failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response` / `persist`）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
+| failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response`）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
 | http_status | integer | NULL可 | HTTP エラー応答のステータス。それ以外は NULL |
 | error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない |
 | direction | varchar(10) | NULL可, CHECK | `LONG` / `SHORT` / `NONE`。拒否・欠落した質問は **NULL**（`NONE` や 0 で補わない） |
@@ -53,7 +53,7 @@ erDiagram
 | input_tokens / output_tokens | integer | NULL可, CHECK 0 以上 | 応答の `usage`。応答が無い・`usage` が無い行は NULL |
 | cost_usd | numeric(12,8) | NULL可, CHECK 0 以上 | 報告値 `usage.cost`、または定価×入力トークンの推定。**どちらも無ければ NULL（0 ではない）** |
 | cost_source | varchar(20) | NOT NULL, CHECK IN | `reported`＝応答の `usage.cost`／`list_price_estimate`＝アームの定価（1M 入力トークンあたり）×入力トークン数の推定／`unknown`＝どちらも無い |
-| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。HTTP エラー応答は課金されない前提で 0（前提であり実測ではない） |
+| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
 | request_bytes / state_bytes | integer | NOT NULL, 既定 0 | リクエスト本文・`state` の大きさ（バイト）。切り詰め疑いを後から判断する材料 |
 | truncation_suspected | integer | NOT NULL, 既定 0, CHECK IN (0, 1) | 報告された入力トークン数に対してリクエストが大きすぎる（`request_bytes / input_tokens` が `trial.TruncationSuspectBytesPerToken`＝6 を超える。未計測の目安）とき 1。**疑いの印であって断定ではない**。Clef 系の切り詰めの有無が実測できるまで、同じ入力での公平な比較とは扱わない |
 | llm_cutoff_status | varchar(20) | NOT NULL, 既定 `unverified`, CHECK 空でない | モデルの学習データ終了日の確認状態。**既定は `unverified`**（日付を推測で作らない）。公開日以降の局面だけで評価する（下記） |

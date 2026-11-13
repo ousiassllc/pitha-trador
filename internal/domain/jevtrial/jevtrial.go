@@ -48,7 +48,6 @@ const (
 	FailureTimeout         = "timeout"
 	FailureTransport       = "transport"
 	FailureInvalidResponse = "invalid_response"
-	FailurePersist         = "persist"
 )
 
 // MaxErrorExcerptBytes bounds Decision.ErrorExcerpt: a trial row never holds an

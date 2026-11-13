@@ -4,7 +4,7 @@ import "github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 
 // CostNotice is the fixed caveat jev_trial_cost returns.
 const CostNotice = "費用は出所別に分ける: reported（応答が報告した usage.cost）・list_price_estimate（定価×入力トークンの推定）・unknown（どちらも無い）。" +
-	"unknown の実費は分からない（actual_usd は null。0 円ではない）。unknown_counted_usd は 1 日の上限の判定に数えた額（最悪値側の単価で数えた上限の見積り。HTTP エラー応答は課金されない前提で 0 と数えるので、その件数を counted_as_zero_calls に出す）で、reported・list_price_estimate の合計には混ぜない。" +
+	"unknown の実費は分からない（actual_usd は null。0 円ではない）。unknown_counted_usd は 1 日の上限の判定に数えた額（最悪値側の単価で数えた上限の見積り。課金されない前提の 4xx・529 応答は 0 と数えるので、その件数を counted_as_zero_calls に出す）で、reported・list_price_estimate の合計には混ぜない。" +
 	"counted_total_usd は上限の判定に数えた額の合計（reported + list_price_estimate + unknown_counted_usd）。エラー本文・応答本文・キーは返さない"
 
 // UnknownBasis names what UnknownCost.UnknownCountedUSD is.

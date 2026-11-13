@@ -3,6 +3,7 @@ package trialflow_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http/httptest"
 	"path/filepath"
 	"sync"
@@ -76,13 +77,31 @@ type countingSettings struct {
 	*system.RuntimeSettingsRepository
 	mu   sync.Mutex
 	sets int
+	// failSets makes every Set (by the trial) fail; failGets makes a Get of a
+	// listed key fail.
+	failSets bool
+	failGets map[string]bool
 }
 
 func (c *countingSettings) Set(ctx context.Context, key, value string, at time.Time) error {
 	c.mu.Lock()
 	c.sets++
+	fail := c.failSets
 	c.mu.Unlock()
+	if fail {
+		return errors.New("settings write failed")
+	}
 	return c.RuntimeSettingsRepository.Set(ctx, key, value, at)
+}
+
+func (c *countingSettings) Get(ctx context.Context, key string) (string, bool, error) {
+	c.mu.Lock()
+	fail := c.failGets[key]
+	c.mu.Unlock()
+	if fail {
+		return "", false, errors.New("settings read failed")
+	}
+	return c.RuntimeSettingsRepository.Get(ctx, key)
 }
 
 func (c *countingSettings) setCount() int {

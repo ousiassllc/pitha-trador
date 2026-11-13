@@ -6,13 +6,13 @@
 
 ライブの Jev（TypeSafe AI）の判断と**同じ入力**を、別のモデル（**アーム**）にも聞き、答えと費用と失敗を並べて残す、Paper 専用の**比較用の記録**。ライブの採否・発注・RAG・較正・メタモデルには**一切入らない**。既存の Jev プロンプトのシャドー（`internal/service/jev/shadow`、`jev_shadow_decisions`、`jev.shadow.*`）とは**別系統**で、表・ランナー・設定キー・API キー・HTTP クライアントを共有しない（シャドーの挙動は変えない）。
 
-- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
+- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jevtrial` / `internal/web/handler/jevtrial` / `internal/web/organisms/jevtrial`（Settings 画面のトライアルカード。オンにできる唯一の経路）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
 - **多数決・合議・「採用すべきアーム」・自動昇格は作らない**。MCP の出力にも無い。比較して何を選ぶかは人が決める。
 
 ## フロー
 
 1. ライブの `jev.Trader` が trader の判断を `jev_decisions` に保存した**後**、既存の `jev.ShadowSubmitter` の継ぎ目（`t.shadow.Submit(saved, state, ragContext)`）に渡す。`trader.go` の評価ロジックと保存順は変えない。
-2. アプリの組み立て（`trial.TraderOptions`。`shadow.TraderOptions` と並ぶ）が、既存のシャドー（`shadow.ForApp`）とトライアル（`trial.Trial`）を合成した `ShadowSubmitter`（`trial.Compose`。`trial.Multi`）を `jev.WithShadow` に渡す。各々が自分の状態・スイッチ・失敗処理を持ち、合成は何も足さない。
+2. アプリの組み立て（`trial.TraderOptions`。`shadow.TraderOptionsWith` を介して`shadow.TraderOptions`と同じ選択肢の並びを作る）が、既存のシャドーとトライアル（`trial.Trial`）を合成した `ShadowSubmitter`（`trial.Compose`。`trial.Multi`）を `jev.WithShadow` に渡す。各々が自分の状態・スイッチ・失敗処理を持ち、合成は何も足さない。
 3. `trial.Trial.Submit` は、**Paper 以外**（`metalabelsettings.RuntimeMode`。ビルドで固定）・スイッチ `jev.trial.enabled` がオフ（既定）・アームが空のときは、**ゴルーチンも起こさず・外部呼び出しも書き込みもせず**に戻る。
 4. 有効なら、アームごとに別のゴルーチンで**並列**に聞く。各アームは同じ `TraderState`・同じ RAG 文脈・自分のプロンプト版（第 1 段階は `trader-v3`＝ライブと同じ）を受け取り、**他のアームの答えを見ない**。結果は成功も失敗も `jev_trial_decisions` に 1 行ずつ残す（失敗した呼び出しは `status='failed'`＋`failure_code`＋`http_status`＋短い `error_excerpt`）。
 5. 呼び出しの前に、止められていないか（トライアル全体の停止・アームの停止・429/529 の待ち・失敗上限）と、費用の上限（全体・アーム）を、保存済みの行から判定する。1 つでも該当すればそのアームは呼ばない（行は残さない）。
@@ -44,7 +44,7 @@
 | `unknown` | **NULL（0 ではない）** | 最悪値側の単価 `jevtrialsettings.WorstCaseUSDPerMtok`（0.24 USD/百万トークン。第 1 段階のモデルのうち最も高い Clef の定価）× 入力トークン数 |
 
 - **上限の判定は、処理元が分からないうちは高い方の単価で数える**。OpenRouter は処理元（プロバイダー）を切り替えうるため、`unknown` は 0 円と数えず最悪値側で数える。第 1 段階の定価は、Clef-flash が 0.038、Clef 系が 0.192〜0.24 USD/百万トークン（2026-11-13 時点の公表値）。実請求との一致は未確認。
-- **応答が返らなかった呼び出し**（`status='failed'`）の費用は常に `unknown`（`cost_usd` は NULL）。HTTP エラーの応答は、モデルが動いておらず課金されない**前提**（前提であって測定ではない）で、上限には 0 円で数える（失敗回数の上限と 402/403/429/529 の停止が歯止めになる）。タイムアウト・通信エラー・不正な応答は課金された可能性があるので、リクエストの推定入力トークン数 × 最悪値側の単価で数える。
+- **応答が返らなかった呼び出し**（`status='failed'`）の費用は常に `unknown`（`cost_usd` は NULL）。4xx の応答（413 を除く）と 529 は、モデルが動く前に断られ課金されない**前提**（前提であって測定ではない）で、上限には 0 円で数える（失敗回数の上限と 402/403/429/529 の停止が歯止めになる）。5xx・413・タイムアウト・通信エラー・不正な応答はモデルが動いた後かもしれず課金された可能性があるので、リクエストの推定入力トークン数 × 最悪値側の単価で数える。
 - 上限は**全体**（`jev.trial.daily_cost_cap_usd`、既定 0.10 USD）と**アームごと**（`Arm.daily_cost_cap_usd`、省略時 0.05 USD）の両方を判定する。どちらかが保存済みの行の `counted_cost_usd` の 1 日（JST）合計に達したら、全体なら `jev.trial.halt`（`daily_cost_cap`）、アームなら `jev.trial.halt.<arm>`（`arm_cost_cap`）を記録して止める。翌日（JST）に再開する。
 - 保存に失敗した（課金されたかもしれない）呼び出しは、失敗として日次カウンタに数え、上限の歯止めにする。
 
@@ -113,7 +113,7 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | `OPENROUTER_*` は必須キーでなく、Setup Guard も求めない | 同 `TestOpenRouterSecretsAreNotRequired`、`internal/config/secretsflow` |
 | 設定が既定のとき、トライアルは動かず、追加の外部呼び出しもない／Paper 以外では動かない／アームは互いの答えを見ない／成功も失敗も行に残る／費用の出所と上限／402・403・429・529 の停止 | `internal/service/jev/trialflow`（ランナーの振る舞いのテスト） |
 
-シャドーの同種のテスト（`internal/service/jev/evalflow/shadow_isolation_test.go`）は同じ形で残る。
+シャドーの同種のテスト（`internal/service/jev/evalflow/shadow_isolation_test.go`）は変更していない（`evalflow` ディレクトリが行数の上限に達していたため、トライアル分は同じ形で新ディレクトリ `isolationflow` に置いた）。
 
 ## 改訂履歴
 

@@ -20,7 +20,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
@@ -91,8 +90,8 @@ func appTrader(t *testing.T, keys trial.Keys, api *apiRecorder) (*jev.Trader, *s
 	inst := mustInstrument(t, market.NewInstrumentRepository(db))
 	client := jev.NewClient(jev.Config{BaseURL: live.URL, MaxAttempts: 1})
 	opts := trial.TraderOptions(db, client, settings, nil, keys)
-	if len(opts) != 3 || len(shadow.TraderOptions(db, client, settings, nil)) != 3 {
-		t.Fatalf("option counts: trial %d, shadow %d, want 3 each", len(opts), len(shadow.TraderOptions(db, client, settings, nil)))
+	if len(opts) != 3 {
+		t.Fatalf("trial.TraderOptions returned %d options, want the shadow's 3 (news, prompt settings, the shadow seam)", len(opts))
 	}
 	tr := jev.NewTrader(client, decisions, rag.NewService(db, decisions, market.NewSnapshotRepository(db)), opts...)
 	t.Cleanup(tr.Close)
@@ -106,17 +105,21 @@ func appTrader(t *testing.T, keys trial.Keys, api *apiRecorder) (*jev.Trader, *s
 	return tr, settings, rows, inst.ID, judgement.NewTrialRepository(db)
 }
 
-func TestAppWiring_NoKeyMeansNoCallAndTheAppStillRuns(t *testing.T) {
-	api := &apiRecorder{handler: jevtest.TraderHandler(jev.TraderResponse{})}
-	tr, settings, rows, instID, _ := appTrader(t, trial.Keys{}, api)
-	// Enabled with an arm, but OPENROUTER_API_KEY is unset: nothing is sent.
-	enableApp(t, settings, jevtrialsettings.Arm{ID: "clef", Provider: "openrouter", Model: "cloudflare/clef", PromptVersion: "trader-v3"})
-	if _, err := tr.Evaluate(context.Background(), instID, state(time.Now())); err != nil {
-		t.Fatalf("Evaluate: %v", err)
+// Without OPENROUTER_API_KEY the arm's caller is not Configured, which is what keeps
+// Trial.run from sending (run_test.go proves that deterministically with Wait); the app
+// still builds and runs.
+func TestAppWiring_NoKeyMeansAnUnconfiguredCaller(t *testing.T) {
+	arm := jevtrialsettings.Arm{ID: "clef", Provider: "openrouter", Model: "cloudflare/clef", PromptVersion: "trader-v3"}
+	if trial.NewCallers(trial.Keys{})(arm).Configured() {
+		t.Error("an arm without OPENROUTER_API_KEY is Configured: it would be called")
 	}
-	tr.Close()
-	if api.requests() != 0 || rows() != 0 {
-		t.Fatalf("requests=%d rows=%d, want 0 without OPENROUTER_API_KEY", api.requests(), rows())
+	if !trial.NewCallers(trial.Keys{APIKey: "sk-test"})(arm).Configured() {
+		t.Error("an arm with a key is not Configured")
+	}
+	api := &apiRecorder{handler: jevtest.TraderHandler(jev.TraderResponse{})}
+	tr, _, _, instID, _ := appTrader(t, trial.Keys{}, api)
+	if _, err := tr.Evaluate(context.Background(), instID, state(time.Now())); err != nil {
+		t.Fatalf("Evaluate without OPENROUTER_API_KEY: %v", err)
 	}
 }
 

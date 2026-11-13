@@ -3,7 +3,6 @@ package jevtrialsettings
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
@@ -123,11 +122,6 @@ func ThrottleReason(status int) string { return jevshadowsettings.ThrottleReason
 
 // IsThrottleStatus reports whether status is 429 or 529.
 func IsThrottleStatus(status int) bool { return ThrottleReason(status) != "" }
-
-// IsPaymentOrForbidden reports whether status is 402 or 403 (an immediate stop).
-func IsPaymentOrForbidden(status int) bool {
-	return status == http.StatusPaymentRequired || status == http.StatusForbidden
-}
 
 // EncodeThrottle renders t for key.
 func EncodeThrottle(key string, t Throttle) (string, error) { return encode(key, t) }

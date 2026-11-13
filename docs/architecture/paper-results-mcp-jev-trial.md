@@ -24,7 +24,7 @@
 | `over_cohort` | 分母 = コホート（結果の記録がある判断）。答えなし・NONE・採点できない方向を分母に含む | 順位はこちらで付く。答えない・NONE ばかりのアームは当たり率が下がる（取りこぼしを隠さない） |
 | `over_answered` | 分母 = 採点できた答え。参考値 | 答えた分だけが良く見えるので、単独で比べない |
 
-`rank` は `hit_rate_over_cohort` の高い順の競技順位で、結果の記録のある判断が 20 件（`MinOutcomeRecordsForRank`）未満のスライスは付けない。`rank` は 1 つの指標の並べ替えであり、昇格・採用の推奨ではない。多数決・合議・「採用すべきアーム」・勝者・自動昇格の項目は、出力にも内部の型にも無い（テストが出力の全キーを走査する）。
+`rank` は `hit_rate_over_cohort` の高い順の競技順位で、結果の記録のある判断が 20 件（`MinOutcomeRecordsForRank`）未満のスライス、およびアームが 1 つだけのときは付けない。ラベルはライブの方向のものなので当たり率にはライブとの一致度も含まれ、比べる基準としてスライスごとに `live_baseline`（ライブ自身の同じ採点）を返す。`rank` は 1 つの指標の並べ替えであり、昇格・採用の推奨ではない。多数決・合議・「採用すべきアーム」・勝者・自動昇格の項目は、出力にも内部の型にも無い（テストが出力の全キーを走査する）。
 
 **公平でない条件は除外せず数える**: `truncation_suspected = 1` の行（入力が切り詰められた疑い。Clef 系の切り詰めの有無が実測できるまで、同じ入力の公平比較とは扱わない）、`rag_includes_live_model_answers = 1` の行（RAG の文脈にライブの Jev の過去の答えが入っている。完全な独立条件ではない）、`llm_cutoff_status` が `unverified` の行（モデルの学習データの終了日が未確認）は、`RowCounts` と `fairness.caveats` に件数・内訳で出し、行は指標から外さない。外すと「どれだけ公平でないか」が見えなくなるため、判断は読み手に任せる。`notice` が、これらが残る間は公平な同じ入力の比較ではないと明示する。
 
@@ -45,7 +45,7 @@
 `jev_trial_cost` は `jev_trial_decisions.cost_source` を区別する（記録側の定義は `integrations-jev-trial.md`）。
 
 - `reported`（応答の `usage.cost`）と `list_price_estimate`（定価×入力トークン）は、それぞれ件数と `cost_usd` の合計を出す
-- `unknown`（どちらも無い）は、実費が分からないので `actual_usd` を `null` にする。0 円にしない。上限の判定に数えた額 `unknown_counted_usd`（最悪値側の単価 `0.24` USD/M で数えた上限の見積り）は別の欄に置き、`reported` / `list_price_estimate` の合計には混ぜない。HTTP エラー応答は課金されない前提で 0 と数えるので、その件数 `counted_as_zero_calls` を並べて出し、低い数えた額が「無料」に見えないようにする
+- `unknown`（どちらも無い）は、実費が分からないので `actual_usd` を `null` にする。0 円にしない。上限の判定に数えた額 `unknown_counted_usd`（最悪値側の単価 `0.24` USD/M で数えた上限の見積り）は別の欄に置き、`reported` / `list_price_estimate` の合計には混ぜない。課金されない前提の 4xx（413 を除く）・529 応答は 0 と数えるので、その件数 `counted_as_zero_calls` を並べて出し、低い数えた額が「無料」に見えないようにする
 - `counted_total_usd` は上限の判定に数えた額（`counted_cost_usd` の合計）で、1 日の上限（全体・アームごと）の基準と一致する
 - 日の区切りは JST（`created_at` を +9 時間して日付に直す）。上限と止まりの記録は `runtime_settings` から読み取りで取り、`limits` に出す（止まりは理由と日だけ。金額・時刻・ステータスは返さない）
 

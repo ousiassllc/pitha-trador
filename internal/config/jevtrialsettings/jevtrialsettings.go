@@ -145,21 +145,29 @@ type Settings struct {
 	CapIsDefault bool
 	// Halt is the recorded stop of the whole trial, nil for none.
 	Halt *Halt
+	// ReadErr is the first failed READ (not a damaged value). While it is set the
+	// stop records are unknown, so a caller about to spend money must not treat
+	// "no record" as "not stopped".
+	ReadErr error
 }
 
-// Load reads the arm-less keys. A stored row that no longer parses, or a failed
-// read, is logged and falls back to the safe side: the trial off, no arms, the
-// default cap, no halt record. A fault can therefore never turn the trial on.
-func Load(ctx context.Context, store Store) Settings {
-	s := Settings{CapUSD: DefaultDailyCostCapUSD, CapIsDefault: true}
-	if raw, ok := read(ctx, store, KeyEnabled); ok {
+// Load reads the arm-less keys. A stored row that no longer parses is logged and
+// falls back to the safe side: the trial off, no arms, the default cap, no halt
+// record; a fault can therefore never turn the trial on. A failed READ is also
+// logged, falls back the same way and is reported in Settings.ReadErr: "no halt
+// record" is not the safe side for a caller that spends, so it must not call on.
+func Load(ctx context.Context, store Store) (s Settings) {
+	s = Settings{CapUSD: DefaultDailyCostCapUSD, CapIsDefault: true}
+	rd := &reader{ctx: ctx, store: store}
+	defer func() { s.ReadErr = rd.err }()
+	if raw, ok := rd.get(KeyEnabled); ok {
 		if on, err := ParseEnabled(raw); err == nil {
 			s.Enabled = on
 		} else {
 			slog.Warn("jevtrialsettings: treating a damaged trial switch as off", "error", err)
 		}
 	}
-	if raw, ok := read(ctx, store, KeyArms); ok {
+	if raw, ok := rd.get(KeyArms); ok {
 		arms, err := ParseArms(raw)
 		if err != nil {
 			s.ArmsError = err.Error()
@@ -168,14 +176,14 @@ func Load(ctx context.Context, store Store) Settings {
 			s.Arms = arms
 		}
 	}
-	if raw, ok := read(ctx, store, KeyDailyCostCapUSD); ok {
+	if raw, ok := rd.get(KeyDailyCostCapUSD); ok {
 		if c, err := ParseCap(raw); err == nil {
 			s.CapUSD, s.CapIsDefault = c, false
 		} else {
 			slog.Warn("jevtrialsettings: using the default overall daily cost cap", "error", err)
 		}
 	}
-	if raw, ok := read(ctx, store, KeyHalt); ok {
+	if raw, ok := rd.get(KeyHalt); ok {
 		if h, err := ParseHalt(KeyHalt, raw); err == nil {
 			s.Halt = &h
 		} else {
@@ -190,26 +198,29 @@ type ArmState struct {
 	Halt     *Halt
 	Failures *Failures
 	Throttle *Throttle
+	// ReadErr is the first failed READ of the arm's keys (see Settings.ReadErr).
+	ReadErr error
 }
 
 // LoadArm reads arm's per-arm keys with the same fallbacks as Load.
-func LoadArm(ctx context.Context, store Store, arm string) ArmState {
-	var s ArmState
-	if raw, ok := read(ctx, store, HaltKey(arm)); ok {
+func LoadArm(ctx context.Context, store Store, arm string) (s ArmState) {
+	rd := &reader{ctx: ctx, store: store}
+	defer func() { s.ReadErr = rd.err }()
+	if raw, ok := rd.get(HaltKey(arm)); ok {
 		if h, err := ParseHalt(HaltKey(arm), raw); err == nil {
 			s.Halt = &h
 		} else {
 			slog.Warn("jevtrialsettings: ignoring the stored arm halt record", "arm", arm, "error", err)
 		}
 	}
-	if raw, ok := read(ctx, store, FailuresKey(arm)); ok {
+	if raw, ok := rd.get(FailuresKey(arm)); ok {
 		if f, err := ParseFailures(FailuresKey(arm), raw); err == nil {
 			s.Failures = &f
 		} else {
 			slog.Warn("jevtrialsettings: ignoring the stored arm failure counter", "arm", arm, "error", err)
 		}
 	}
-	if raw, ok := read(ctx, store, ThrottleKey(arm)); ok {
+	if raw, ok := rd.get(ThrottleKey(arm)); ok {
 		if t, err := ParseThrottle(ThrottleKey(arm), raw); err == nil {
 			s.Throttle = &t
 		} else {
@@ -219,10 +230,20 @@ func LoadArm(ctx context.Context, store Store, arm string) ArmState {
 	return s
 }
 
-func read(ctx context.Context, store Store, key string) (string, bool) {
-	raw, ok, err := store.Get(ctx, key)
+// reader reads keys and remembers the first failed read.
+type reader struct {
+	ctx   context.Context
+	store Store
+	err   error
+}
+
+func (r *reader) get(key string) (string, bool) {
+	raw, ok, err := r.store.Get(r.ctx, key)
 	if err != nil {
 		slog.Warn("jevtrialsettings: read runtime setting", "key", key, "error", err)
+		if r.err == nil {
+			r.err = fmt.Errorf("jevtrialsettings: read runtime setting %s: %w", key, err)
+		}
 		return "", false
 	}
 	return raw, ok

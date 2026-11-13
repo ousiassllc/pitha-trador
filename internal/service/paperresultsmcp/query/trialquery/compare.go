@@ -19,7 +19,7 @@ var Definitions = map[string]string{
 	"over_answered":  "分母 = 採点できた答え（方向が LONG/SHORT で、ライブの方向と同じかライブが NONE）。答えなし・NONE を含まないので、答えた分だけが良く見える。参考値",
 	"none":           "NONE は方向の結果が無いので当たり外れに数えない（none_count）。方向を補完しない。分母（cohort）には入る",
 	"hit":            "方向で符号を付けた future_return（既存の calibration_outcomes。コスト控除前）が 0 を超えたとき。ライブの方向のラベルなので、ライブと逆の方向の答えは採点しない（excluded_disagreement）",
-	"rank":           "over_cohort の当たり率の高い順の並べ替え（同率は同順位）。結果の記録のある判断が最低 " + strconv.Itoa(MinOutcomeRecordsForRank) + " 件ないと null。昇格・採用の推奨ではない",
+	"rank":           "over_cohort の当たり率の高い順の並べ替え（同率は同順位。ラベルはライブの方向のものなので、ライブと逆向きの答えは採点されず当たり率にはライブとの一致度も含まれる。比べる基準は live_baseline）。アームが 1 つだけのときは null。結果の記録のある判断が最低 " + strconv.Itoa(MinOutcomeRecordsForRank) + " 件ないと null。昇格・採用の推奨ではない",
 }
 
 // ArmReport is one arm of jev_trial_compare.
@@ -71,9 +71,14 @@ type CommonSuccessStats struct {
 // OutcomeSlice is the outcomes of one horizon and label version. Labels of
 // different versions define "correct" differently and are never mixed.
 type OutcomeSlice struct {
-	HorizonMinutes int          `json:"horizon_minutes"`
-	LabelVersion   int          `json:"label_version"`
-	Arms           []ArmOutcome `json:"arms"`
+	HorizonMinutes int `json:"horizon_minutes"`
+	LabelVersion   int `json:"label_version"`
+	// LiveBaseline is the live Jev's own score of the same cohort decisions, so
+	// an arm's hit rate can be read against it: the labels belong to the live
+	// direction, so an arm that disagrees with the live direction is not scored
+	// (excluded_disagreement) and a rate over the cohort also measures agreement.
+	LiveBaseline LiveBaseline `json:"live_baseline"`
+	Arms         []ArmOutcome `json:"arms"`
 }
 
 // Comparison is jev_trial_compare's data.
@@ -206,7 +211,7 @@ func outcomeSlices(arms []string, cohort, common []*decision, outcomes map[outco
 			continue // no cohort decision has a record in this slice
 		}
 		ranks := rankByHitRateOverCohort(stats)
-		slice := OutcomeSlice{HorizonMinutes: k.horizon, LabelVersion: k.labelVersion, Arms: make([]ArmOutcome, len(arms))}
+		slice := OutcomeSlice{HorizonMinutes: k.horizon, LabelVersion: k.labelVersion, LiveBaseline: scoreLive(cohort, returns), Arms: make([]ArmOutcome, len(arms))}
 		for i, arm := range arms {
 			slice.Arms[i] = ArmOutcome{
 				ArmID: arm, Rank: ranks[i], Cohort: stats[i],

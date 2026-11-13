@@ -54,13 +54,20 @@ func TestAnsweredCost(t *testing.T) {
 }
 
 func TestFailedCost(t *testing.T) {
-	http := trial.FailedCost(true, 3000)
-	if http.Source != jevtrial.CostUnknown || http.USD != nil || http.CountedUSD != 0 {
-		t.Errorf("HTTP error answer = %+v, want unknown / NULL / counted 0 (documented: not billed)", http)
-	}
-	other := trial.FailedCost(false, 3000)
 	want := float64(shadow.EstimateInputTokens(3000)) * jevtrialsettings.WorstCaseUSDPerMtok / 1e6
-	if other.Source != jevtrial.CostUnknown || other.USD != nil || !near(other.CountedUSD, want) || want <= 0 {
-		t.Errorf("a failure that may have been billed = %+v, want unknown / NULL / counted %v", other, want)
+	for status, billedAtWorstCase := range map[int]bool{
+		0: true, 401: false, 402: false, 403: false, 422: false, 429: false, 529: false, // refused before the model ran (assumed unbilled)
+		413: true, 500: true, 502: true, 504: true, // may come after the model ran
+	} {
+		c := trial.FailedCost(status, 3000)
+		if c.Source != jevtrial.CostUnknown || c.USD != nil {
+			t.Errorf("status %d: %+v, want unknown with a NULL cost (never 0 USD)", status, c)
+		}
+		if billedAtWorstCase && (!near(c.CountedUSD, want) || want <= 0) {
+			t.Errorf("status %d counted %v, want the worst case %v", status, c.CountedUSD, want)
+		}
+		if !billedAtWorstCase && c.CountedUSD != 0 {
+			t.Errorf("status %d counted %v, want 0 (assumed unbilled)", status, c.CountedUSD)
+		}
 	}
 }

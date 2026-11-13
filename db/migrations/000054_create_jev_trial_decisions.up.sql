@@ -13,7 +13,7 @@
 --   status            ok=全問に答えた / failed=応答が得られなかった（通信・HTTP エラー・不正な応答） /
 --                     refused=全問を拒否 / partial=一部の質問を拒否。
 --   failure_code      status が failed のときの短い分類（http_402 / http_403 / http_429 / http_529 / http_4xx /
---                     http_5xx / timeout / transport / invalid_response / canceled / persist）。それ以外は空。
+--                     http_5xx / timeout / transport / invalid_response）。それ以外は空。
 --   http_status       HTTP エラーのときのステータス。それ以外は NULL。
 --   error_excerpt     エラーの短い抜粋（全文は残さない。上限 200 バイト）。
 --   direction 〜 continuation_probability  各答え。拒否・欠落した質問は NULL（0 や NONE で補わない）。

@@ -9,7 +9,7 @@ import (
 // settingsHints is the per-key input guidance shown under a Settings
 // field. Only keys whose expected format is easy to get wrong have one.
 var settingsHints = map[string]string{
-	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はAPI のルートを入力してください（/v1/systemone などのエンドポイントのパスは付けないでください）。",
+	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はホスト名のみ入力してください（/v1/systemone などのパスは付けないでください）。",
 	config.KeyJevModel:   "未設定の場合は既定値 " + jev.DefaultModel + " を使用します。",
 
 	config.KeyTachibanaDemoAuthID:         "デモ環境の認証ID（立花証券の利用設定画面で自動発行されます）。保存済みの値は表示しません。",

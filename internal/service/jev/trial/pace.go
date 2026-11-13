@@ -45,3 +45,18 @@ func (t *Trial) holdThrottle(arm string, until time.Time) {
 		t.throttledUntil[arm] = until
 	}
 }
+
+// haltHeld reports whether key (KeyHalt or an arm's HaltKey) was stopped by a
+// 402/403 on the JST day day, in memory.
+func (t *Trial) haltHeld(key, day string) bool {
+	t.paceMu.Lock()
+	defer t.paceMu.Unlock()
+	return t.halted[key] == day
+}
+
+// holdHalt remembers a 402/403 stop of key for the JST day day.
+func (t *Trial) holdHalt(key, day string) {
+	t.paceMu.Lock()
+	defer t.paceMu.Unlock()
+	t.halted[key] = day
+}

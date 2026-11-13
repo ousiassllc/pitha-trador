@@ -32,8 +32,10 @@ func (t *Trial) stopAfterFailure(arm jevtrialsettings.Arm, d jevtrial.Decision, 
 	}
 	switch {
 	case status == 402:
+		t.holdHalt(jevtrialsettings.KeyHalt, jevshadowsettings.Day(now))
 		t.recordHalt(jevtrialsettings.KeyHalt, jevtrialsettings.Halt{Reason: jevtrialsettings.HaltReasonPaymentRequired, Status: status}, now)
 	case status == 403:
+		t.holdHalt(jevtrialsettings.HaltKey(arm.ID), jevshadowsettings.Day(now))
 		t.recordHalt(jevtrialsettings.HaltKey(arm.ID), jevtrialsettings.Halt{Reason: jevtrialsettings.HaltReasonForbidden, Status: status}, now)
 	case jevtrialsettings.IsThrottleStatus(status):
 		t.recordThrottle(arm.ID, status, now)
@@ -45,7 +47,8 @@ func (t *Trial) stopAfterFailure(arm jevtrialsettings.Arm, d jevtrial.Decision, 
 // recordHalt leaves why the trial (key = KeyHalt) or an arm (key = HaltKey) is
 // stopped for the JST day of now (h: the reason with its numbers), once per day:
 // the first reason of a day stays. A failed write is logged; the stop still
-// holds because the caps are checked against stored state before every call.
+// holds: a cap is re-derived from the stored rows before every call and a 402/403
+// is also held in memory (haltHeld).
 func (t *Trial) recordHalt(key string, h jevtrialsettings.Halt, now time.Time) {
 	ctx, cancel := t.recordCtx()
 	defer cancel()
@@ -77,7 +80,13 @@ func (t *Trial) countFailure(arm, day string) {
 	t.recMu.Lock()
 	defer t.recMu.Unlock()
 	f := jevtrialsettings.Failures{Date: day}
-	if stored := jevtrialsettings.LoadArm(ctx, t.settings, arm).Failures; stored != nil && stored.Date == day {
+	st := jevtrialsettings.LoadArm(ctx, t.settings, arm)
+	if st.ReadErr != nil {
+		// Writing 1 over an unread higher count would lower the day's count.
+		slog.Error("jev trial: the arm's failed-call counter could not be read; not counting this failure", "arm", arm, "error", st.ReadErr)
+		return
+	}
+	if stored := st.Failures; stored != nil && stored.Date == day {
 		f.Count = stored.Count
 	}
 	f.Count++

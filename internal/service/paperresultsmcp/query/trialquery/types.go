@@ -12,8 +12,6 @@
 package trialquery
 
 import (
-	"regexp"
-
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
@@ -44,9 +42,6 @@ const (
 	// null: an ordering of a handful of outcomes is noise, not a comparison.
 	MinOutcomeRecordsForRank = 20
 )
-
-// armIDPattern is jevtrialsettings's arm id rule (it ends up in settings keys).
-var armIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,47}$`)
 
 // entryQualityOrder is the fixed order of the entry_quality rows, poor to
 // exceptional: every level is always present, with zeros.

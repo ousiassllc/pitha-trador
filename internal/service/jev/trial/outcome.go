@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
@@ -109,19 +110,31 @@ func fillFailure(d *jevtrial.Decision, r callResult) {
 	d.FailureCode, status = classifyFailure(r.err)
 	d.HTTPStatus = status
 	d.ErrorExcerpt = textutil.Excerpt(errorText(r.err), jevtrial.MaxErrorExcerptBytes)
-	c := FailedCost(status != nil, r.requestBytes)
+	httpStatus := 0
+	if status != nil {
+		httpStatus = *status
+	}
+	c := FailedCost(httpStatus, r.requestBytes)
 	d.CostUSD, d.CostSource, d.CountedCostUSD = c.USD, c.Source, c.CountedUSD
 }
 
 // errorText is the text an error excerpt is cut from: an API error's body (the
 // vendor's explanation), else the error's own message.
+//
+// Credentials are redacted: some vendors echo the rejected key in a 401/403 body.
 func errorText(err error) string {
 	var apiErr *jev.APIError
 	if errors.As(err, &apiErr) {
-		return apiErr.Body
+		return redact(apiErr.Body)
 	}
-	return err.Error()
+	return redact(err.Error())
 }
+
+// credential matches an API-key-looking token or a bearer credential.
+var credential = regexp.MustCompile(`(?i)(bearer\s+[A-Za-z0-9._~+/=-]+|\bsk-[A-Za-z0-9._-]{4,})`)
+
+// redact replaces anything that looks like a credential in s.
+func redact(s string) string { return credential.ReplaceAllString(s, "[redacted]") }
 
 // classifyFailure maps a call error to its failure code and, for an HTTP error
 // answer, the status.

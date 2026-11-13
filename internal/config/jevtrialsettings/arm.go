@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
@@ -23,6 +22,12 @@ const (
 
 // MaxArms bounds the number of arms.
 const MaxArms = 8
+
+// MaxProviderOnly bounds Arm.ProviderOnly.
+const MaxProviderOnly = 8
+
+// providerName is a provider.only entry (OpenRouter provider slugs).
+var providerName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$`)
 
 // MaxModelLen bounds a model id.
 const MaxModelLen = 100
@@ -85,34 +90,72 @@ func (a Arm) DataCollectionOrDefault() string {
 	return a.DataCollection
 }
 
-// Validate checks one arm's shape. That PromptVersion is registered is checked
-// where the registry is (internal/service/jev).
+// ValidArmID reports whether id is a well-formed arm id (it ends up in runtime_settings keys).
+func ValidArmID(id string) bool { return armID.MatchString(id) }
+
+// Kinds of an ArmsError: which part of the arms setting is invalid.
+const (
+	ArmsErrJSON           = "json"
+	ArmsErrTooMany        = "too_many"
+	ArmsErrDuplicateID    = "duplicate_id"
+	ArmsErrID             = "id"
+	ArmsErrProvider       = "provider"
+	ArmsErrModel          = "model"
+	ArmsErrPromptVersion  = "prompt_version"
+	ArmsErrCap            = "daily_cost_cap_usd"
+	ArmsErrListPrice      = "list_price_usd_per_mtok"
+	ArmsErrProviderOnly   = "provider_only"
+	ArmsErrDataCollection = "data_collection"
+)
+
+// ArmsError is an invalid arms setting. Kind (an ArmsErr* constant) and ArmID
+// say which part, so a screen can word it without the English text of Err.
+type ArmsError struct {
+	Kind  string
+	ArmID string
+	Err   error
+}
+
+func (e *ArmsError) Error() string { return e.Err.Error() }
+func (e *ArmsError) Unwrap() error { return e.Err }
+
+func armsErr(kind, arm, format string, args ...any) error {
+	return &ArmsError{Kind: kind, ArmID: arm, Err: fmt.Errorf("jevtrialsettings: "+format, args...)}
+}
+
+// Validate checks one arm's shape; the error is an *ArmsError. That PromptVersion
+// is registered is checked where the registry is (internal/service/jev).
 func (a Arm) Validate() error {
 	if !armID.MatchString(a.ID) {
-		return fmt.Errorf("jevtrialsettings: arm id %q must be 1〜48 characters of a-z, 0-9, '.', '_' or '-'", a.ID)
+		return armsErr(ArmsErrID, a.ID, "arm id %q must be 1〜48 characters of a-z, 0-9, '.', '_' or '-'", a.ID)
 	}
 	if a.Provider != ProviderOpenRouter {
-		return fmt.Errorf("jevtrialsettings: arm %q: provider must be %q", a.ID, ProviderOpenRouter)
+		return armsErr(ArmsErrProvider, a.ID, "arm %q: provider must be %q", a.ID, ProviderOpenRouter)
 	}
 	if a.Model == "" || len(a.Model) > MaxModelLen {
-		return fmt.Errorf("jevtrialsettings: arm %q: model must be 1〜%d characters", a.ID, MaxModelLen)
+		return armsErr(ArmsErrModel, a.ID, "arm %q: model must be 1〜%d characters", a.ID, MaxModelLen)
 	}
 	if err := jevshadowsettings.ValidateVersion(a.PromptVersion); err != nil {
-		return fmt.Errorf("jevtrialsettings: arm %q: %w", a.ID, err)
+		return armsErr(ArmsErrPromptVersion, a.ID, "arm %q: %v", a.ID, err)
 	}
 	if a.DailyCostCapUSD != 0 {
 		if err := ValidateCap(a.DailyCostCapUSD); err != nil {
-			return fmt.Errorf("jevtrialsettings: arm %q: daily_cost_cap_usd: %w", a.ID, err)
+			return armsErr(ArmsErrCap, a.ID, "arm %q: daily_cost_cap_usd: %v", a.ID, err)
 		}
 	}
 	if p := a.ListPriceUSDPerMtok; math.IsNaN(p) || math.IsInf(p, 0) || p < 0 || p > MaxListPriceUSDPerMtok {
-		return fmt.Errorf("jevtrialsettings: arm %q: list_price_usd_per_mtok must be 0〜%g", a.ID, MaxListPriceUSDPerMtok)
+		return armsErr(ArmsErrListPrice, a.ID, "arm %q: list_price_usd_per_mtok must be 0〜%g", a.ID, MaxListPriceUSDPerMtok)
 	}
-	if slices.Contains(a.ProviderOnly, "") {
-		return fmt.Errorf("jevtrialsettings: arm %q: provider_only must not contain an empty name", a.ID)
+	if len(a.ProviderOnly) > MaxProviderOnly {
+		return armsErr(ArmsErrProviderOnly, a.ID, "arm %q: provider_only holds at most %d providers", a.ID, MaxProviderOnly)
+	}
+	for _, name := range a.ProviderOnly {
+		if !providerName.MatchString(name) {
+			return armsErr(ArmsErrProviderOnly, a.ID, "arm %q: provider_only name %q must be 1〜64 characters of letters, digits, '.', '_', '-', '/' or ':'", a.ID, name)
+		}
 	}
 	if dc := a.DataCollection; dc != "" && dc != DataCollectionDeny && dc != DataCollectionAllow {
-		return fmt.Errorf("jevtrialsettings: arm %q: data_collection must be %q or %q", a.ID, DataCollectionDeny, DataCollectionAllow)
+		return armsErr(ArmsErrDataCollection, a.ID, "arm %q: data_collection must be %q or %q", a.ID, DataCollectionDeny, DataCollectionAllow)
 	}
 	return nil
 }
@@ -120,15 +163,19 @@ func (a Arm) Validate() error {
 // ParseArms decodes and validates the runtime_settings value of KeyArms: a JSON
 // array of at most MaxArms arms with distinct ids. An empty array is valid (no
 // arm). Unknown fields are refused so a misspelt key is not silently dropped.
+// The error is an *ArmsError.
 func ParseArms(jsonValue string) ([]Arm, error) {
 	var arms []Arm
 	dec := json.NewDecoder(strings.NewReader(jsonValue))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&arms); err != nil {
-		return nil, fmt.Errorf("jevtrialsettings: decode %s as a JSON array of arms: %w", KeyArms, err)
+		return nil, armsErr(ArmsErrJSON, "", "decode %s as a JSON array of arms: %v", KeyArms, err)
+	}
+	if dec.More() {
+		return nil, armsErr(ArmsErrJSON, "", "%s must hold exactly one JSON array", KeyArms)
 	}
 	if len(arms) > MaxArms {
-		return nil, fmt.Errorf("jevtrialsettings: %s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
+		return nil, armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
 	}
 	seen := map[string]bool{}
 	for _, a := range arms {
@@ -136,7 +183,7 @@ func ParseArms(jsonValue string) ([]Arm, error) {
 			return nil, err
 		}
 		if seen[a.ID] {
-			return nil, fmt.Errorf("jevtrialsettings: arm id %q is used twice", a.ID)
+			return nil, armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
 		}
 		seen[a.ID] = true
 	}

@@ -157,12 +157,50 @@ func scoreOutcomes(pool []*decision, arm int, returns map[int64]float64) Outcome
 	return s
 }
 
+// LiveBaseline is the live Jev's score of the cohort decisions that have an
+// outcome record: its own direction scored by the same rule as an arm's
+// (future_return signed by the direction, a hit above HitThresholdPct); a NONE
+// is counted, not scored.
+type LiveBaseline struct {
+	Records    int  `json:"records"`
+	NoneCount  int  `json:"none_count"`
+	Scorable   int  `json:"scorable"`
+	Hits       int  `json:"hits"`
+	OverCohort Rate `json:"hit_rate_over_cohort"`
+}
+
+func scoreLive(pool []*decision, returns map[int64]float64) LiveBaseline {
+	var s LiveBaseline
+	for _, d := range pool {
+		fr, ok := returns[d.id]
+		if !ok {
+			continue
+		}
+		s.Records++
+		switch d.liveDir {
+		case dirNone:
+			s.NoneCount++
+		case dirLong, dirShort:
+			s.Scorable++
+			signed := fr
+			if d.liveDir == dirShort {
+				signed = -fr
+			}
+			if signed > HitThresholdPct {
+				s.Hits++
+			}
+		}
+	}
+	s.OverCohort = rate(s.Hits, s.Records)
+	return s
+}
+
 // rankByHitRateOverCohort gives the arms a competition rank (1, 1, 3) by their
 // hit rate over the cohort, highest first. It is an ordering of one metric: nil
-// ranks (below MinOutcomeRecordsForRank records) when there is too little to order.
+// ranks (below MinOutcomeRecordsForRank records, or with a single arm: a lone rank 1 would read as a winner) when there is too little to order.
 func rankByHitRateOverCohort(stats []OutcomeStats) []*int {
 	ranks := make([]*int, len(stats))
-	if len(stats) == 0 || stats[0].Records < MinOutcomeRecordsForRank {
+	if len(stats) < 2 || stats[0].Records < MinOutcomeRecordsForRank {
 		return ranks
 	}
 	order := make([]int, len(stats))

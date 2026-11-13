@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -32,7 +33,7 @@ func ValidateArms(arms []string) error {
 	}
 	seen := map[string]bool{}
 	for _, a := range arms {
-		if !armIDPattern.MatchString(a) || seen[a] {
+		if !jevtrialsettings.ValidArmID(a) || seen[a] {
 			return fmt.Errorf("trialquery: invalid or repeated arm id")
 		}
 		seen[a] = true

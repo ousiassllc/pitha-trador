@@ -27,7 +27,7 @@
 | `cohort` | `definition` / `common_success_definition`（定義文）・`size`（コホートの判断数）・`common_success_count`（共通の成功数）・`common_success_rate`（= `common_success_count / size`、`size` が 0 なら `null`）・`rows`（コホートの判断に対する全アームの行の `RowCounts`） |
 | `per_arm[]` | アームごと。`arm_id`・`period_rows`（期間内のそのアームの全行の `RowCounts`）・`cohort_rows`（コホートの判断に対する行の `RowCounts`）・`direction`・`direction_agreement`・`entry_quality` |
 | `fairness` | `cohort_size` と `caveats[]`（コホートの行に見つかった公平でない条件: `truncation_suspected` / `rag_includes_live_model_answers` / `llm_cutoff_unverified`。該当が無ければ空） |
-| `outcomes[]` | (`horizon_minutes`, `label_version`) ごとのスライス（ラベルの版は混ぜない）。各要素は `horizon_minutes`・`label_version`・`arms[]`。`arms[]` は `arm_id`・`rank`・`cohort`（`OutcomeStats`）・`common_success`（`informational: true` と、同じ `OutcomeStats` の項目） |
+| `outcomes[]` | (`horizon_minutes`, `label_version`) ごとのスライス（ラベルの版は混ぜない）。各要素は `horizon_minutes`・`label_version`・`live_baseline`（同じコホートのライブ自身の採点: `records`・`none_count`・`scorable`・`hits`・`hit_rate_over_cohort`。アームの当たり率はこれと並べて読む）・`arms[]`。`arms[]` は `arm_id`・`rank`・`cohort`（`OutcomeStats`）・`common_success`（`informational: true` と、同じ `OutcomeStats` の項目） |
 | `counterfactual_proxy` | `proxy: true`（常に）・`note`・`arms[]`（`arm_id`・`no_direction_decisions`・`none_answers`・`no_answer`・`horizons[]`）。下の「NONE と反実仮想」 |
 
 **`RowCounts`**: `total`（分母。失敗・拒否・一部拒否を含む）・`ok` / `failed` / `refused` / `partial`・`missing_rate`（= (`failed` + `refused` + `partial`) / `total`。`total` が 0 なら `null`）・`failure_codes`（`failed` の行の `failure_code` 別件数。固定コードのみ）・`truncation_suspected`（フラグが付いた行の数）・`rag_includes_live_model_answers`（同）・`llm_cutoff_status`（状態別の件数）。**フラグの付いた行は除外せず件数で出す。**
@@ -55,7 +55,7 @@
 | `coverage` | `{scorable, records, rate}` — 採点できた割合 |
 | `by_entry_quality[]` | 5 水準ごとの `scorable`・`hits`・`hit_rate_over_answered`（entry_quality の較正の見方。水準の閾値は評価側の固定値で、`HitThresholdPct` = 0） |
 
-`rank`: スライスごとに、`hit_rate_over_cohort` の高い順の競技順位（同率は同順位。1, 1, 3）。結果の記録のある判断が 20 件（`MinOutcomeRecordsForRank`）未満のスライスは `null`。**成功した行だけで順位は作らない**: 少ない成功がすべて当たりでも、失敗の多いアームは分母（コホート）が大きいので上位にならない。`common_success` 側に `rank` は無い（参考値）。
+`rank`: スライスごとに、`hit_rate_over_cohort` の高い順の競技順位（同率は同順位。1, 1, 3）。結果の記録のある判断が 20 件（`MinOutcomeRecordsForRank`）未満のスライス、およびアームが 1 つだけのときは `null`（1 つだけの 1 位は勝者に読めるため）。ラベルはライブの方向のものなので、ライブと逆向きの答えは採点されず（`excluded_disagreement`）、当たり率にはライブとの一致度も含まれる。基準は `live_baseline`。**成功した行だけで順位は作らない**: 少ない成功がすべて当たりでも、失敗の多いアームは分母（コホート）が大きいので上位にならない。`common_success` 側に `rank` は無い（参考値）。
 
 **NONE と反実仮想**（`counterfactual_proxy`）: NONE の答えには方向の結果が無いので、`calibration_outcomes` の当たり外れには数えず（`none_count`）、方向を補完して勝たせない。分母（コホート）には入る。見送られたライブの LONG/SHORT 候補に、既存の記録として `counterfactual_labels`（「ライブの方向で入っていたらどうなったか」。このツールは新しく計算しない）が付いていれば、アームが NONE と答えた判断・答えなかった判断について、`proxy: true` のブロックに別に出す: `no_direction_decisions`（= `none_answers` + `no_answer`）と、ホライズンごとの `labelled`・`coverage`（`labelled / no_direction_decisions`）・`barrier_hit`（`tp` / `sl` / `timeout` の件数）・`avg_net_return_bps_of_live_direction`（ラベルの `net_return_bps` の平均。ライブの方向のコスト控除後の bps）。実現した結果ではなく、見送りが結果として良かったかの目安にすぎないので、`outcomes[]` の指標・順位には混ぜない。ラベルの無い判断は `coverage` に現れる。
 
@@ -71,7 +71,7 @@
 
 **`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported` + `list_price_estimate` + `unknown.unknown_counted_usd`）。
 
-**`unknown`**: `calls`・`actual_usd`（常に `null`。実費は分からない。0 円ではない）・`unknown_counted_usd`（上限の判定に数えた額。最悪値側の単価で数えた**上限の見積り**で、`reported` / `list_price_estimate` の合計には混ぜない。0 に丸めない）・`counted_as_zero_calls`（HTTP エラー応答は課金されない前提で 0 と数えた件数。低い `unknown_counted_usd` を「無料」と読まないために出す）・`basis`（`cap_counting_upper_bound`）。
+**`unknown`**: `calls`・`actual_usd`（常に `null`。実費は分からない。0 円ではない）・`unknown_counted_usd`（上限の判定に数えた額。最悪値側の単価で数えた**上限の見積り**で、`reported` / `list_price_estimate` の合計には混ぜない。0 に丸めない）・`counted_as_zero_calls`（課金されない前提の 4xx（413 を除く）・529 応答を 0 と数えた件数。低い `unknown_counted_usd` を「無料」と読まないために出す）・`basis`（`cap_counting_upper_bound`）。
 
 **`limits`**: `enabled`（トライアルの有効。読み取りのみ）・`today`（JST の日）・`arms_config_invalid`（保存されたアーム設定が読めない。理由の文は返さない）・`overall_daily_cap_usd`・`overall_cap_source`（`default` / `stored`）・`overall_counted_today_usd`・`halt`（全体の止まりの記録 `{date, reason, active_today}`。無ければ `null`。`reason` は `daily_cost_cap` / `payment_required` など固定コード）・`failure_cap`・`throttle_cooldown_seconds`・`min_call_interval_seconds`・`worst_case_usd_per_mtok`（unknown を数える単価）・`arms[]`（設定されたアームごと: `arm_id`・`model`・`prompt_version`・`daily_cap_usd`・`list_price_known`・`counted_today_usd`・`failures_today`・`halt`（`{date, reason, active_today}` または `null`）・`throttle`（`{date, reason, active}` または `null`。429/529 の止まり））。止まりの記録は理由と日だけで、金額・時刻・ステータス・本文は返さない。
 

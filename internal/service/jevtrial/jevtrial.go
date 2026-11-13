@@ -129,6 +129,12 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		if b, err := json.MarshalIndent(cfg.Arms, "", "  "); err == nil {
 			st.ArmsJSON = string(b)
 		}
+	} else if cfg.ArmsError != "" {
+		// Damaged: show the stored text so it can be fixed, not an empty list that
+		// would silently replace it on the next save.
+		if raw, ok, err := s.settings.Get(ctx, jevtrialsettings.KeyArms); err == nil && ok {
+			st.ArmsJSON = raw
+		}
 	}
 	from, to := jevshadowsettings.DayBounds(now)
 	var err error
@@ -189,7 +195,7 @@ func ValidateArms(armsJSON string) (string, error) {
 	}
 	arms, err := jevtrialsettings.ParseArms(armsJSON)
 	if err != nil {
-		return "", fmt.Errorf("%w: アームの設定を読み取れません（%s）", ErrInvalidInput, strings.TrimPrefix(err.Error(), "jevtrialsettings: "))
+		return "", fmt.Errorf("%w: %s", ErrInvalidInput, armsMessage(err))
 	}
 	for _, a := range arms {
 		if !jev.IsTraderVersion(a.PromptVersion) {
@@ -249,6 +255,13 @@ func (s *Service) Save(ctx context.Context, f Form) error {
 			return err
 		}
 	}
+	// Turning the trial off comes first, so a later write that fails cannot leave
+	// it on; turning it on comes last, after everything it depends on is saved.
+	if !f.Enabled {
+		if err := s.SetEnabled(ctx, false); err != nil {
+			return err
+		}
+	}
 	if err := s.SetArms(ctx, f.ArmsJSON); err != nil {
 		return err
 	}
@@ -261,5 +274,8 @@ func (s *Service) Save(ctx context.Context, f Form) error {
 	if err != nil {
 		return err
 	}
-	return s.SetEnabled(ctx, f.Enabled)
+	if f.Enabled {
+		return s.SetEnabled(ctx, true)
+	}
+	return nil
 }
