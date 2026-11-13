@@ -14,11 +14,12 @@ import (
 // call the stopped arm again.
 func TestPaymentRequiredAndForbiddenStopsHoldWhenTheRecordCannotBeWritten(t *testing.T) {
 	for name, tc := range map[string]struct {
-		status        int
-		otherArmCalls int
+		status       int
+		stopsOthers  bool
+		otherCallsLe int // calls of the other arm after the first decision (arms run in parallel: a 402 may or may not land before its check)
 	}{
-		"402 stops every arm": {status: 402, otherArmCalls: 1},
-		"403 stops that arm":  {status: 403, otherArmCalls: 2},
+		"402 stops every arm": {status: 402, stopsOthers: true, otherCallsLe: 1},
+		"403 stops that arm":  {status: 403, stopsOthers: false, otherCallsLe: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newEnv(t, metalabelsettings.ModePaper, nil)
@@ -30,12 +31,19 @@ func TestPaymentRequiredAndForbiddenStopsHoldWhenTheRecordCannotBeWritten(t *tes
 			e.settings.mu.Unlock()
 
 			e.evaluate()
+			first := other.calls()
 			e.evaluate()
 			if stopped.calls() != 1 {
 				t.Errorf("the stopped arm was called %d times, want 1: the stop must hold in memory", stopped.calls())
 			}
-			if other.calls() != tc.otherArmCalls {
-				t.Errorf("the other arm was called %d times, want %d", other.calls(), tc.otherArmCalls)
+			if first > tc.otherCallsLe {
+				t.Errorf("the other arm was called %d times for the first decision, want at most %d", first, tc.otherCallsLe)
+			}
+			if tc.stopsOthers && other.calls() != first {
+				t.Errorf("the other arm was called again after a 402 (%d -> %d): the whole trial must stay stopped", first, other.calls())
+			}
+			if !tc.stopsOthers && other.calls() != first+1 {
+				t.Errorf("the other arm was called %d times in all, want %d: a 403 stops that arm only", other.calls(), first+1)
 			}
 			if _, ok := e.get(jevtrialsettings.KeyHalt); ok {
 				t.Error("no record could be written, yet one exists")
