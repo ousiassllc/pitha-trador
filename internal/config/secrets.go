@@ -79,6 +79,14 @@ const (
 	KeyTachibanaDemoAuthID         = "TACHIBANA_DEMO_AUTH_ID"
 	KeyTachibanaProdAuthID         = "TACHIBANA_PROD_AUTH_ID"
 	KeyTachibanaDemoSecondPassword = "TACHIBANA_DEMO_SECOND_PASSWORD"
+	// KeyOpenRouterAPIKey/KeyOpenRouterBaseURL supply the Jev model-comparison
+	// trial's arms (internal/service/jev/trialwire; issue #1059). Both are
+	// optional: unset leaves the trial inert (the app still starts), and they
+	// are never part of RequiredSecretKeys, so the Setup Guard does not ask
+	// for them. They are independent of the live Jev keys. An empty base URL
+	// makes the trial use OpenRouter's public endpoint.
+	KeyOpenRouterAPIKey  = "OPENROUTER_API_KEY"
+	KeyOpenRouterBaseURL = "OPENROUTER_BASE_URL"
 )
 
 // Switch values of KeyNewsFeedEnabled.
@@ -97,6 +105,7 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 // as missing.
 var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey, KeyNewsFeedEnabled,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL,
+	KeyOpenRouterAPIKey, KeyOpenRouterBaseURL,
 	KeyTachibanaDemoAuthID, KeyTachibanaProdAuthID, KeyTachibanaDemoSecondPassword}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
@@ -155,6 +164,10 @@ type Secrets struct {
 	SolBaseURL  string
 	OpusAPIKey  string
 	OpusBaseURL string
+	// OpenRouterAPIKey/OpenRouterBaseURL are optional (see
+	// KeyOpenRouterAPIKey); empty means the model-comparison trial cannot run.
+	OpenRouterAPIKey  string
+	OpenRouterBaseURL string
 	// TachibanaDemoAuthID / TachibanaProdAuthID are the 立花 認証ID per
 	// environment. The デモ 第二暗証番号 is unexported so it can only leave
 	// Secrets through TachibanaCredentials, which withholds it in 本番.
@@ -235,20 +248,22 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 	}
 
 	return Secrets{
-		JevAPIKey:       values[KeyJevAPIKey],
-		JevBaseURL:      values[KeyJevBaseURL],
-		JevModel:        values[KeyJevModel],
-		KabuAPIPassword: values[KeyKabuAPIPassword],
-		SlackWebhookURL: values[KeySlackWebhookURL],
-		LunaAPIKey:      values[KeyLunaAPIKey],
-		LunaBaseURL:     values[KeyLunaBaseURL],
-		NewsFeedURL:     values[KeyNewsFeedURL],
-		NewsFeedAPIKey:  values[KeyNewsFeedAPIKey],
-		NewsFeedEnabled: values[KeyNewsFeedEnabled],
-		SolAPIKey:       values[KeySolAPIKey],
-		SolBaseURL:      values[KeySolBaseURL],
-		OpusAPIKey:      values[KeyOpusAPIKey],
-		OpusBaseURL:     values[KeyOpusBaseURL],
+		JevAPIKey:         values[KeyJevAPIKey],
+		JevBaseURL:        values[KeyJevBaseURL],
+		JevModel:          values[KeyJevModel],
+		KabuAPIPassword:   values[KeyKabuAPIPassword],
+		SlackWebhookURL:   values[KeySlackWebhookURL],
+		LunaAPIKey:        values[KeyLunaAPIKey],
+		LunaBaseURL:       values[KeyLunaBaseURL],
+		NewsFeedURL:       values[KeyNewsFeedURL],
+		NewsFeedAPIKey:    values[KeyNewsFeedAPIKey],
+		NewsFeedEnabled:   values[KeyNewsFeedEnabled],
+		SolAPIKey:         values[KeySolAPIKey],
+		SolBaseURL:        values[KeySolBaseURL],
+		OpusAPIKey:        values[KeyOpusAPIKey],
+		OpusBaseURL:       values[KeyOpusBaseURL],
+		OpenRouterAPIKey:  values[KeyOpenRouterAPIKey],
+		OpenRouterBaseURL: values[KeyOpenRouterBaseURL],
 
 		TachibanaDemoAuthID:         values[KeyTachibanaDemoAuthID],
 		TachibanaProdAuthID:         values[KeyTachibanaProdAuthID],

@@ -8,6 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
@@ -50,6 +51,7 @@ type options struct {
 	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
 	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
 	jevPrompt           jevprompt.Service            // nil until WithJevPromptSettings: no Jev prompt card
+	jevTrial            jevtrial.Service             // nil until WithJevTrialSettings: no model-comparison trial card
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -222,6 +224,15 @@ func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
 // without it the card is hidden and the routes answer 404.
 func WithJevPromptSettings(svc jevprompt.Service) Option {
 	return func(o *options) { o.jevPrompt = svc }
+}
+
+// WithJevTrialSettings enables the Settings screen's model-comparison trial card
+// (`modal-jev-trial`: switch, arms, daily cost cap, state) and its `GET
+// /settings/jev-trial-panel` and `POST /settings/jev-trial` routes; without it
+// the card is hidden and the routes answer 404. It is the only way the trial
+// can be switched on.
+func WithJevTrialSettings(svc jevtrial.Service) Option {
+	return func(o *options) { o.jevTrial = svc }
 }
 
 // WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the

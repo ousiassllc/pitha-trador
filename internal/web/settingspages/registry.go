@@ -185,10 +185,12 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-luna", nil},
 	{PageIntegrations, "modal-sol", nil},
 	{PageIntegrations, "modal-opus", nil},
+	{PageIntegrations, "modal-openrouter", nil},
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
 	{PageIntegrations, "modal-jev-prompt", nil},
+	{PageIntegrations, "modal-jev-trial", nil},
 
 	// システム. The header's version link used to land on
 	// `/settings#update-panel`.

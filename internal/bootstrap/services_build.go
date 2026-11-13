@@ -42,7 +42,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/observation"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
@@ -90,12 +90,11 @@ func (s *Services) wireActivity() {
 
 // buildExternalClients builds the kabuステーション and Jev API clients and the
 // News Ingest service (issue #81, FR-LUNA-1〜5). Luna defaults to Jev and the
-// news feed to the やのしん TDnet WebAPI (issue #273), so News Ingest runs
-// with nothing but JEV_API_KEY. Unless Luna (Jev or LUNA_*) is available and
-// the feed is not switched off the service still exists (its cache is simply
-// always empty, so no news_context is injected and no news flag is raised)
-// but its polling loop is not started; start-up never depends on either. dbPath is the database file the
-// disclosure skip record (issue #935) opens its own connection on at Start.
+// news feed to the やのしん TDnet WebAPI (issue #273), so News Ingest runs with
+// nothing but JEV_API_KEY. Unless Luna (Jev or LUNA_*) is available and the feed
+// is not switched off the service still exists (its cache is simply always
+// empty, so no news_context is injected and no news flag is raised) but its
+// polling loop is not started; start-up never depends on either. dbPath: the file the disclosure skip record (#935) opens.
 func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
 	infoAPIMax := 0
 	if s.strategy != nil {
@@ -129,14 +128,14 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	s.News = newsfeed.NewService(feed, luna, newstargets.New(s.Screener, s.Positions), newsOpts...)
 }
 
-// buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader.
-func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig) {
+// buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader (the shadow and the model-comparison trial, #1059, ride its shadow seam).
+func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig, secrets config.Secrets) {
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots, rag.WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener), jev.WithObservation(observation.New(s.Settings, rankingwatch.Held{Positions: s.Positions, Orders: s.Orders}, nil)), // observation-only symbols: Scout only, never Trader, unless held (#1055)
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
-	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, shadow.TraderOptions(db, s.Jev, s.Settings, s.News)...)
+	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, trial.TraderOptions(db, s.Jev, s.Settings, s.News, trial.Keys{APIKey: secrets.OpenRouterAPIKey, BaseURL: secrets.OpenRouterBaseURL})...)
 }
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine

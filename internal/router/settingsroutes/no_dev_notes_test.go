@@ -65,7 +65,7 @@ func screenTargets() []string {
 		"/scanner", "/scanner/scan", "/watchlist", "/symbols/7203",
 		"/order-proposals", "/performance", "/calibration", "/activity",
 		"/setup", settingspages.BasePath,
-		"/settings/mcp-panel", "/settings/jev-prompt-panel", "/system/update-panel", "/system/status",
+		"/settings/mcp-panel", "/settings/jev-prompt-panel", "/settings/jev-trial-panel", "/system/update-panel", "/system/status",
 	}
 	for _, page := range settingspages.Pages() {
 		targets = append(targets, page.Path())

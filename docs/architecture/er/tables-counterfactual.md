@@ -4,7 +4,7 @@
 
 ## 位置づけ
 
-ガードで見送った候補に「もし入っていたらどうなったか」の結果ラベルを残す、**取引に使わない**記録。Policy・Risk・発注・Paper ガード・Live・Jev のプロンプトのどれも読まない（`internal/repository/counterlabel/isolation_test.go` が、読めるファイルを学習・記録部品・配線に限って固定する）。`calibration_outcomes` と `jev_decisions` には列も制約も足さず、既存行の数値も書き換えない。
+ガードで見送った候補に「もし入っていたらどうなったか」の結果ラベルを残す、**取引に使わない**記録。Policy・Risk・発注・Paper ガード・Live・Jev のプロンプトのどれも読まない（`internal/repository/counterlabel/isolation_test.go` が、読めるファイルを学習・記録部品・配線と、読み取り専用の MCP ツール`jev_trial_compare`（issue #1060。proxy として別枠で見せるだけで、何の入力にもしない）に限って固定する）。`calibration_outcomes` と `jev_decisions` には列も制約も足さず、既存行の数値も書き換えない。
 
 すでに `calibration_outcomes` にラベルが付いた見送り候補（Outcome Labeling は trader 判断なら見送りでも対象にする）は、**この表に計算し直さない**。この表に入るのは、そのラベルが付かないまま残った見送りだけである。
 

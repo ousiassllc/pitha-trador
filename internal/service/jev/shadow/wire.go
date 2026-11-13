@@ -16,6 +16,13 @@ import (
 // input. The shadow runs only in Paper and is off until a person turns it on on
 // the Settings screen.
 func TraderOptions(db *sql.DB, client *jev.Client, settings *system.RuntimeSettingsRepository, news jev.NewsSource) []jev.Option {
+	return TraderOptionsWith(db, client, settings, news, func(s *Shadow) jev.ShadowSubmitter { return s })
+}
+
+// TraderOptionsWith is TraderOptions with the shadow seam's submitter built from
+// the shadow by seam, so that something else (the model-comparison trial, issue
+// #1059) can sit next to the shadow without the option list being written twice.
+func TraderOptionsWith(db *sql.DB, client *jev.Client, settings *system.RuntimeSettingsRepository, news jev.NewsSource, seam func(*Shadow) jev.ShadowSubmitter) []jev.Option {
 	s := New(client, judgement.NewShadowRepository(db), settings, metalabelsettings.RuntimeMode, time.Now)
-	return []jev.Option{jev.WithNewsSource(news), jev.WithPromptSettings(settings), jev.WithShadow(s)}
+	return []jev.Option{jev.WithNewsSource(news), jev.WithPromptSettings(settings), jev.WithShadow(seam(s))}
 }

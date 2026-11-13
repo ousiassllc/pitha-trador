@@ -43,6 +43,14 @@ type Choice struct {
 	// option probabilities. It is Jev's self-reported certainty, not a
 	// verified probability (FR-TRADER-2).
 	Confidence float64
+	// ConfidenceReported is false when DecodeTrial accepted an answer that
+	// carried no confidence (Confidence is then 0, not a measurement).
+	// Decode never returns such an answer.
+	ConfidenceReported bool
+	// Probabilities are the option probabilities exactly as the API sent them
+	// (DecodeTrial only; nil when absent or not a number map). They are not
+	// validated.
+	Probabilities map[string]float64
 }
 
 // Result is a response that Decode validated against its request: every
@@ -56,9 +64,28 @@ type Result struct {
 	// input tokens from it when Usage carries none.
 	RequestBytes int
 
+	// ID, Provider and ReportedCostUSD are the response's "id", "provider"
+	// and "usage.cost" as DecodeTrial read them (zero/nil when absent,
+	// mistyped or, for the cost, negative). Decode leaves them empty: the
+	// live path does not read them. A nil ReportedCostUSD is "not reported",
+	// never 0 USD: the caller estimates the cost instead.
+	ID              string
+	Provider        string
+	ReportedCostUSD *float64
+	// Body is the raw response body (DecodeTrial only).
+	Body string
+
 	noul    map[string]float64
 	choices map[string]Choice
+	refused map[string]bool
 }
+
+// Refused reports whether the provider refused to answer question id
+// (DecodeTrial only; Decode fails on a refusal).
+func (r Result) Refused(id string) bool { return r.refused[id] }
+
+// RefusedCount is the number of questions the provider refused.
+func (r Result) RefusedCount() int { return len(r.refused) }
 
 // Noul returns the yes-probability in [0, 1] of the noul question id
 // (0 if id was not a noul question of the request).
@@ -71,8 +98,44 @@ func (r Result) Choice(id string) Choice { return r.choices[id] }
 // Decode parses body as the response to req and validates every answer
 // against the question it answers. Any violation returns an error that
 // wraps ErrInvalidResponse. Answers for ids that were not asked are
-// ignored.
-func Decode(req Request, body []byte) (Result, error) {
+// ignored. This is the strict validation of the live Scout/Trader path: a
+// missing or mistyped field, a refusal and a choice without confidence all
+// fail. The trial path uses DecodeTrial instead.
+func Decode(req Request, body []byte) (Result, error) { return decode(req, body, false) }
+
+// DecodeTrial is Decode with the looser reading of the trial path (the
+// OpenRouter models compared next to the live Jev, issue #1058):
+//
+//   - an answer of type "refusal" is not an error: the question is recorded as
+//     refused (Result.Refused) and the other questions are still read;
+//   - a choice may omit "confidence" (Choice.ConfidenceReported is then false);
+//     a confidence that is present must still be in [0, 1];
+//   - the choice's "probabilities", the response's "id" and "provider" and
+//     "usage.cost" are read when present (Result).
+//
+// Everything else stays strict: malformed JSON, a missing model or answer, an
+// answer type that is neither the asked type nor "refusal", a noul value that
+// is missing or outside [0, 1], and a choice outside the defined options still
+// wrap ErrInvalidResponse. Only the trial path calls it; the live path never
+// does.
+func DecodeTrial(req Request, body []byte) (Result, error) {
+	r, err := decode(req, body, true)
+	if err != nil {
+		return Result{}, err
+	}
+	r.Body = string(body)
+	extra := decodeTrialExtras(body)
+	r.ID, r.Provider, r.ReportedCostUSD = extra.ID, extra.Provider, extra.costUSD
+	for id, probs := range extra.probabilities {
+		if c, ok := r.choices[id]; ok {
+			c.Probabilities = probs
+			r.choices[id] = c
+		}
+	}
+	return r, nil
+}
+
+func decode(req Request, body []byte, lenient bool) (Result, error) {
 	var resp response
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return Result{}, fmt.Errorf("%w: decode body: %w", ErrInvalidResponse, err)
@@ -99,6 +162,13 @@ func Decode(req Request, body []byte) (Result, error) {
 		if !ok {
 			return Result{}, fmt.Errorf("%w: missing answer %q", ErrInvalidResponse, id)
 		}
+		if lenient && a.Type == TypeRefusal {
+			if result.refused == nil {
+				result.refused = make(map[string]bool)
+			}
+			result.refused[id] = true
+			continue
+		}
 		if a.Type != q.Type {
 			return Result{}, fmt.Errorf("%w: answer %q has type %q, want %q", ErrInvalidResponse, id, a.Type, q.Type)
 		}
@@ -109,7 +179,7 @@ func Decode(req Request, body []byte) (Result, error) {
 			}
 			result.noul[id] = *a.Noul
 		case TypeChoice:
-			c, err := validateChoice(id, q, a)
+			c, err := validateChoice(id, q, a, lenient)
 			if err != nil {
 				return Result{}, err
 			}
@@ -121,7 +191,7 @@ func Decode(req Request, body []byte) (Result, error) {
 	return result, nil
 }
 
-func validateChoice(id string, q Question, a answer) (Choice, error) {
+func validateChoice(id string, q Question, a answer, lenient bool) (Choice, error) {
 	options, _ := q.Criteria.(Options)
 	if a.Choice == nil || !slices.ContainsFunc(options, func(o Option) bool { return o.Name == *a.Choice }) {
 		got := "<missing>"
@@ -130,10 +200,13 @@ func validateChoice(id string, q Question, a answer) (Choice, error) {
 		}
 		return Choice{}, fmt.Errorf("%w: answer %q choice %q is not a defined option", ErrInvalidResponse, id, got)
 	}
+	if lenient && a.Confidence == nil {
+		return Choice{Value: *a.Choice}, nil
+	}
 	if a.Confidence == nil || !inUnitRange(*a.Confidence) {
 		return Choice{}, fmt.Errorf("%w: answer %q confidence is missing or outside [0, 1]", ErrInvalidResponse, id)
 	}
-	return Choice{Value: *a.Choice, Confidence: *a.Confidence}, nil
+	return Choice{Value: *a.Choice, Confidence: *a.Confidence, ConfidenceReported: true}, nil
 }
 
 func inUnitRange(v float64) bool { return v >= 0 && v <= 1 }

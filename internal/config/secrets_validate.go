@@ -21,7 +21,7 @@ func (e *InvalidSecretValueError) Error() string { return e.Message }
 // urlSecretKeys are the keys whose value must be an absolute http/https URL
 // with a host (issue #235). The other allowed keys are opaque credentials.
 var urlSecretKeys = []string{
-	KeyJevBaseURL, KeySlackWebhookURL, KeyLunaBaseURL, KeyNewsFeedURL, KeySolBaseURL, KeyOpusBaseURL,
+	KeyJevBaseURL, KeySlackWebhookURL, KeyLunaBaseURL, KeyNewsFeedURL, KeySolBaseURL, KeyOpusBaseURL, KeyOpenRouterBaseURL,
 }
 
 // IsURLSecretKey reports whether key holds a URL rather than a credential.

@@ -54,14 +54,15 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 	body := allPagesBody(t, engine)
 
 	want := map[string][]string{
-		"jev":       {config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel},
-		"kabu":      {config.KeyKabuAPIPassword},
-		"slack":     {config.KeySlackWebhookURL},
-		"luna":      {config.KeyLunaAPIKey, config.KeyLunaBaseURL},
-		"news-feed": {config.KeyNewsFeedAPIKey, config.KeyNewsFeedURL, config.KeyNewsFeedEnabled},
-		"sol":       {config.KeySolAPIKey, config.KeySolBaseURL},
-		"opus":      {config.KeyOpusAPIKey, config.KeyOpusBaseURL},
-		"tachibana": {config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword},
+		"jev":        {config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel},
+		"kabu":       {config.KeyKabuAPIPassword},
+		"slack":      {config.KeySlackWebhookURL},
+		"luna":       {config.KeyLunaAPIKey, config.KeyLunaBaseURL},
+		"news-feed":  {config.KeyNewsFeedAPIKey, config.KeyNewsFeedURL, config.KeyNewsFeedEnabled},
+		"sol":        {config.KeySolAPIKey, config.KeySolBaseURL},
+		"opus":       {config.KeyOpusAPIKey, config.KeyOpusBaseURL},
+		"openrouter": {config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL},
+		"tachibana":  {config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword},
 	}
 	var all []string
 	for id, keys := range want {
@@ -98,7 +99,7 @@ func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 
 	body := allPagesBody(t, engine)
 
-	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default"} {
+	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default", "openrouter": "unset"} {
 		if want := `data-testid="connection-status-` + id + `"`; !strings.Contains(body, want) {
 			t.Fatalf("no status for %s", id)
 		}
@@ -147,6 +148,7 @@ func TestSettingsHandler_UnsetOptionalKeys_DoesNotNagAboutDefaultedKeys(t *testi
 	for _, key := range []string{
 		config.KeyJevBaseURL, config.KeyJevModel,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+		config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
 		config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	} {
 		if slices.Contains(got, key) {

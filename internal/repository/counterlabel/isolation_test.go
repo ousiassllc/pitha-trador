@@ -19,13 +19,17 @@ func TestCounterfactualLabelsAreReadOnlyByTrainingAndTheirRecorder(t *testing.T)
 	// Symbols of the record itself.
 	record := []string{"counterfactual_labels", "counterlabel", "calibration_outcome_origins", "ListTrainingRowsWithSkipped"}
 	recordReaders := []string{
-		"internal/repository/counterlabel/",              // the record's own repository
-		"internal/repository/metalabel/training_",        // the nightly retraining's rows
-		"internal/service/calibration/counterfactual",    // the recorder
-		"internal/service/metalabel/training/",           // the nightly retraining
-		"internal/bootstrap/metalabeljob/",               // wires the recorder into the nightly job
+		"internal/repository/counterlabel/",           // the record's own repository
+		"internal/repository/metalabel/training_",     // the nightly retraining's rows
+		"internal/service/calibration/counterfactual", // the recorder
+		"internal/service/metalabel/training/",        // the nightly retraining
+		"internal/bootstrap/metalabeljob/",            // wires the recorder into the nightly job
+		// jev_trial_compare (#1060): a read-only MCP view that shows the labels as a proxy, never an input of anything. Listed per file, so a writer added elsewhere in the package still fails.
+		"internal/service/paperresultsmcp/query/trialquery/load.go",
+		"internal/service/paperresultsmcp/query/trialquery/proxy.go",
+		"internal/service/paperresultsmcp/query/trialquery/types.go",
 		"internal/repository/metalabel/training_repo.go", // ListTrainingRowsWithSkipped
-		"db/migrations/",                                 // the schema
+		"db/migrations/", // the schema
 	}
 	// The training switch.
 	switchSymbols := []string{"IncludeSkippedLabels", "include_skipped_labels", "KeyIncludeSkippedLabels"}

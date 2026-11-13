@@ -206,6 +206,7 @@ func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
 		config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 		config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+		config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
 		config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 	} {
 		if !config.IsAllowedSecretKey(key) {
@@ -218,7 +219,7 @@ func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
 			t.Errorf("IsAllowedSecretKey(%q) = true, want false", key)
 		}
 	}
-	if got := len(config.AllowedSecretKeys()); got != 17 {
-		t.Errorf("len(AllowedSecretKeys()) = %d, want 17", got)
+	if got := len(config.AllowedSecretKeys()); got != 19 {
+		t.Errorf("len(AllowedSecretKeys()) = %d, want 19", got)
 	}
 }

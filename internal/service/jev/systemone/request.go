@@ -18,6 +18,10 @@ const (
 	TypeChoice = "choice"
 )
 
+// TypeRefusal is the answer type OpenRouter's Decisions API returns when the
+// provider declined to answer a question. Only DecodeTrial accepts it.
+const TypeRefusal = "refusal"
+
 // Request is the POST body of the evaluation endpoint.
 type Request struct {
 	// State is the content to evaluate: any JSON-encodable value.
@@ -28,6 +32,26 @@ type Request struct {
 	// the model) to the typed question. Answers come back under the
 	// same ids.
 	Questions map[string]Question `json:"questions"`
+	// Provider is OpenRouter's provider routing preference (trial calls
+	// only). nil is omitted from the body: the live call never sends it.
+	Provider *Provider `json:"provider,omitempty"`
+}
+
+// Provider is the routing preference OpenRouter accepts under "provider"
+// (https://openrouter.ai/docs/api/api-reference/systemone/submit-a-system-one-request).
+// Every field is optional and omitted when empty.
+type Provider struct {
+	// Only restricts routing to these providers (e.g. "deepinfra").
+	Only []string `json:"only,omitempty"`
+	// AllowFallbacks false makes OpenRouter return the upstream error
+	// instead of routing to another provider. nil leaves OpenRouter's
+	// default (true).
+	AllowFallbacks *bool `json:"allow_fallbacks,omitempty"`
+	// DataCollection is "deny" (only providers that do not collect user
+	// data) or "allow".
+	DataCollection string `json:"data_collection,omitempty"`
+	// ZDR true restricts routing to Zero Data Retention endpoints.
+	ZDR *bool `json:"zdr,omitempty"`
 }
 
 // Question is one typed question. Build it with NoulQuestion or ChoiceQuestion.

@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
@@ -98,6 +99,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	if o.jevPrompt != nil {
 		settingsHandler.WithJevPromptSettings()
 		jevprompt.New(o.jevPrompt).Register(engine)
+	}
+	if o.jevTrial != nil {
+		settingsHandler.WithJevTrialSettings()
+		jevtrial.New(o.jevTrial).Register(engine)
 	}
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET(settingspages.BasePath, settingsHandler.Page)
