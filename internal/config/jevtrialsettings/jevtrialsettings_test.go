@@ -68,6 +68,8 @@ func TestParseArms_RejectsInvalidArms(t *testing.T) {
 		"negative list price": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","list_price_usd_per_mtok":-1}]`, "list_price"},
 		"bad data collection": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","data_collection":"maybe"}]`, "data_collection"},
 		"trailing data":       {`[` + valid + `] garbage`, "exactly one"},
+		"stray closer":        {`[` + valid + `] ]`, "exactly one"},
+		"stray brace":         {`[` + valid + `]}`, "exactly one"},
 		"two arrays":          {`[` + valid + `][` + valid + `]`, "exactly one"},
 		"provider_only empty": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","provider_only":[""]}]`, "provider_only"},
 		"provider_only bad":   {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","provider_only":["a b"]}]`, "provider_only"},

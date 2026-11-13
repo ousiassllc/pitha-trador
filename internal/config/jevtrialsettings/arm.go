@@ -3,6 +3,7 @@ package jevtrialsettings
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"strings"
@@ -171,7 +172,7 @@ func ParseArms(jsonValue string) ([]Arm, error) {
 	if err := dec.Decode(&arms); err != nil {
 		return nil, armsErr(ArmsErrJSON, "", "decode %s as a JSON array of arms: %v", KeyArms, err)
 	}
-	if dec.More() {
+	if _, err := dec.Token(); err != io.EOF {
 		return nil, armsErr(ArmsErrJSON, "", "%s must hold exactly one JSON array", KeyArms)
 	}
 	if len(arms) > MaxArms {
