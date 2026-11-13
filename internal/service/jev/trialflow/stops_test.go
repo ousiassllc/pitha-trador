@@ -94,8 +94,9 @@ func TestPaymentRequiredHaltsTheWholeTrialForTheDay(t *testing.T) {
 	}
 	e.advance(24 * time.Hour)
 	e.evaluate()
-	if a1.calls() != 2 || a2.calls() != firstA2+1 {
-		t.Fatalf("calls a1=%d a2=%d, want 2 and %d the next JST day", a1.calls(), a2.calls(), firstA2+1)
+	// a1 answers 402 again, so a2 races with that stop once more: it is called at most once.
+	if a1.calls() != 2 || a2.calls() < firstA2 || a2.calls() > firstA2+1 {
+		t.Fatalf("calls a1=%d a2=%d, want a1 called again the next JST day and a2 at most once more than %d", a1.calls(), a2.calls(), firstA2)
 	}
 }
 
