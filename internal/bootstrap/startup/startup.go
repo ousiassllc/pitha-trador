@@ -5,15 +5,18 @@ package startup
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/service/migratebundle/importflow"
 )
 
 // DefaultLogDir is the log directory used while the Settings screen has not
@@ -117,4 +120,19 @@ func RunMain(name string, resolve func() (LogSetup, error), run func() error) (e
 		return 1
 	}
 	return 0
+}
+
+// OpenDatabase opens the application database at dbPath (read-only for
+// cmd/backtestverify). Before a read-write open it applies an import the
+// operator confirmed on the Settings screen's PC 移行 (issue #1075,
+// importflow.ApplyPending): the staged database replaces the file only here,
+// while nothing has it open, after a safety copy of the current one. The
+// result is logged and kept for the Settings screen; a failed import leaves
+// the current database untouched and the application starts on it.
+func OpenDatabase(dbPath string, readOnly bool) (*sql.DB, error) {
+	if readOnly {
+		return sqlitedb.OpenReadOnly(dbPath)
+	}
+	importflow.ApplyPending(context.Background(), dbPath, time.Now)
+	return sqlitedb.Open(dbPath)
 }

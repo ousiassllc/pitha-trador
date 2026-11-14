@@ -24,12 +24,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // DefaultRetentionDays is non-functional.md §3's "直近90日分のフルバック
@@ -147,17 +144,7 @@ func (s *Service) copyDatabase(ctx context.Context, dst string) error {
 		return fmt.Errorf("backup: close temporary file %q: %w", tmp, err)
 	}
 
-	busy, err := sqlitedb.BackupTo(ctx, s.db, tmp)
-	if busy {
-		slog.Warn("backup: wal checkpoint could not fully truncate the WAL; the copy is still a consistent snapshot")
-	}
-	if err == nil {
-		err = scrubSecrets(ctx, tmp)
-	}
-	if err == nil {
-		err = verifyCopy(ctx, tmp)
-	}
-	if err != nil {
+	if err := CopyScrubbed(ctx, s.db, tmp, nil); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("backup: copy database: %w", err)
 	}
