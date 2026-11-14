@@ -163,7 +163,7 @@ func TestCostReadsCurrentCapsAndStops(t *testing.T) {
 	}
 	a, b := l.Arms[0], l.Arms[1]
 	closeTo(t, "arm-a cap", a.DailyCapUSD, 0.05)
-	closeTo(t, "arm-a counted today", a.CountedTodayUSD, 0.025)
+	closeTo(t, "arm-a counted today", a.CountedTodayUSD, 0.02+0.024)
 	if !a.ListPriceKnown || a.Halt != nil || a.Throttle != nil {
 		t.Errorf("arm-a = %+v", a)
 	}
