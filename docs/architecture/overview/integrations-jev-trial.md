@@ -111,6 +111,9 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | `jev_trial_decisions` を名指しするのは `internal/repository/judgement/trial_repo.go` だけ | 同 `TestOnlyTheTrialRepositoryTouchesTheTrialTable` |
 | トライアルのキーは自己改善ループ（`ValidatePolicyChanges`）・MCP の `settings_set`・汎用の運用設定のどれでも書けず、`jev.shadow.*` と重ならない | 同 `TestTrialKeysAreOutsideEveryAutomaticWritePath` |
 | ランナー・ワイヤ層は取引・学習のパッケージを import せず、ライブ Jev のシークレットを読まない | 同 `TestTrialRunnerImportsNoTradingPackageAndReadsNoLiveJevSecret` |
+| ライブの判断経路（Jev 本体・プロンプト・判断の保存）・Risk・発注・RAG・較正・メタモデルは、トライアル側（`internal/service/jevtrial` / `internal/service/jev/trial` / `internal/service/jev/trialwire`）を、直接にも他のパッケージ経由でも import しない。トライアル側を import してよいのは、許可リスト（`internal/bootstrap`・`internal/web/handler/jevtrial`・`internal/web/handler/settings`・`internal/service/jev/trial`。理由はテストに明記）の中だけで、リストに載るのに import しなくなった項目もテストが落ちる | 同 `TestLivePathDoesNotImportTheTrial`（import グラフは `internal/` と `cmd/` の本番ソースから読む） |
+| トライアル側のパッケージは、取引・学習のパッケージに加え、発注（`execution`・`broker`）と注文案の経路（`proposalexec`・`proposalstore`・`paperresultsmcp/proposal`）を直接 import しない（推移的には見ない。ワイヤ層はライブ Jev のプロンプトのパッケージの上に載り、それが Risk の上にあるため） | 同 `TestTrialPackagesImportNoTradingOrOrderPlacementPackage` |
+| 上の 2 つの検査自体が、違反を見つけて失敗できること（合成した import グラフで確認） | 同 `TestImportGuardCheckersFailOnViolations` |
 | `OPENROUTER_*` は必須キーでなく、Setup Guard も求めない | 同 `TestOpenRouterSecretsAreNotRequired`、`internal/config/secretsflow` |
 | 設定が既定のとき、トライアルは動かず、追加の外部呼び出しもない／Paper 以外では動かない／アームは互いの答えを見ない／成功も失敗も行に残る／費用の出所と上限／402・403・429・529 の停止 | `internal/service/jev/trialflow`（ランナーの振る舞いのテスト） |
 
@@ -121,3 +124,4 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。トライアルのフロー・費用の数え方・上限・設定・隔離のテストを `integrations.md` §6 から分割して記述 | issue #1059 |
+| 1.1 | 2026-11-14 | 隔離の保証の表に、ライブ側からトライアル側への import を許可リスト方式で禁じるテストと、トライアル側が発注に触れないことのテストを追加 | issue #1069 |
