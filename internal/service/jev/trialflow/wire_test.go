@@ -149,6 +149,28 @@ func TestAppWiring_ArmGetsItsOwnKeyModelAndRoutingPreference(t *testing.T) {
 	}
 }
 
+// The application's wiring hands the configured key to the redaction: a vendor that
+// echoes the rejected key in a shape of its own gets it stored as [redacted] (a fake key only).
+func TestAppWiring_ConfiguredKeyIsRedactedFromTheErrorExcerpt(t *testing.T) {
+	const fakeKey = "fake-or-key-0123456789abcdef"
+	api := &apiRecorder{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "no access for "+fakeKey, http.StatusUnauthorized)
+	})}
+	tr, settings, rows, instID, results := appTrader(t, trial.Keys{APIKey: fakeKey}, api)
+	enableApp(t, settings, jevtrialsettings.Arm{ID: "clef", Provider: "openrouter", Model: "cloudflare/clef", PromptVersion: "trader-v3"})
+	if _, err := tr.Evaluate(context.Background(), instID, state(time.Now())); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	waitFor(t, "the arm's row", func() bool { return rows() == 1 })
+	d, err := results.Get(context.Background(), 1)
+	if err != nil || d.Status != jevtrial.StatusFailed {
+		t.Fatalf("row = %+v (%v)", d, err)
+	}
+	if strings.Contains(d.ErrorExcerpt, fakeKey) || !strings.Contains(d.ErrorExcerpt, "[redacted]") {
+		t.Errorf("error_excerpt = %q, want the configured key redacted", d.ErrorExcerpt)
+	}
+}
+
 func enableApp(t *testing.T, settings *system.RuntimeSettingsRepository, arm jevtrialsettings.Arm) {
 	t.Helper()
 	value, err := jevtrialsettings.EncodeArms([]jevtrialsettings.Arm{arm})

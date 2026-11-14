@@ -120,7 +120,8 @@ jobs:
   # The production target is Windows, but lint/test above run on Linux:
   # run the Windows-only single-instance lock (lock_windows.go,
   # CreateFile dwShareMode=0) test natively, and the MCP process control's
-  # kill-on-close Job Object test. The frontend/templ setup is
+  # kill-on-close Job Object test, the sleep guard and the Jev trial / Settings
+  # tests (see the steps). The frontend/templ setup is
   # needed because static/src/embed.go must compile for any `go test`.
   test-windows:
     needs: lint
@@ -140,6 +141,16 @@ jobs:
       # OS-independent guard logic is covered by the Linux test job.
       - name: go test (sleep guard keeper, windows)
         run: go test -run 'TestWindowsKeeper' ./internal/service/sleepguard
+      # The Jev model-comparison trial and its Settings section run on the
+      # Windows app too (issue #1071): runner, wire client, Settings service,
+      # handler, keys and the SQLite repository run natively here. Plain
+      # `go test` (no -race, no -count=N) to keep this job short: locally trialflow
+      # takes ~7 s and jevtrial ~3 s, while the Linux job already runs them with
+      # -race. evalflow is out (shadow, not the trial; ~475 s at -race -count=5).
+      - name: go test (jev trial / settings, windows)
+        run: go test ./internal/service/jev/trial ./internal/service/jev/trialwire ./internal/service/jev/trialflow ./internal/service/jevtrial ./internal/web/handler/jevtrial ./internal/config/jevtrialsettings
+      - name: go test (jev trial repository, windows)
+        run: go test -run 'TestTrialRepository' ./internal/repository/judgement
 
   build:
     needs: [test, test-windows]

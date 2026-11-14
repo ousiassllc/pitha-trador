@@ -32,6 +32,7 @@ erDiagram
     jev_decisions ||--o{ metalabel_predictions : "二次モデルの予測が紐付く"
     jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     jev_decisions ||--o{ jev_trial_decisions : "同じ入力を別モデルに聞いた結果がアームごとに紐付く（取引に使わない）"
+    jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判断ごとに紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
     disclosure_skip_records ||--o{ disclosure_skip_matches : "該当した開示を持つ"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
@@ -57,7 +58,7 @@ erDiagram
 | `docs/architecture/er/tables-disclosure.md` | `disclosure_items` / `disclosure_fetches` / `disclosure_skip_records` / `disclosure_skip_matches`（適時開示による見送りルールの記録。取引に使わない。issue #935） |
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
-| `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions`（意思決定モデル比較のお試し記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059） |
+| `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
@@ -151,7 +152,8 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.79 | 2026-11-11 | マイグレーション000052を追加し、`er/tables-system.md`に`session_diagnostics_daily`（立会日ごとのセッションのそろいの日次診断。欠け種別・コード・件数・当時の警告コード。ジョブの7日保持より長く残す）を追加 | issue #1054 |
 | 1.80 | 2026-11-12 | マイグレーション000053を追加し、`counterfactual_labels`に`skip_kind`（`risk_rejected`/`guard_skipped`/`no_signal`。Risk 却下とガード見送りを列で分ける）と`cutoff_unverified`（cutoff 未確認のあいだの記録の印。学習・評価の行には入れない）を足し、ビュー`calibration_outcome_origins`の`origin`を`skipped`から`risk_rejected`/`guard_skipped`/`no_signal`に分けた。`calibration_outcomes`は変えない | issue #1052 |
 | 1.81 | 2026-11-13 | マイグレーション000054を追加し、`er/tables-jev-trial.md`に`jev_trial_decisions`（別モデルの答え・失敗・費用の出所・切り詰め疑い・RAG フラグ・cutoff の状態）と`jev.trial.*`のキーを新設。`er/tables-system.md`の`secrets`許可キーに`OPENROUTER_API_KEY`/`OPENROUTER_BASE_URL`（任意）を加え 19 件にした | issue #1059 |
-| 1.82 | 2026-11-14 | `er/tables-system.md`の`runtime_settings`の`system.backup_dir`の説明を、未設定で無効から未設定ならDBと同じ階層の既定フォルダを使う、へ更新（スキーマ変更なし） | issue #890 |
-| 1.83 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
-| 1.84 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
-| 1.85 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
+| 1.82 | 2026-11-14 | マイグレーション000055を追加し、`er/tables-jev-trial.md`に`jev_trial_skips`（お試しがライブの判断に対してアームを呼ばなかった記録。判断×アームごとに 1 行、理由の固定コード。答え・費用・status は持たず、`jev_trial_decisions`には入れない。取引に使わない）を追加。全体ER図に関係線を追加 | issue #1062 |
+| 1.83 | 2026-11-14 | `er/tables-system.md`の`runtime_settings`の`system.backup_dir`の説明を、未設定で無効から未設定ならDBと同じ階層の既定フォルダを使う、へ更新（スキーマ変更なし） | issue #890 |
+| 1.84 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
+| 1.85 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
+| 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
