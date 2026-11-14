@@ -42,11 +42,18 @@ type Result struct {
 // records: on failure the current database is exactly as it was (the safety
 // copy, when already taken, is kept), the pending import is discarded so the
 // next start does not retry it, and the application starts on the old data.
+// A database that gained user data after the import was confirmed without
+// ReplacedExisting is not replaced (ErrReplaceNotConfirmed).
 func ApplyPending(ctx context.Context, dbPath string, now func() time.Time) *Result {
 	l := layoutFor(dbPath)
+	// Nothing is in flight at start: a staged preview left on disk is a
+	// leftover of the previous run (a crash, or a preview never confirmed).
+	_ = os.RemoveAll(l.staging())
 	var pend Pending
 	switch err := readJSON(filepath.Join(l.pending(), pendingFile), &pend); {
 	case errors.Is(err, os.ErrNotExist):
+		// A pending folder without its marker is no valid import either.
+		_ = os.RemoveAll(l.pending())
 		return nil
 	case err != nil:
 		return finish(l, now, Pending{}, "", err)
@@ -83,11 +90,35 @@ func finish(l layout, now func() time.Time, pend Pending, safety string, err err
 	return r
 }
 
+// currentHasUserData reports whether the database file at dbPath holds user
+// data (the same rule Preview and Confirm use), so the start-up apply can
+// re-check what Confirm checked: the database may have changed since.
+func currentHasUserData(ctx context.Context, dbPath string) (has bool, err error) {
+	cur, err := sql.Open("sqlite", sqlitedb.FileURI(dbPath, "mode=rw&_busy_timeout=60000"))
+	if err != nil {
+		return false, fmt.Errorf("open the current database: %w", err)
+	}
+	defer func() { err = errors.Join(err, cur.Close()) }()
+	cur.SetMaxOpenConns(1)
+	tables, err := migratebundle.CountTables(ctx, cur)
+	if err != nil {
+		return false, fmt.Errorf("count the current database's rows: %w", err)
+	}
+	return hasUserData(tables), nil
+}
+
 func apply(ctx context.Context, l layout, dbPath, staged string, pend Pending, now func() time.Time) (safety string, err error) {
 	if err := migratebundle.VerifyDatabase(ctx, staged, pend.Manifest); err != nil {
 		return "", fmt.Errorf("the staged bundle no longer verifies: %w", err)
 	}
 	if info, statErr := os.Stat(dbPath); statErr == nil && info.Size() > 0 {
+		has, err := currentHasUserData(ctx, dbPath)
+		if err != nil {
+			return "", err
+		}
+		if has && !pend.ReplacedExisting {
+			return "", fmt.Errorf("%w (the current database gained data after the import was confirmed; confirm again)", ErrReplaceNotConfirmed)
+		}
 		if safety, err = safetyCopy(ctx, l, dbPath, now()); err != nil {
 			return "", err
 		}

@@ -31,7 +31,10 @@ func ReadManifest(src io.ReaderAt, size int64) (Manifest, *zip.Reader, error) {
 	if err != nil {
 		return Manifest{}, nil, fmt.Errorf("%w: %v", ErrNotBundle, err)
 	}
-	names := make([]string, 0, len(zr.File))
+	if len(zr.File) != bundleEntries {
+		return Manifest{}, nil, fmt.Errorf("%w: %d archive entries, want %d", ErrNotBundle, len(zr.File), bundleEntries)
+	}
+	names := make([]string, 0, bundleEntries)
 	for _, f := range zr.File {
 		names = append(names, f.Name)
 	}
@@ -64,6 +67,14 @@ func ReadManifest(src io.ReaderAt, size int64) (Manifest, *zip.Reader, error) {
 	}
 	if m.Database != DatabaseName || m.DatabaseBytes <= 0 || m.DatabaseSHA256 == "" {
 		return Manifest{}, nil, fmt.Errorf("%w: manifest does not describe the database entry", ErrNotBundle)
+	}
+	if m.DatabaseBytes > MaxDatabaseBytes {
+		return Manifest{}, nil, fmt.Errorf("%w: manifest declares a %d-byte database, above the %d-byte limit", ErrNotBundle, m.DatabaseBytes, MaxDatabaseBytes)
+	}
+	// The ZIP header is attacker-controlled too, but it must agree with the
+	// manifest, and extractDatabase stops at the manifest's size regardless.
+	if got := findEntry(zr, DatabaseName).UncompressedSize64; got != uint64(m.DatabaseBytes) {
+		return Manifest{}, nil, fmt.Errorf("%w: archive entry is %d bytes, manifest says %d", ErrChecksum, got, m.DatabaseBytes)
 	}
 	return m, zr, nil
 }

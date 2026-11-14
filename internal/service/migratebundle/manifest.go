@@ -17,6 +17,12 @@ const (
 	// ManifestName and DatabaseName are the two entries of the archive.
 	ManifestName = "manifest.json"
 	DatabaseName = "pitha.db"
+	// MaxDatabaseBytes caps the database entry a bundle may declare (and so
+	// the size Unpack will ever write): 64 GiB, far above a real database, so
+	// a manifest cannot make an import fill the disk.
+	MaxDatabaseBytes int64 = 64 << 30
+	// bundleEntries is the number of archive entries: manifest.json and pitha.db.
+	bundleEntries = 2
 )
 
 // TableCount is one table's row count. The table list is enumerated from
@@ -70,16 +76,20 @@ var (
 // ExcludedSettingKeys are the runtime_settings keys a bundle never carries:
 // the directories of this PC (backup folder, log folder - the new PC picks its
 // own, and a path copied from the old one would point nowhere or, worse, at
-// the wrong disk) and the 立花 秘密鍵 file paths (the key files themselves are
+// the wrong disk), the 立花 秘密鍵 file paths (the key files themselves are
 // never in the database and stay on the old PC; the new PC re-enters its
-// path). The snapshot archive and default backup folders are not settings at
-// all: they sit next to the database and are not part of it.
+// path) and the 立花 API base URLs (a bundle from another source could point
+// the broker client - and the credentials it sends - at a host of its choice;
+// this PC keeps its own). The snapshot archive and default backup folders are
+// not settings at all: they sit next to the database and are not part of it.
 func ExcludedSettingKeys() []string {
 	return []string{
 		config.KeyBackupDir,
 		config.KeyLogDir,
 		config.KeyTachibanaDemoPrivateKeyPath,
 		config.KeyTachibanaProdPrivateKeyPath,
+		config.KeyTachibanaDemoBaseURL,
+		config.KeyTachibanaProdBaseURL,
 	}
 }
 
