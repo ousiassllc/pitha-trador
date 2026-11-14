@@ -13,7 +13,7 @@ import (
 // seedCost plants cost rows on two JST days (10-17 and 10-18, "today" of the test clock).
 //
 //	10-17  arm-a reported 0.01                          arm-b reported 0.003
-//	10-18  arm-a reported 0.02, list_price_estimate 0.005
+//	10-18  arm-a reported 0.02, list_price_estimate 0.005 (counted 0.024: the caps count it at the worst-case price)
 //	10-18  arm-b failed, unknown cost, counted 0.0048 (worst-case price)
 //	10-18  arm-b failed, unknown cost, counted 0 (an HTTP error response, assumed not billed)
 func seedCost(t *testing.T, w *sql.DB) {
@@ -22,7 +22,7 @@ func seedCost(t *testing.T, w *sql.DB) {
 		{decision: 101, arm: armA, source: "reported", cost: f64(0.01), counted: 0.01, created: "2026-10-17T01:00:00Z"},
 		{decision: 102, arm: armB, source: "reported", cost: f64(0.003), counted: 0.003, created: "2026-10-17T02:00:00Z"},
 		{decision: 103, arm: armA, source: "reported", cost: f64(0.02), counted: 0.02, created: "2026-10-18T01:00:00Z"},
-		{decision: 104, arm: armA, source: "list_price_estimate", cost: f64(0.005), counted: 0.005, created: "2026-10-18T01:30:00Z"},
+		{decision: 104, arm: armA, source: "list_price_estimate", cost: f64(0.005), counted: 0.024, created: "2026-10-18T01:30:00Z"},
 		{decision: 105, arm: armB, status: "failed", failure: "timeout", counted: 0.0048, created: "2026-10-18T02:00:00Z"},
 		{decision: 106, arm: armB, status: "failed", failure: "http_402", counted: 0, created: "2026-10-18T02:30:00Z"},
 	}
@@ -83,7 +83,10 @@ func TestCostSplitsBySourceAndNeverZeroesUnknown(t *testing.T) {
 	closeTo(t, "reported usd", tot.Reported.USD, 0.033)
 	closeTo(t, "estimate usd", tot.ListPriceEstimate.USD, 0.005)
 	closeTo(t, "unknown_counted_usd", tot.Unknown.UnknownCountedUSD, 0.0048)
-	closeTo(t, "counted_total_usd", tot.CountedTotalUSD, 0.033+0.005+0.0048) // the cap basis includes the unknown's counted amount
+	// The caps counted the list-price estimate at the worst-case price, so counted_usd is above usd.
+	closeTo(t, "reported counted_usd", tot.Reported.CountedUSD, 0.033)
+	closeTo(t, "estimate counted_usd", tot.ListPriceEstimate.CountedUSD, 0.024)
+	closeTo(t, "counted_total_usd", tot.CountedTotalUSD, 0.033+0.024+0.0048) // the cap basis includes the unknown's counted amount
 	if tot.Unknown.ActualUSD != nil || tot.Unknown.Basis != trialquery.UnknownBasis || tot.Unknown.CountedAsZeroCalls != 1 {
 		t.Errorf("unknown = %+v", tot.Unknown)
 	}
@@ -121,7 +124,7 @@ func TestCostSplitsBySourceAndNeverZeroesUnknown(t *testing.T) {
 	if d17.Overall.Unknown.Calls != 0 || d18.Overall.Calls != 4 || d18.Overall.Unknown.Calls != 2 {
 		t.Errorf("daily split: 10-17 %+v / 10-18 %+v", d17.Overall, d18.Overall)
 	}
-	closeTo(t, "10-18 counted total", d18.Overall.CountedTotalUSD, 0.02+0.005+0.0048)
+	closeTo(t, "10-18 counted total", d18.Overall.CountedTotalUSD, 0.02+0.024+0.0048)
 	closeTo(t, "10-18 arm-a estimate", armCost(t, d18.Arms, armA).ListPriceEstimate.USD, 0.005)
 }
 
@@ -154,7 +157,7 @@ func TestCostReadsCurrentCapsAndStops(t *testing.T) {
 	if l.OverallCapSource != "stored" || l.Halt == nil || l.Halt.Reason != "payment_required" || !l.Halt.ActiveToday {
 		t.Errorf("overall = %s %+v", l.OverallCapSource, l.Halt)
 	}
-	closeTo(t, "overall counted today", l.OverallCountedTodayUSD, 0.02+0.005+0.0048)
+	closeTo(t, "overall counted today", l.OverallCountedTodayUSD, 0.02+0.024+0.0048)
 	if l.FailureCap != jevtrialsettings.DailyFailureCap || l.WorstCaseUSDPerMtok != jevtrialsettings.WorstCaseUSDPerMtok || len(l.Arms) != 2 {
 		t.Errorf("limits = %+v", l)
 	}

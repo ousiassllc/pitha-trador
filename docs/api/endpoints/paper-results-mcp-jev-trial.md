@@ -69,7 +69,7 @@
 | `per_arm[]` | アームごとの `CostBlock`（`arm_id` つき） |
 | `daily[]` | JST の日ごと（古い順）。`date`・`overall`（`CostBlock`）・`arms[]`（アームごとの `CostBlock`） |
 
-**`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported` + `list_price_estimate` + `unknown.unknown_counted_usd`）。
+**`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計・`counted_usd`: 上限に数えた額。`usd` と同じ）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計・`counted_usd`: 上限に数えた額。処理先を固定していないアームは定価と最悪単価の高い方で数えるので `usd` 以上になる）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported.counted_usd` + `list_price_estimate.counted_usd` + `unknown.unknown_counted_usd`）。
 
 **`unknown`**: `calls`・`actual_usd`（常に `null`。実費は分からない。0 円ではない）・`unknown_counted_usd`（上限の判定に数えた額。最悪値側の単価で数えた**上限の見積り**で、`reported` / `list_price_estimate` の合計には混ぜない。0 に丸めない）・`counted_as_zero_calls`（課金されない前提の 4xx（413 を除く）・529 応答を 0 と数えた件数。低い `unknown_counted_usd` を「無料」と読まないために出す）・`basis`（`cap_counting_upper_bound`）。
 

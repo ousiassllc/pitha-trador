@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -28,8 +29,15 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 		slog.Debug("jev trial: the arm has no API key, skipping the comparison", "arm", arm.ID)
 		return nil
 	}
+	reservedBytes, err := trialwire.RequestBytes(arm.Model, providerFor(arm), jev.TraderRequest{QuestionVersion: arm.PromptVersion, State: state, RAGContext: ragContext})
+	if err != nil {
+		return fmt.Errorf("jev trial: arm %q: size the request (not calling it): %w", arm.ID, err)
+	}
 	now := t.now()
-	if ok, err := t.mayCall(ctx, cfg, arm, now); !ok || err != nil {
+	// The reservation holds this call against the caps until its row is stored.
+	res, err := t.mayCall(ctx, cfg, arm, now, reservedUSD(reservedBytes))
+	defer res.release()
+	if res == nil || err != nil {
 		return err
 	}
 	if !t.allowCall(arm.ID) {
@@ -68,43 +76,59 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 // mayCall runs the checks that cost no request: a stop of the whole trial or
 // of the arm for today, the arm's 429/529 cooldown, the arm's failed calls,
 // then the overall and the arm's daily cost cap against the counted cost of
-// the stored rows. It records the stop that a cap or the failure cap causes.
-// ok is false when the arm must not be called; err only reports that a
-// cost could not be read (then the arm is not called).
-func (t *Trial) mayCall(ctx context.Context, cfg jevtrialsettings.Settings, arm jevtrialsettings.Arm, now time.Time) (ok bool, err error) {
+// the stored rows plus the reservations of the calls in flight and of this
+// call (reserveUSD). It records the stop that a cap or the failure cap causes:
+// only when the stored rows alone have reached the cap; a call held back only by
+// reservations is skipped without a stop, since the calls in flight may still
+// land under the cap.
+//
+// The returned reservation (nil: the arm must not be called) holds reserveUSD
+// against the caps; the caller releases it once the call's row is stored. err
+// only reports that a cost could not be read (then the arm is not called).
+func (t *Trial) mayCall(ctx context.Context, cfg jevtrialsettings.Settings, arm jevtrialsettings.Arm, now time.Time, reserveUSD float64) (res *reservation, err error) {
+	allowed := false
 	day := jevshadowsettings.Day(now)
 	st := jevtrialsettings.LoadArm(ctx, t.settings, arm.ID)
 	if st.ReadErr != nil {
 		// "No record" is not the safe side when the read failed: a stopped arm
 		// would be called.
-		return false, fmt.Errorf("jev trial: read the stop records of arm %q (not calling it): %w", arm.ID, st.ReadErr)
+		return nil, fmt.Errorf("jev trial: read the stop records of arm %q (not calling it): %w", arm.ID, st.ReadErr)
 	}
 	if cfg.Halt.HaltOn(day) || st.Halt.HaltOn(day) || t.haltHeld(jevtrialsettings.KeyHalt, day) || t.haltHeld(jevtrialsettings.HaltKey(arm.ID), day) {
-		return false, nil
+		return nil, nil
 	}
 	if st.Throttle.ActiveAt(now) || t.throttleHeld(arm.ID, now) {
-		return false, nil
+		return nil, nil
 	}
+	// Reserve before reading the stored cost (see reserved), and give it back
+	// unless the arm may be called.
+	held := t.reserve(arm.ID, reserveUSD)
+	defer func() {
+		if err != nil || !allowed {
+			held.release()
+		}
+	}()
+	reservedTotal, reservedArm := t.reserved(arm.ID)
 	from, to := jevshadowsettings.DayBounds(now)
 	total, err := t.results.SpentBetween(ctx, from, to)
 	if err != nil {
-		return false, fmt.Errorf("jev trial: read today's trial cost (not calling arm %q): %w", arm.ID, err)
+		return nil, fmt.Errorf("jev trial: read today's trial cost (not calling arm %q): %w", arm.ID, err)
 	}
 	if total.CountedCostUSD >= cfg.CapUSD {
 		t.recordHalt(jevtrialsettings.KeyHalt, jevtrialsettings.Halt{
 			Reason: jevtrialsettings.HaltReasonDailyCostCap, SpentUSD: total.CountedCostUSD, CapUSD: cfg.CapUSD,
 		}, now)
-		return false, nil
+		return nil, nil
 	}
 	spent, err := t.results.SpentByArmBetween(ctx, arm.ID, from, to)
 	if err != nil {
-		return false, fmt.Errorf("jev trial: read today's cost of arm %q (not calling it): %w", arm.ID, err)
+		return nil, fmt.Errorf("jev trial: read today's cost of arm %q (not calling it): %w", arm.ID, err)
 	}
 	if spent.CountedCostUSD >= arm.CapUSD() {
 		t.recordHalt(jevtrialsettings.HaltKey(arm.ID), jevtrialsettings.Halt{
 			Reason: jevtrialsettings.HaltReasonArmCostCap, SpentUSD: spent.CountedCostUSD, CapUSD: arm.CapUSD(),
 		}, now)
-		return false, nil
+		return nil, nil
 	}
 	// The cost above only sums the rows that were stored; a call that could not
 	// be stored is counted as a failure instead, and enough of them stop the
@@ -113,9 +137,17 @@ func (t *Trial) mayCall(ctx context.Context, cfg jevtrialsettings.Settings, arm 
 		t.recordHalt(jevtrialsettings.HaltKey(arm.ID), jevtrialsettings.Halt{
 			Reason: jevtrialsettings.HaltReasonDailyFailureCap, Failures: failed, FailureCap: jevtrialsettings.DailyFailureCap,
 		}, now)
-		return false, nil
+		return nil, nil
 	}
-	return true, nil
+	// The stored rows are under both caps; the calls in flight and this one, at
+	// their reservations, must fit under them too. No stop is recorded: the calls in
+	// flight may still land under the cap, and the next comparison asks again.
+	if total.CountedCostUSD+reservedTotal > cfg.CapUSD || spent.CountedCostUSD+reservedArm > arm.CapUSD() {
+		slog.Debug("jev trial: the calls in flight leave no room under the daily cap, skipping the comparison", "arm", arm.ID)
+		return nil, nil
+	}
+	allowed = true
+	return held, nil
 }
 
 // cancelledByClose reports whether err is the cancellation Close caused (not a

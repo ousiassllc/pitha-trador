@@ -2,6 +2,8 @@ package trialwire
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 	"time"
 
@@ -77,17 +79,36 @@ func (c *Client) Trader(ctx context.Context, req jev.TraderRequest) (Response, t
 		return Response{}, 0, 0, err
 	}
 	start := time.Now()
-	res, requestBytes, err := c.do(ctx, systemone.Request{
-		State:     state{Market: req.State, SimilarPastCases: req.RAGContext},
-		Model:     c.model,
-		Questions: questions,
-		Provider:  c.provider,
-	})
+	res, requestBytes, err := c.do(ctx, buildRequest(c.model, c.provider, questions, req))
 	latency := time.Since(start)
 	if err != nil {
 		return Response{}, latency, requestBytes, err
 	}
 	return mapResult(res), latency, requestBytes, nil
+}
+
+func buildRequest(model string, provider *systemone.Provider, questions map[string]systemone.Question, req jev.TraderRequest) systemone.Request {
+	return systemone.Request{
+		State:     state{Market: req.State, SimilarPastCases: req.RAGContext},
+		Model:     model,
+		Questions: questions,
+		Provider:  provider,
+	}
+}
+
+// RequestBytes is the size of the request body Trader would send for req to an
+// arm with model and provider, without sending anything. The trial uses it to
+// reserve a call's worst-case cost before the call is made.
+func RequestBytes(model string, provider *systemone.Provider, req jev.TraderRequest) (int, error) {
+	questions, err := jev.TraderQuestionsFor(req.QuestionVersion)
+	if err != nil {
+		return 0, err
+	}
+	body, err := json.Marshal(buildRequest(model, provider, questions, req))
+	if err != nil {
+		return 0, fmt.Errorf("trialwire: encode request: %w", err)
+	}
+	return len(body), nil
 }
 
 func mapResult(res systemone.Result) Response {

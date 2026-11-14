@@ -44,9 +44,9 @@
 
 `jev_trial_cost` は `jev_trial_decisions.cost_source` を区別する（記録側の定義は `integrations-jev-trial.md`）。
 
-- `reported`（応答の `usage.cost`）と `list_price_estimate`（定価×入力トークン）は、それぞれ件数と `cost_usd` の合計を出す
+- `reported`（応答の `usage.cost`）と `list_price_estimate`（定価×入力トークン）は、それぞれ件数と `cost_usd` の合計（`usd`）、上限に数えた額の合計（`counted_usd`）を出す。`reported` は両者が同じ。`list_price_estimate` は、処理先を固定していないアーム（`provider_only` なし）を定価と最悪単価の高い方で数えるので、`counted_usd` が `usd` 以上になる
 - `unknown`（どちらも無い）は、実費が分からないので `actual_usd` を `null` にする。0 円にしない。上限の判定に数えた額 `unknown_counted_usd`（最悪値側の単価 `0.24` USD/M で数えた上限の見積り）は別の欄に置き、`reported` / `list_price_estimate` の合計には混ぜない。課金されない前提の 4xx（413 を除く）・529 応答は 0 と数えるので、その件数 `counted_as_zero_calls` を並べて出し、低い数えた額が「無料」に見えないようにする
-- `counted_total_usd` は上限の判定に数えた額（`counted_cost_usd` の合計）で、1 日の上限（全体・アームごと）の基準と一致する
+- `counted_total_usd` は上限の判定に数えた額（`counted_cost_usd` の合計 ＝ `reported.counted_usd` + `list_price_estimate.counted_usd` + `unknown_counted_usd`）で、保存済みの行の分。飛んでいる呼び出しの予約（メモリ上）は含まない（`integrations-jev-trial.md`「飛んでいる呼び出しと、上限を超え得る幅」）。1 日の上限（全体・アームごと）の基準と一致する
 - 日の区切りは JST（`created_at` を +9 時間して日付に直す）。上限と止まりの記録は `runtime_settings` から読み取りで取り、`limits` に出す（止まりは理由と日だけ。金額・時刻・ステータスは返さない）
 
 ## 5. 読み取りの上限

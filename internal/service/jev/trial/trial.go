@@ -36,8 +36,9 @@ import (
 const (
 	// maxInFlight bounds the arm calls running at once, over all arms. A full
 	// queue drops that arm's comparison (logged) instead of waiting: the live
-	// decision must never be slowed, and a backlog would overshoot the daily
-	// caps by every call already in flight. Same bound as the shadow's.
+	// decision must never be slowed, and a backlog would pile up calls beyond
+	// the daily caps. The calls in flight are held against the caps by
+	// reservations (reserve.go). Same bound as the shadow's.
 	maxInFlight = 4
 	// armCallTimeout bounds one arm call. A trial call is a single attempt
 	// (trialwire never retries).
@@ -98,6 +99,11 @@ type Trial struct {
 	// its record cannot be written (the cost caps are re-derived from stored
 	// rows, these two are not).
 	halted map[string]string
+	// resMu guards the reservations of the calls that are allowed but whose rows
+	// are not stored yet (reserve.go): over all arms and per arm.
+	resMu         sync.Mutex
+	reservedTotal float64
+	reservedArm   map[string]float64
 	// secrets are redacted from stored error excerpts (WithSecrets).
 	secrets []string
 	// closeMu orders Submit's wg.Add against Close's wg.Wait.
@@ -117,7 +123,7 @@ func New(results Results, settings Settings, callers func(jevtrialsettings.Arm) 
 	t := &Trial{results: results, settings: settings, callers: callers, mode: mode, now: now,
 		slots: make(chan struct{}, maxInFlight), base: base, cancel: cancel,
 		minInterval: jevtrialsettings.MinCallInterval, pace: time.Now,
-		lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}, halted: map[string]string{}}
+		reservedArm: map[string]float64{}, lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}, halted: map[string]string{}}
 	for _, opt := range opts {
 		opt(t)
 	}

@@ -53,7 +53,7 @@ erDiagram
 | input_tokens / output_tokens | integer | NULL可, CHECK 0 以上 | 応答の `usage`。応答が無い・`usage` が無い行は NULL |
 | cost_usd | numeric(12,8) | NULL可, CHECK 0 以上 | 報告値 `usage.cost`、または定価×入力トークンの推定。**どちらも無ければ NULL（0 ではない）** |
 | cost_source | varchar(20) | NOT NULL, CHECK IN | `reported`＝応答の `usage.cost`／`list_price_estimate`＝アームの定価（1M 入力トークンあたり）×入力トークン数の推定／`unknown`＝どちらも無い |
-| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
+| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値（処理先を固定していないアーム〈`provider_only` なし〉は、定価と最悪単価の高い方で数えた額。`cost_usd` は定価での推定額のまま）、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
 | request_bytes / state_bytes | integer | NOT NULL, 既定 0 | リクエスト本文・`state` の大きさ（バイト）。切り詰め疑いを後から判断する材料 |
 | truncation_suspected | integer | NOT NULL, 既定 0, CHECK IN (0, 1) | 報告された入力トークン数に対してリクエストが大きすぎる（`request_bytes / input_tokens` が `trial.TruncationSuspectBytesPerToken`＝6 を超える。未計測の目安）とき 1。**疑いの印であって断定ではない**。Clef 系の切り詰めの有無が実測できるまで、同じ入力での公平な比較とは扱わない |
 | llm_cutoff_status | varchar(20) | NOT NULL, 既定 `unverified`, CHECK 空でない | モデルの学習データ終了日の確認状態。**既定は `unverified`**（日付を推測で作らない）。公開日以降の局面だけで評価する（下記） |
