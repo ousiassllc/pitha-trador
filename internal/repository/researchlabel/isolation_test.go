@@ -121,3 +121,32 @@ func TestResearchPackagesWriteOnlyTheirOwnTables(t *testing.T) {
 		}
 	}
 }
+
+// services_build.go is the composition root, the file where wiring the research
+// record into a trading component would most plausibly be added, so it is
+// allow-listed above only for the maintenance task: every line that mentions
+// research must be the researchlabeljob import or the one WithMaintenanceTask
+// call, and nothing else (a repository or recorder passed to Policy, Risk or
+// Live would name researchlabel directly).
+func TestServicesBuildOnlyRegistersTheResearchMaintenanceTask(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "bootstrap", "services_build.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, line := range strings.Split(string(src), "\n") {
+		if !strings.Contains(strings.ToLower(line), "research") {
+			continue
+		}
+		switch {
+		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`:
+		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task())"):
+			calls++
+		default:
+			t.Errorf("services_build.go mentions research outside the maintenance task registration: %q", strings.TrimSpace(line))
+		}
+	}
+	if calls != 1 {
+		t.Errorf("researchlabeljob is registered %d times, want exactly 1", calls)
+	}
+}

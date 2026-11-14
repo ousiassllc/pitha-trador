@@ -182,6 +182,24 @@ func TestLimits(t *testing.T) {
 			direction, confidence, latency_ms, model_id, created_at FROM jev_decisions WHERE id = 1`, evaldiag.MaxDecisions+1)
 		srv.call(t, nil).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeLimitExceeded)
 	})
+	t.Run("long horizon shrinks the decision limit", func(t *testing.T) {
+		// A decision's window grows with the horizon, so the same decision count reads many more bars:
+		// the limit is on window rows (MaxWindowRows), not only on decisions.
+		srv, w := newServer(t)
+		testkit.MustExec(t, w, `INSERT INTO instruments (id, symbol, name, market) VALUES (1, '7203', 'a', 'TSE')`)
+		limit := evaldiag.LimitFor(60)
+		if limit >= evaldiag.MaxDecisions || limit != evaldiag.MaxWindowRows/64 {
+			t.Fatalf("LimitFor(60) = %d", limit)
+		}
+		bulkDecisions(t, w, limit, func(int) string { return "m" })
+		srv.call(t, map[string]any{"horizon_minutes": 60}).data(t) // at the limit is answered
+		testkit.MustExec(t, w, `INSERT INTO jev_decisions (id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
+			question_version, response_json, direction, confidence, latency_ms, model_id, created_at)
+			SELECT ?, instrument_id, symbol, timestamp, decision_type, state_hash, state_json, question_version, response_json,
+			direction, confidence, latency_ms, model_id, created_at FROM jev_decisions WHERE id = 1`, limit+1)
+		srv.call(t, map[string]any{"horizon_minutes": 60}).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeLimitExceeded)
+		srv.call(t, map[string]any{"horizon_minutes": 1}).data(t) // the same rows are far below the limit at horizon 1
+	})
 	t.Run("cohorts", func(t *testing.T) {
 		srv, w := newServer(t)
 		testkit.MustExec(t, w, `INSERT INTO instruments (id, symbol, name, market) VALUES (1, '7203', 'a', 'TSE')`)

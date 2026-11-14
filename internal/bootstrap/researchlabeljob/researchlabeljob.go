@@ -47,7 +47,7 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	j := &Job{now: time.Now}
 	rec := servicelabel.NewRecorder(researchlabel.NewRepository(db), func(ctx context.Context) (servicelabel.Costs, error) {
 		return servicelabel.CostsFromSettings(ctx, settings)
-	}).WithClock(func() time.Time { return j.now() })
+	}).WithClock(func() time.Time { return j.now() }).WithBatchPause(servicelabel.DefaultBatchPause)
 	j.record = rec.Run
 	return j
 }

@@ -32,7 +32,7 @@
   - 再開可能: 途中で止まった日は印がないので、次の実行がその日をやり直す。行は `UNIQUE (snapshot_id, horizon)` と `INSERT OR IGNORE` で二重にならず、集計は印のときに行から作り直す（置き換え）ので行と必ず一致する。
   - 今日の日は決してラベルしない（足がそろっていない日を半分だけ付けない）。
   - `market_snapshots` が削除済みの日は対象に挙がらない（エラーにしない）。印のある日の行と集計は削除後も残る。
-  - 書き込みは短い: 1 トランザクション = 1 銘柄 1 日分（数百行）。ライブの取引と同じ DB を WAL で共有するので、長い書き込みトランザクションは持たない。
+  - 書き込みは短い: 1 トランザクション = 1 銘柄 1 日分（数百行）。ライブの取引と同じ DB を WAL で共有するので、長い書き込みトランザクションは持たない。 銘柄ごとの書き込みのあいだには 200ms の間（`researchlabel.DefaultBatchPause`。`retention` の `defaultBatchPause` と同じ理由: WAL には待ち行列の公平さがなく、`busy_timeout` で待つライブの書き込みが入る隙を作る。#1077 の統合レビューの指摘）を置く。保守タスクは 1 本の mutex の下で順に動くので、初回の長い記録は後ろのタスクを遅らせ得る。
 - 日次タスク `research_labels`（`internal/bootstrap/researchlabeljob`）: メンテナンスタスクとして `internal/bootstrap/services_build.go` の `scheduler.WithMaintenanceTask` に 1 行で登録する（`metalabel_retrain` と同じ作り）。**16:00 JST より前は `maintenance.ErrSkipped`** を返すので、「今日」の規則が単純になる（大引け後・足が確定したあとだけ記録する）。設定（コスト）は `system.RuntimeSettingsRepository` から実行ごとに読む。失敗はランナーが他のタスクと隔離して再試行し（既定 30 分後、3 回連続で通知）、記録部品の panic はエラーに変えて取引と同じプロセスを落とさない。
 - 初回は DB に残る全期間（最大 90 日）を、1 回 10 日ずつ数日かけて追いつく。
 

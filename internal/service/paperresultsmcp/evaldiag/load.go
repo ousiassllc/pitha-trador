@@ -72,12 +72,19 @@ func scope(from, to string, req Request) (string, []any) {
 	return cond, args
 }
 
+// LimitFor is the most decisions one call reads at horizon minutes: MaxDecisions,
+// or fewer when their windows (horizon + 4 one-minute bars each) would exceed
+// MaxWindowRows.
+func LimitFor(horizon int) int {
+	return min(MaxDecisions, MaxWindowRows/(horizon+4))
+}
+
 // listDecisions reads the decisions of scope with the stored label at horizon,
 // the entry flag and the return_5m of their own bar, oldest first. More than
-// MaxDecisions is query.ErrLimitExceeded.
+// LimitFor(horizon) is query.ErrLimitExceeded.
 func listDecisions(ctx context.Context, q query.Q, from, to string, horizon int, req Request) ([]decisionRow, error) {
 	cond, args := scope(from, to, req)
-	args = append([]any{domain.CalibrationLabelVersionTripleBarrier, horizon}, append(args, MaxDecisions+1)...)
+	args = append([]any{domain.CalibrationLabelVersionTripleBarrier, horizon}, append(args, LimitFor(horizon)+1)...)
 	stmt := `
 SELECT d.id, d.timestamp, d.created_at, d.direction, d.model_id, d.question_version,
 	m.id IS NOT NULL, m.return_5m, o.net_return_bps,
@@ -103,7 +110,7 @@ ORDER BY d.timestamp, d.id LIMIT ?`
 		if err := rows.Scan(&d.id, &at, &createdAt, &d.direction, &d.modelID, &d.version, &d.hasBar, &ret, &net, &d.entered); err != nil {
 			return nil, fmt.Errorf("query: scan evaluated decision: %w", err)
 		}
-		if len(out) == MaxDecisions {
+		if len(out) == LimitFor(horizon) {
 			return nil, query.ErrLimitExceeded
 		}
 		if d.at, err = sqlutil.ParseTime(at); err != nil {

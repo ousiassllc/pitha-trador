@@ -15,6 +15,11 @@ import (
 // database shared with live trading: the rest follows on the next daily runs.
 const DefaultMaxDaysPerRun = 10
 
+// DefaultBatchPause is the pause between two instruments' insert transactions:
+// the modernc.org/sqlite busy handler polls at most every 100 ms, so 200 ms lets
+// a waiting live writer land inside the pause (as retention's defaultBatchPause).
+const DefaultBatchPause = 200 * time.Millisecond
+
 // jst is the zone of the day a label belongs to; a fixed zone keeps the result
 // independent of the host's time zone.
 var jst = time.FixedZone("JST", 9*60*60)
@@ -58,6 +63,10 @@ type Recorder struct {
 	costs   CostSource
 	now     func() time.Time
 	maxDays int
+	// pause is how long recordDay waits after each instrument's insert so a writer
+	// waiting on busy_timeout can take the write lock (WAL has no fair queue;
+	// the same reasoning as retention's batch pause, issue #533). 0 = no pause.
+	pause time.Duration
 }
 
 // NewRecorder returns a Recorder over store, with costs read at the start of
@@ -69,6 +78,13 @@ func NewRecorder(store Store, costs CostSource) *Recorder {
 // WithClock overrides time.Now (tests).
 func (r *Recorder) WithClock(now func() time.Time) *Recorder {
 	r.now = now
+	return r
+}
+
+// WithBatchPause sets the pause between instruments' insert transactions
+// (DefaultBatchPause in production; none by default, so tests do not wait).
+func (r *Recorder) WithBatchPause(d time.Duration) *Recorder {
+	r.pause = d
 	return r
 }
 
@@ -127,6 +143,13 @@ func (r *Recorder) recordDay(ctx context.Context, day string, costs Costs) (snap
 		rows += n
 		if err != nil {
 			return snapshots, rows, fmt.Errorf("researchlabel: record instrument %d on %s: %w", id, day, err)
+		}
+		if r.pause > 0 {
+			select {
+			case <-ctx.Done():
+				return snapshots, rows, ctx.Err()
+			case <-time.After(r.pause):
+			}
 		}
 	}
 	if err := r.store.MarkDone(ctx, day, snapshots, r.now()); err != nil {

@@ -19,7 +19,7 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 | `prompt_version` | 任意。この版（`question_version`。例 `trader-v4`）の判断だけ。省略は全版（版ごとに別集計） |
 | `model_id` | 任意。この `model_id` の判断だけ（100 文字まで）。省略は全モデル（モデルごとに別集計） |
 
-不明な引数・型の違い・範囲外（`horizon_minutes` が 1〜60 でない、`prompt_version` の形が不正）は `invalid_argument`（422）、期間の誤りは `invalid_period`（422）。期間内の判断が 20,000 件（`MaxDecisions`）を超える、または (`model_id`, `question_version`) の組が 50（`MaxCohorts`）を超えると、部分結果を返さず `limit_exceeded`（422。期間か `model_id` / `prompt_version` で狭める）。
+不明な引数・型の違い・範囲外（`horizon_minutes` が 1〜60 でない、`prompt_version` の形が不正）は `invalid_argument`（422）、期間の誤りは `invalid_period`（422）。期間内の判断が 10,000 件（`MaxDecisions`）を超える（`horizon_minutes` が長いほど窓の行が増えるため、窓の行数の上限 `MaxWindowRows` = 200,000 から `200,000 ÷ (horizon_minutes + 4)` 件に下がる。ホライズン 60 なら 3,125 件）、または (`model_id`, `question_version`) の組が 50（`MaxCohorts`）を超えると、部分結果を返さず `limit_exceeded`（422。期間か `model_id` / `prompt_version` で狭める）。
 
 #### 応答の `data`
 

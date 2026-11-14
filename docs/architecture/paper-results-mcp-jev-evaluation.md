@@ -48,7 +48,7 @@ MCP 側は、判断ごとの窓（`market_snapshots` の `[応答時刻, 応答�
 
 ## 6. 読み取りの上限
 
-期間内の LONG/SHORT trader 判断は 20,000 件（`evaldiag.MaxDecisions`）まで、(`model_id`, `question_version`) は 50 組まで。超えたら部分結果を返さず `limit_exceeded`（422）にする。判断ごとの窓は結合 1 本でストリームに読み、判断の数に比例した SQL 文は出さない（3 秒の `query_timeout` の中で 20,000 件が終わることを確かめてある）。
+期間内の LONG/SHORT trader 判断は 10,000 件（`evaldiag.MaxDecisions`）まで。判断の窓は約 `horizon + 4` 本の足を持つので、読む足の行数も `evaldiag.MaxWindowRows`（200,000）で縛り、上限は `evaldiag.LimitFor(horizon)` = `min(10,000, 200,000 ÷ (horizon + 4))` になる（#1077 の統合レビューの指摘。ホライズン 60 で 20,000 件だと 128 万行になり 3 秒を超え得る）。(`model_id`, `question_version`) は(`model_id`, `question_version`) は 50 組まで。超えたら部分結果を返さず `limit_exceeded`（422）にする。判断ごとの窓は結合 1 本でストリームに読み、判断の数に比例した SQL 文は出さない（実測: 1 判断あたり約 13 本の足を持つ合成データ 20,000 件で、負荷の高い開発機で約 1.2 秒、`-race` なし。そこから件数と行数の上限を下げて、3 秒に対して余裕を残している。`-race` 付きの CI では 3 秒を超え得るため、`evaltests` のテストサーバーだけ `QueryTimeout` を 1 分にしている。本番の 3 秒内に収まることはテストでは固定していない）。
 
 ## 7. 触れないもの
 

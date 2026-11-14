@@ -17,7 +17,11 @@ package evaldiag
 // than a partial result.
 const (
 	// MaxDecisions is the most trader LONG/SHORT decisions one call reads.
-	MaxDecisions = 20000
+	MaxDecisions = 10000
+	// MaxWindowRows bounds the market_snapshots rows one call reads: a decision's window holds about
+	// horizon + EntryWaitTolerance bars, so the decision limit shrinks as the horizon grows
+	// (see LimitFor). 200k rows took about 0.85 s at the default horizon on a loaded dev host.
+	MaxWindowRows = 200_000
 	// MaxCohorts is the most distinct (model_id, question_version) pairs.
 	MaxCohorts = 50
 	// MaxModelIDLen is the width of jev_decisions.model_id.
