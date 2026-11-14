@@ -3,6 +3,7 @@ package retention
 import (
 	"context"
 	"database/sql"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -63,7 +64,7 @@ func TestPurgeQueries_UseIndexRangeScans(t *testing.T) {
 	_, db := newService(t, Policy{})
 
 	assertIndexRange(t,
-		explainDetails(t, db, selectExpiredSnapshotIDsSQL, daysAgo(90), 1000), "market_snapshots")
+		explainDetails(t, db, selectExpiredSnapshotIDsSQL, daysAgo(90), int64(math.MaxInt64), 1000), "market_snapshots")
 	assertIndexRange(t,
 		explainDetails(t, db, deleteExpiredJobsSQL, "succeeded", daysAgo(7), 1000), "jobs")
 }
