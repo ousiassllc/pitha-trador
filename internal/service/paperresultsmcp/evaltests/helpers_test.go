@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/evaldiag"
@@ -48,6 +49,9 @@ func newServer(t *testing.T) (*testServer, *sql.DB) {
 	srv := paperresultsmcp.New(paperresultsmcp.Options{
 		Settings: s, DBPath: path, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)),
 		Now: testkit.FixedNow, CapitalJPY: 30_000_000,
+		// The limit tests aggregate 20,000 decisions; under -race on a loaded CI runner that exceeds the
+		// production 3 s budget, which is not what these tests pin (the limits and the numbers are).
+		QueryTimeout: time.Minute,
 	})
 	hs := httptest.NewServer(srv.Handler())
 	t.Cleanup(func() {
