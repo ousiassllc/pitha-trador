@@ -29,6 +29,8 @@
   - **観察用のScout判断はRAGに入れない**: 観察用銘柄のScout判断は`jev_decisions`には保存するが、類似事例の索引（`jev_decision_vectors`）には加えない（`Scout.evaluate`の`indexRAG=false`）。ライブのTrader・Scoutのプロンプトが検索する類似事例に、観察用の判断が混ざらないため（テスト`TestScout_ObservationDecisionIsNotIndexedForRAG`で固定）。
   - **観察用のJev呼び出しの費用上限**: 観察用銘柄のScout呼び出しだけを、1日（JST）の費用上限`jev.observation.daily_cost_cap_usd`（0より大きく100以下、既定0.10 USD）と失敗回数20回で止める。費用は応答の`request_cost`、無ければ入力トークン数（無ければリクエストサイズからの見積り）×公表単価（1Mトークンあたり0.042 USD。シャドーと同じ`shadow.InputCostUSD`）の概算で、請求額ではない。上限に達した観察用のジョブは`skipped:`で終わりJevを呼ばない。**止めるのは観察用の呼び出しだけ**で、通常の銘柄のScout・Trader（取引経路）はこの上限を参照せず、止まらない。既定では観察用銘柄が無いため、この上限が止める呼び出しは無く、取引経路の呼び出しは従来どおり。シャドーの上限`jev.shadow.daily_cost_cap_usd`（既定0.10 USD）とは別の枠で、既定値も変えない。当日の使用量は`jev.observation.usage`（アプリが書く記録。Settings画面には出さない）に持つ。
   - 後追いの投入（過去日の判断の再生成）は行わない。この設定の追加で`llm_cutoff`より前のデータが作られることはない。
+- FR-SCHED-13（`market_snapshots`の削除前退避、issue #1072）: 日次のデータ保持パージ（`internal/service/retention`）は、90日より古い`market_snapshots`を削除する前に、対象のUTC日ごとに全列（特徴量・`raw_data_json`を含む）を日別のgzip CSV（`snapshot_archive/market_snapshots/YYYY/market_snapshots-YYYY-MM-DD.csv.gz`。DBと同じ階層の`snapshot_archive/`。`internal/service/snapshotarchive`）へ退避し、読み戻した行数・`id`・時刻範囲がDBと一致した日だけを削除する（`non-functional.md` §3）。退避または検証に失敗したら`market_snapshots`は削除せず（`jobs`のパージは独立して続行）、エラーをメンテナンス通知に載せる。退避先は同じPC内のみで、送信・配信の経路を作らず、DBバックアップにも含まれない。既定の保持期間（90日）・取引の経路は変えない
+  - 確認: 退避した日ごとにINFOログ（日付・行数・パス）と`manifest.json`、および`Archiver.Reconcile`（退避ファイルとDBの行数・`id`・時刻範囲の照合。書き込まない）で確認できる。Paper 実績 MCP の読み取りツールへ退避日・行数を出すことは行わない（MCPはDBの読み取り専用接続だけを持ち、ファイルシステム上の退避先を知らないため。別issueで検討）
 
 ### 4.11 バックテスト
 

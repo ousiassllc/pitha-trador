@@ -157,7 +157,7 @@ bid/ask系カラムの注意（issue #458）: 修正前に保存された`bid`/`
 
 ベクトルインデックス: `market_snapshot_vectors`（後述「ベクトルインデックス」参照、`rowid = market_snapshots.id`）
 
-運用上の注意: 高頻度書き込みテーブルのため、周期実行1サイクル分（スクリーニング対象銘柄分）を1トランザクションにまとめて書き込み、SQLiteのWAL書き込みコストを抑える。保持期間は90日で、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`timestamp`が90日より古い行を`market_snapshot_vectors`の対応行とともにバッチ削除する（期限切れ`id`は上記`INDEX (timestamp)`の範囲走査で取得する。`non-functional.md` §3）。
+運用上の注意: 高頻度書き込みテーブルのため、周期実行1サイクル分（スクリーニング対象銘柄分）を1トランザクションにまとめて書き込み、SQLiteのWAL書き込みコストを抑える。保持期間は90日で、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`timestamp`が90日より古い行を`market_snapshot_vectors`の対応行とともにバッチ削除する（期限切れ`id`は上記`INDEX (timestamp)`の範囲走査で取得する。`non-functional.md` §3）。削除の前に、対象のUTC日（`timestamp`の日付）ごとに全58列（特徴量・`raw_data_json`を含む。ヘッダ行の列名はテーブルの列名と同じ）をgzip CSVの日別ファイルへ退避し、読み戻した行数・`id`・時刻範囲がDBと一致した日だけを削除する（issue #1072、`snapshot_archive/market_snapshots/YYYY/market_snapshots-YYYY-MM-DD.csv.gz`と`manifest.json`。NULLは空欄。退避は同じPC内のみで、DBバックアップには含まれない。`market_snapshot_vectors`は`market_snapshots`から再生成できる派生物のため退避しない。退避に失敗した間は削除しない）。
 
 立花証券選択時の保存方針（issue #721。#720の決定）: 取得した時価・板（`market_snapshots`の各カラムと`raw_data_json`）のローカル保存と分析（特徴量・バックテスト・キャリブレーション・RAG索引）は、自己の証券投資目的に限り行う。これは`non-functional.md` §6の方針（API専用ページの「蓄積、編集および加工等は禁止」とインターネット取引規程第18条を、自己利用の範囲で解釈）に従う。**第三者への提供・再配信の経路は作らない**（DBバックアップは操作者本人の退避先に限る）。保存量は日中に全銘柄を巡回しないため監視銘柄（最大120件）に限られ、保持期間は同じ90日。夜間の日足スクリーニングの結果と翌日の監視リスト用テーブルは#726で追加する（本方針に従う）。kabu選択時の`/ranking`の値は従来どおり保存しない（FR-SCHED-8）。
 
