@@ -8,7 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 )
 
-// The whitelist is exactly the keys #806, #861 and #929 name. A change here is a decision
+// The whitelist is exactly the keys #806, #861, #929 and #1073 name. A change here is a decision
 // about what the MCP may write, so it is pinned verbatim.
 func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 	want := []string{
@@ -19,9 +19,10 @@ func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 		"risk.daily_loss_limit_jpy", "risk.profit_lock.trigger_jpy",
 		"metalabel.llm_cutoff", "metalabel.llm_cutoff_model", "metalabel.llm_cutoff_confirmed_on", "metalabel.llm_cutoff_source",
 		"jev.shadow.enabled", "jev.shadow.candidate_version", // #929: only these two of the jev.shadow.* keys; the cost cap, halt, failures, throttle and the live version are not here
+		"research.labels.enabled", // #1073: only the recording switch of the research labels (default off); research.labels.retention_days is not here
 	}
-	if len(want) != 21 {
-		t.Fatalf("the test lists %d keys, issue #929 makes the whitelist 21", len(want))
+	if len(want) != 22 {
+		t.Fatalf("the test lists %d keys, issue #1073 makes the whitelist 22", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)

@@ -169,6 +169,7 @@ var dialogs = []Dialog{
 	{PageResults, "modal-metalabel", nil},
 	{PageResults, "modal-regime", nil},
 	{PageResults, "modal-orderflow", nil},
+	{PageResults, "modal-research-labels", nil},
 
 	// 証券会社・データ
 	{PageBroker, "modal-broker", nil},
