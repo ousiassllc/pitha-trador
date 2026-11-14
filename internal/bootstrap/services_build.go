@@ -211,11 +211,11 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
 		scheduler.WithRiskMonitor(s.Risk), scheduler.WithAutoResumer(s.Risk),
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0, logging.WithRetentionSource(logsettings.RetentionSource(s.Settings)))),
-		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings, state.Paths.DBPath)),
 		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
-	backupjob.WarnIfDisabled(context.Background(), s.Settings)
+	backupjob.LogDestination(context.Background(), s.Settings, state.Paths.DBPath)
 	// 立花: never the full REST scan (issue #731, #720): the saved watch list is
 	// the only ingestion, whatever scan.full_scan_enabled says.
 	if s.strategy != nil && (!s.strategy.Scan.FullScanOn() || s.isTachibana()) {

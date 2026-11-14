@@ -297,3 +297,18 @@ func TestRunMain_UnwritableLogDirFallsBackToStderr(t *testing.T) {
 		}
 	}
 }
+
+// Issue #890: the default backup folder is a "backups" folder next to the DB,
+// never the DB's own directory and independent of the working directory.
+func TestDefaultBackupDir_NextToDBInItsOwnFolder(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	t.Chdir(t.TempDir())
+
+	got := startup.DefaultBackupDir(dbPath)
+	if want := filepath.Join(filepath.Dir(dbPath), "backups"); got != want {
+		t.Fatalf("DefaultBackupDir = %q, want %q", got, want)
+	}
+	if got == filepath.Dir(dbPath) || !filepath.IsAbs(got) {
+		t.Fatalf("DefaultBackupDir = %q, want an absolute folder separate from the DB's own", got)
+	}
+}

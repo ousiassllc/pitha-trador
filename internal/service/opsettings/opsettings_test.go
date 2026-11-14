@@ -199,7 +199,14 @@ func TestPathSettings_DefaultsAndBackupDirWarning(t *testing.T) {
 
 	backup, _ := svc.Get(ctx, config.KeyBackupDir)
 	if backup.Current != "" || backup.Default != "" || backup.Overridden || backup.Warning != "" {
-		t.Errorf("unset backup dir = %+v, want empty (disabled) with no warning", backup)
+		t.Errorf("unset backup dir without a default folder = %+v, want nothing shown", backup)
+	}
+	// Issue #890: with the default same-PC folder the unset backup dir shows it
+	// as the Default together with the same-disk caveat, and a stored dir drops it.
+	svc.WithDefaultBackupDir("/data/backups")
+	backup, _ = svc.Get(ctx, config.KeyBackupDir)
+	if backup.Current != "" || backup.Default != "/data/backups" || backup.Overridden || !strings.Contains(backup.Warning, "ディスク") {
+		t.Errorf("unset backup dir = %+v, want the default folder and the same-disk warning", backup)
 	}
 	logDir, _ := svc.Get(ctx, config.KeyLogDir)
 	if logDir.Current != "" || logDir.Default != "/data/logs" {

@@ -25,6 +25,16 @@ func DefaultLogDir(dbPath string) string {
 	return filepath.Join(filepath.Dir(dbPath), "logs")
 }
 
+// DefaultBackupDir is the daily database backup destination used while the
+// Settings screen has not configured one (issue #890): "backups" next to the
+// SQLite DB at dbPath, a separate folder on the same PC, derived from dbPath
+// like DefaultLogDir. It does not survive a disk failure; choosing an
+// external path in Settings does. Only the backup's own daily/ and weekly/
+// subfolders are ever pruned, never the DB or its WAL files.
+func DefaultBackupDir(dbPath string) string {
+	return filepath.Join(filepath.Dir(dbPath), "backups")
+}
+
 // LogDir returns the absolute directory the daily JSON logs are written to
 // (RunMain), the Scheduler's logging.Archiver compresses old files in and
 // the error-log logging.Exporter reads (requirements/non-functional.md §5):
