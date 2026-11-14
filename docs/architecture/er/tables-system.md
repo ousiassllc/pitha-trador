@@ -30,6 +30,8 @@ Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_pro
 
 Paper 実績 MCP の注文案の受け付け（issue #827）はキー`mcp.order_proposals_enabled`（JSON の整数`1`=受け付ける・`0`=受け付けない。**行が無いときも、`1`/`0`以外の壊れた値のときも受け付けない**＝既定オフ。書き込み許可とは既定が逆）。オンにできるのは Settings 画面（`POST /settings/mcp/order-proposals`）だけで、MCP は`order_proposals_disable`でオフにだけできる。`settings_set`のホワイトリストには入らない（`key_not_allowed`）。切り替えは`mcp_settings_audit`に残る。
 
+PC 移行（issue #1075、`requirements/functional/components-platform.md` §4.25）の移行ファイルは、この DB の写しに対して`secrets`を全削除し、`runtime_settings`のうち`system.backup_dir`・`system.log_dir`・`broker.tachibana.{demo,production}.private_key_path`（端末固有のパス）と、キー名が秘密を示す行・値が秘密を含む行を削除して作る（`migratebundle.ExcludedSettingKeys`、`overview/flows.md` §10.8）。取り込み後も、この 2 つのテーブルの除外分は取り込み前の PC の値を引き継ぐ。スキーマの変更はない。
+
 ## secrets
 
 Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository/system.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。

@@ -169,6 +169,7 @@ pitha-trador/
 │   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
 │   │   ├── actuals/               # 実績評価と合格ライン（issue #777、`requirements/functional/performance-evaluation.md`）: 期間・方向・exit_reason・メタモデル版・A/Bアーム別の指標と信頼区間、コスト内訳、OOS並列。読み取り専用・表示時計算
 │   │   ├── dailyguardreplay/      # 記録済みの確定損益だけで日次エントリー停止3ルールを再現する純粋関数（`Replay`・`Render`。判定は`risk/dailyguard.go`と同じ条件。`risk`・`repository`をimportせず`config/dailyguardsettings`・`domain`のみに依存。`cmd/dailyguardreplay`から使う。#782）
+│   │   ├── migratebundle/         # PC移行の移行ファイル（`.pitha-bundle`＝`manifest.json`＋秘密を除いたDBの写し）の書き出し・読み込み・検証（FR-MIGRATE、`overview/flows.md` §10.8）。`importflow/`は確認・予約と、起動時の適用（安全コピー・引き継ぎ・入れ替え）。`bundletest/`はテスト用の補助
 │   │   ├── dataexport/            # 取引ログ・判断ログ・計測ログの期間エクスポート（CSV/JSONLのZIP＋`manifest.json`、秘密情報のマスク、ローカル出力のみ。`requirements/functional/components-platform.md` §4.21）
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ。market_snapshotsは削除前に`snapshotarchive`で退避・検証する（`requirements/non-functional.md` §3）
@@ -300,6 +301,7 @@ handler → service → repository → domain
 | Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9）。`checkflow`はテスト専用 | `internal/service/updater`（`checkflow`） |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
+| PC Migration | PC移行用の移行ファイルの書き出し（一貫スナップショット＋scrub）と、確認→予約→次回起動時（DBを開く前）の適用による取り込み（`requirements/functional/components-platform.md` §4.25、§10.8） | `internal/service/migratebundle`、`internal/service/migratebundle/importflow`、`internal/web/handler/migration`、`internal/bootstrap/migrationwire`、`internal/bootstrap/startup`（`OpenDatabase`） |
 | Data Export | 取引ログ（注文・約定・決済・損益）・判断ログ（Jevリクエスト/レスポンス・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）・計測ログ（INFO以上）の期間エクスポート（Settingsの「データエクスポート」から`GET /api/v1/export`）。`internal/logging`のマスク規則を全値に適用し、`io.Writer`へZIPを書くだけで外部送信経路を持たない（`requirements/functional/components-platform.md` §4.21、フローは`overview/flows.md` §10.7） | `internal/service/dataexport` |
 | Daily Guard Replay | 記録済みのPaperポジション（範囲内で建てた・決済したもの）に日次エントリー停止ルール（損失上限・profit lock・取引回数、FR-RISK-8）を当てはめ、取引日（JST）ごとの「ガードなし／あり」の損益・見送り分・日中最大ドローダウン・停止理由を比較する。確定損益のみで含み損益は再現できない（`requirements/functional/components-pipeline.md` FR-RISK-8）。DBは読み取り専用で開き、Risk Engineの挙動・設定には触れない | `internal/service/dailyguardreplay`、`cmd/dailyguardreplay` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外。`market_snapshots`は削除前に日別gzip CSVへ退避して読み戻し検証し、失敗時は削除しない（研究用、同じPC内のみ、issue #1072） | `internal/service/retention`、`internal/service/snapshotarchive` |
@@ -321,5 +323,5 @@ handler → service → repository → domain
 | 節 | ファイル |
 |----|----------|
 | §5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 / §14 外国為替FXレート取得アダプタ（GMOコイン） | `docs/architecture/overview/integrations.md` |
-| §10 通信フロー（§10.1〜§10.7）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
+| §10 通信フロー（§10.1〜§10.8）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
 | 改訂履歴（1.0〜。`overview.md`と`overview/`配下の全体の改訂を追記する） | `docs/architecture/overview/history.md` |

@@ -234,6 +234,44 @@ sequenceDiagram
 - 計測ログ（`metrics`）は`logging.Exporter.ExportMetrics`（ログディレクトリの日次ログ。マスク済み・10MiB上限）の結果を1レコード1行に展開し、上限で切り捨てた場合はmanifestの`files[].truncated`に記録する
 - マスクは行正規化の1箇所で全値に適用するため、コレクタが個別に呼び忘れることはない。`dataexport`は`io.Writer`以外の出力先（ネットワーク・ファイル作成）を持たない
 
+### 10.8 PC 移行（移行ファイルの書き出しと取り込み。issue #1075）
+
+`requirements/functional/components-platform.md` §4.25（FR-MIGRATE-1〜7）の実装詳細。稼働中のアプリはDB（WAL・コネクションプール）を開いているため、**画面からDBファイルを入れ替えない**。取り込みは確認（何も変えない）→予約（移行ファイルを検証済みのまま置く）→次回起動でDBを開く前に適用、の順で、適用だけが起動時の1か所（`startup.OpenDatabase`）で起きる。
+
+```mermaid
+sequenceDiagram
+    participant UI as Settings「PC 移行」
+    participant H as handler/migration
+    participant EX as migratebundle.Exporter
+    participant IF as importflow.Service
+    participant FS as <DBの隣>/migration/
+    participant ST as startup.OpenDatabase（起動時）
+
+    UI->>H: GET /api/v1/migration/export
+    H->>EX: Export(w)
+    EX->>EX: BackupTo（checkpoint＋VACUUM INTO）→ secrets全削除・端末固有/秘密の設定行削除 → VACUUM → integrity_check → 件数・SHA-256
+    EX-->>UI: .pitha-bundle（manifest.json＋pitha.db）
+    UI->>H: POST /api/v1/migration/preview（ファイルそのもの）
+    H->>IF: Preview
+    IF->>IF: 形式版・スキーマ版（新しすぎれば拒否）→ SHA-256・integrity_check・件数・秘密なし
+    IF->>FS: staging/<token>/pitha.db
+    IF-->>UI: manifest＋テーブルごとの行数（現在/ファイル）
+    UI->>H: POST /api/v1/migration/confirm（token, replace_existing）
+    H->>IF: Confirm（既存データがあれば replace_existing 必須）
+    IF->>FS: pending/（staging から rename）
+    Note over UI,ST: アプリを再起動
+    ST->>FS: ApplyPending（単一インスタンスロックの後・DBを開く前）
+    ST->>ST: 再検証 → 安全コピー（safety/）→ このPCの secrets と端末固有設定を引き継ぎ → 現行スキーマへ migrate → -wal/-shm 削除 → rename
+    ST->>FS: last-result.json（applied | failed）
+    ST->>ST: sqlitedb.Open（通常のマイグレーション）
+```
+
+- 書き出しの scrub は日次バックアップと同じ`backup.CopyScrubbed`（`scrubSecrets`に設定行の削除`Prune`を挟めるようにしただけで、バックアップの挙動は変えない）。写しは`journal_mode=DELETE`・`secure_delete=ON`・`VACUUM`で書き直し、解放ページにも秘密を残さない。取り込み側は`secrets`が空・端末固有/秘密の設定行が無いことを検証し、満たさないファイルは拒否する
+- 除外する設定（`migratebundle.ExcludedSettingKeys`）: `system.backup_dir`・`system.log_dir`（新しいPCのフォルダは別）、`broker.tachibana.{demo,production}.private_key_path`（鍵ファイルはDBに無く、パスは新しいPCで入れ直す）。ほかの運用設定（リスク・資金の値、ブローカー選択、モデルの設定等）は移行ファイルとともに移る。取り込み後も除外した設定と`secrets`は**取り込み前の新PCの値を引き継ぐ**（`importflow.carryOver`。PC内のファイルからファイルへで、移行ファイルには入らない）
+- スキーマ版: ファイルが新しい→拒否、同じ→そのまま、古い→受け付け、適用時に`sqlitedb.Open`と同じマイグレーション（`golang-migrate`）で現行へ上げてから入れ替える（途中で失敗したら現在のDBはそのまま）
+- 置き場所は`<DBの隣>/migration/`の`staging/`（確認中）・`pending/`（予約済み）・`safety/`（入れ替え前の安全コピー。秘密を含む。PC内のみ）・`last-result.json`で、DBと同じファイルシステムなので`rename`が原子的。`backups/`（#890）・`snapshot_archive/`（#1072）とは別のフォルダで、どちらも移行ファイルには入らない
+- 起動の入口: `bootstrap.Run`が`startup.OpenDatabase`でDBを開く（`cmd/desktop`・`cmd/server`共通。`cmd/backtestverify`の読み取り専用の open は適用しない）。`internal/bootstrap`は行数上限のため新しいサブパッケージ（`startup`・`migrationwire`）へ置き、`bootstrap.go`の行数は増やしていない。売買経路・OS固有の処理は追加しない
+
 ## 11. 障害対応方針
 
 | 障害 | 対応 |

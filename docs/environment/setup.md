@@ -136,7 +136,7 @@ make dev
 | 監視銘柄数と観察用銘柄（kabu ランキング監視） | `scan.ranking_watch.max_symbols`（1〜45）・`scan.observation.enabled`（0/1）・`scan.observation.symbols`（カンマ区切り・最大10件）・`jev.observation.daily_cost_cap_usd`（USD/日） | 45・オフ・空・0.10 | **再起動不要**（ランキング監視の次のサイクル（毎分）から）。監視銘柄数の上限45はkabuの登録枠50件のうちREST用に5件を残すため（超える値は保存できない）。情報APIのレート上限（既定8件/秒、公式10件/秒）は外れない。429/`4001006`が増えたら監視銘柄数を下げて戻せる。観察用銘柄は市況取得とJev Scoutだけで取引には乗らず、観察用のJev呼び出しだけが1日の費用上限で止まる（FR-SCHED-12）。環境変数・MCPでは変更できない |
 
 - 優先順位は`config/strategy.yaml` < `runtime_settings`（Settings画面）。以前の環境変数による上書き（`PITHA_POLICY_LONG_*`/`PITHA_POLICY_SHORT_*`/`PITHA_FAST_SCREENER_*`/`PITHA_LOG_DIR`/`PITHA_BACKUP_DIR`）は廃止した（設定されていても無視される）。
-- バックアップ先は未設定でも、既定フォルダ（DBと同じ階層の`backups/`。`PITHA_DB_PATH`で DB の場所を変えたときはその親ディレクトリ配下）へ保存する。ただし**同じディスク上のため、ディスク故障には耐えず、別PCへの移行にも使えない**（PC移行は issue #1075）。ディスク故障に備えるには、ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）の**既存ディレクトリの絶対パス**をSettingsで指定する。指定先ディレクトリ自体は作成しない（自動作成は既定フォルダのみ）。指定先が存在しない間（未マウントなど）は既定フォルダへも退避せずバックアップが失敗し、連続失敗時にSlack/ログで通知される（Settingsの該当項目にも警告を表示する）。
+- バックアップ先は未設定でも、既定フォルダ（DBと同じ階層の`backups/`。`PITHA_DB_PATH`で DB の場所を変えたときはその親ディレクトリ配下）へ保存する。ただし**同じディスク上のため、ディスク故障には耐えず、別PCへの移行にも使えない**（PC移行は Settings の「PC 移行」と`environment/setup/pc-migration.md`の手順で行う。issue #1075）。ディスク故障に備えるには、ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）の**既存ディレクトリの絶対パス**をSettingsで指定する。指定先ディレクトリ自体は作成しない（自動作成は既定フォルダのみ）。指定先が存在しない間（未マウントなど）は既定フォルダへも退避せずバックアップが失敗し、連続失敗時にSlack/ログで通知される（Settingsの該当項目にも警告を表示する）。
 - `market_snapshots`（1分足）は90日で削除される前に、DBと同じ階層の`snapshot_archive/`（`market_snapshots/YYYY/market_snapshots-YYYY-MM-DD.csv.gz`と`manifest.json`。設定項目はなく、`0700`で自動作成）へ日別に退避される（研究用、issue #1072）。同じPC内のローカルディスクのみで、外部へは送信せず（kabuの利用規約上、第三者への提供・再配信は不可）、DBバックアップにも含まれない。年間で約1〜2.5GBの空き容量の目安（概算。`non-functional.md` §3）。退避に失敗すると`market_snapshots`は削除されない（空き容量不足など。ERRORログとメンテナンス通知）
 - バックアップの内容: Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する。
 - ログディレクトリは日次JSONログ（全ログ`<日付>.log`とERRORのみの`<日付>-error.log`）・`.gz`アーカイブ・エラーログのダウンロードが共有する。失敗したジョブは1分ごとにエラーコード別へ集約して`<日付>-error.log`にも出る（`jobfailurelog: jobs failed`。`non-functional.md` §5.1）。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する。
@@ -296,6 +296,10 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 - **UI**: Stoplight Elements（`@stoplight/elements`、bunで導入）。`static/package.json`の依存として`bun.lock`でバージョンを固定し、`static/esbuild.config.mjs`が`web-components.min.js`/`styles.min.css`を`static/src/dist/vendor/stoplight-elements/`へコピーして`go:embed`でバイナリに同梱、`/static/dist/vendor/stoplight-elements/`から同一オリジン配信する（CDN読み込みはしない。取引操作APIを持つオリジンでサードパーティスクリプトを実行しないため）。`/swagger`固定エンドポイントで、`<elements-api apiDescriptionUrl="/api/v1/openapi.json">` を埋め込んだ静的HTML 1枚を返す。Swagger UI用の追加ミドルウェアは不要
 - **環境変数**: `SWAGGER_ENABLED`（`true`のときのみ`/swagger`ルートを有効化。未設定・`true`以外は無効＝オプトイン）。`/api/v1/openapi.json`は本変数に関わらず常に公開される。`make dev`は`true`を設定し、本番（Phase 7実売買時）を含むそれ以外は未設定（無効）とする
 - **CI連携**: Huma生成spec方式のため「生成し忘れによるdrift」が構造的に発生しない。よってswag方式で一般的な`swag init && git diff --exit-code`のようなdrift検知CIステップは不要。外部ツール（Postman等）向けにspecファイルをエクスポートしたい場合のみ、任意タスクとして`make openapi-export`（`docs/api/openapi.json`へ書き出し）を用意する
+
+## PC 移行（issue #1075）
+
+PC の買い替え・故障のときは、Settings「システム」の「PC 移行」でデータと設定を 1 ファイルへ書き出し、新しい PC で取り込む。手順は`docs/environment/setup/pc-migration.md`。秘密情報（API キー・パスワード・立花の認証情報）・バックアップ先・ログ先・秘密鍵のパスはファイルに入らないため、新しい PC で入れ直す。
 
 ## 改訂履歴
 

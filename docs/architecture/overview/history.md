@@ -142,3 +142,4 @@
 | 1.135 | 2026-11-13 | §6 に意思決定モデル比較のトライアルを追加（`integrations-jev-trial.md`新設。合成`ShadowSubmitter`・Paper 専用・既定オフ・アーム別の費用の出所と上限・402/403/429/529 の停止・隔離テスト） | issue #1059 |
 | 1.136 | 2026-11-14 | §6（`integrations.md`）の`system.backup_dir`の説明に、未設定のときは無効ではなくDBと同じ階層の既定フォルダ（`backups/`、同一ディスク）へ保存し、起動ログにINFO/WARNを出すことを追記 | issue #890 |
 | 1.137 | 2026-11-14 | §3ディレクトリ構成に`internal/service/snapshotarchive/`（`market_snapshots`の削除前退避）を、§Retentionの行に削除前の退避・検証と失敗時は削除しない旨を追記 | issue #1072 |
+| 1.138 | 2026-11-14 | §3ディレクトリ構成に`internal/service/migratebundle/`（PC移行の移行ファイル。`importflow/`・`bundletest/`）、§コンポーネント表にPC Migration、§10.8（PC移行: 書き出し＝一貫スナップショット＋scrub、取り込み＝確認→予約→起動時の適用。除外する設定・スキーマ版の扱い・置き場所）を追加。起動時のDB open を`startup.OpenDatabase`へ | issue #1075 |

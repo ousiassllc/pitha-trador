@@ -153,3 +153,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.81 | 2026-11-13 | マイグレーション000054を追加し、`er/tables-jev-trial.md`に`jev_trial_decisions`（別モデルの答え・失敗・費用の出所・切り詰め疑い・RAG フラグ・cutoff の状態）と`jev.trial.*`のキーを新設。`er/tables-system.md`の`secrets`許可キーに`OPENROUTER_API_KEY`/`OPENROUTER_BASE_URL`（任意）を加え 19 件にした | issue #1059 |
 | 1.82 | 2026-11-14 | `er/tables-system.md`の`runtime_settings`の`system.backup_dir`の説明を、未設定で無効から未設定ならDBと同じ階層の既定フォルダを使う、へ更新（スキーマ変更なし） | issue #890 |
 | 1.83 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
+| 1.84 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
