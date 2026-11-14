@@ -85,7 +85,7 @@ func fixedCosts(c Costs) CostSource {
 }
 
 func newRecorder(db *sql.DB, now string) *Recorder {
-	return NewRecorder(researchlabel.NewRepository(db), fixedCosts(Costs{Long: 19, Short: 27})).WithClock(fixedNow(now))
+	return NewRecorder(researchlabel.NewRepository(db), fixedCosts(Costs{Long: 19, Short: 27})).WithClock(fixedNow(now)).WithMaxDaysPerRun(10)
 }
 
 func TestRecorder_LabelsOnlyCompleteDaysAndRerunIsIdempotent(t *testing.T) {
@@ -182,7 +182,7 @@ func TestRecorder_ResumesAfterAPartialRun(t *testing.T) {
 	seedDay(t, db, "2026-10-14")
 	repo := researchlabel.NewRepository(db)
 	crash := &failingStore{Store: repo, failDay: "2026-10-14", failID: 2}
-	rec := NewRecorder(crash, fixedCosts(Costs{Long: 19, Short: 27})).WithClock(fixedNow("2026-10-15 16:30"))
+	rec := NewRecorder(crash, fixedCosts(Costs{Long: 19, Short: 27})).WithClock(fixedNow("2026-10-15 16:30")).WithMaxDaysPerRun(10)
 
 	res, err := rec.Run(context.Background())
 	if err == nil {

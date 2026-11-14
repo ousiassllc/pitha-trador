@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
@@ -16,7 +17,19 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
+// newJob is a Job over a fresh database with the switch ON (the default is off:
+// see TestJob_IsOffByDefault...) and one JST day of bars, 2026-10-13.
 func newJob(t *testing.T) (*Job, *sql.DB, *system.RuntimeSettingsRepository) {
+	t.Helper()
+	job, db, settings := newOffJob(t)
+	if err := settings.Set(context.Background(), researchlabelsettings.KeyEnabled, "1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	return job, db, settings
+}
+
+// newOffJob is a Job with nothing stored in runtime_settings: the shipped state.
+func newOffJob(t *testing.T) (*Job, *sql.DB, *system.RuntimeSettingsRepository) {
 	t.Helper()
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
@@ -26,8 +39,19 @@ func newJob(t *testing.T) (*Job, *sql.DB, *system.RuntimeSettingsRepository) {
 	if _, err := db.Exec(`INSERT INTO instruments (id, symbol, name, market, is_active, created_at, updated_at) VALUES (1, '7203', 'x', 'TSE Prime', 1, 't', 't')`); err != nil {
 		t.Fatal(err)
 	}
-	// Bars 14:00..15:29 JST of 2026-10-13, price rising 1 yen a minute, quote price -/+ 1.
-	start := time.Date(2026, 10, 13, 14, 0, 0, 0, jst)
+	seedDay(t, db, "2026-10-13")
+	settings := system.NewRuntimeSettingsRepository(db)
+	return New(db, settings), db, settings
+}
+
+// seedDay inserts bars 14:00..15:29 JST of the JST date d for instrument 1, the
+// price rising 1 yen a minute, quote price -/+ 1.
+func seedDay(t *testing.T, db *sql.DB, d string) {
+	t.Helper()
+	start, err := time.ParseInLocation("2006-01-02 15:04", d+" 14:00", jst)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < 90; i++ {
 		p := 1000 + float64(i)
 		if _, err := db.Exec(`INSERT INTO market_snapshots (instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover, vwap, price_vs_vwap_bps, raw_data_json)
@@ -35,8 +59,6 @@ func newJob(t *testing.T) (*Job, *sql.DB, *system.RuntimeSettingsRepository) {
 			t.Fatal(err)
 		}
 	}
-	settings := system.NewRuntimeSettingsRepository(db)
-	return New(db, settings), db, settings
 }
 
 func clockAt(s string) func() time.Time {

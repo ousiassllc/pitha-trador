@@ -47,12 +47,13 @@ func DayBounds(day string) (from, to time.Time, err error) {
 	return d, d.AddDate(0, 0, 1), nil
 }
 
-// PendingDays returns up to limit JST days strictly before the day `before`,
+// PendingDays returns up to limit JST days from the day `from` (inclusive; "" for
+// no lower bound) and strictly before the day `before`,
 // oldest first, that have at least one market_snapshots bar and no
 // research_label_days mark. A day whose snapshots retention has purged is not
 // listed (nothing is left to label). It reads the oldest snapshot time and one
 // existence probe per unmarked day, all served by market_snapshots_timestamp_idx.
-func (r *Repository) PendingDays(ctx context.Context, before string, limit int) ([]string, error) {
+func (r *Repository) PendingDays(ctx context.Context, from, before string, limit int) ([]string, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
@@ -68,6 +69,9 @@ func (r *Repository) PendingDays(ctx context.Context, before string, limit int) 
 		return nil, fmt.Errorf("researchlabel: oldest snapshot: %w", err)
 	}
 	start := first.In(jst).Format(time.DateOnly)
+	if from > start {
+		start = from
+	}
 	marked, err := r.markedDays(ctx, start)
 	if err != nil {
 		return nil, err
@@ -175,6 +179,31 @@ const insertSQL = `INSERT OR IGNORE INTO research_horizon_labels (
 	snapshot_id, instrument_id, symbol, snapshot_at, horizon, exit_at, entry_bid, entry_ask, entry_price, exit_price, spread_bps,
 	long_gross_bps, long_cost_bps, long_net_bps, short_gross_bps, short_cost_bps, short_net_bps, label_version, created_at, day, sample_bucket
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+// PurgeBefore deletes up to limit rows of research_horizon_labels whose JST day
+// is before `day` ("2006-01-02"), oldest day first, in one short transaction, and
+// returns how many it deleted. It touches no other table: the per-day marks and
+// sums (research_label_days, research_label_day_stats) stay, so the marks keep a
+// purged day from being labeled again and the period means keep their days. The
+// rows are found through research_horizon_labels_day_sample_idx.
+func (r *Repository) PurgeBefore(ctx context.Context, day string, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	if _, err := time.ParseInLocation(time.DateOnly, day, jst); err != nil {
+		return 0, fmt.Errorf("researchlabel: purge day %q: %w", day, err)
+	}
+	res, err := r.db.ExecContext(ctx, `DELETE FROM research_horizon_labels WHERE id IN (
+	SELECT id FROM research_horizon_labels WHERE day < ? ORDER BY day LIMIT ?)`, day, limit)
+	if err != nil {
+		return 0, fmt.Errorf("researchlabel: purge rows before %s: %w", day, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("researchlabel: purged rows: %w", err)
+	}
+	return int(n), nil
+}
 
 // SampleBuckets is the number of research_horizon_labels.sample_bucket values.
 const SampleBuckets = 100
