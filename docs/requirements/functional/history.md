@@ -165,3 +165,4 @@
 | 1.158 | 2026-11-12 | #1052〜#1055 の担当判断を反映。FR-META-8: Risk 却下と guard 見送りを`skip_kind`・`calibration_outcome_origins.origin`で分け（旧`skipped`を`risk_rejected`/`guard_skipped`/`no_signal`に分割。マイグレーション`000053`）、cutoff が未確認のあいだの記録に`cutoff_unverified`の印を付けて学習・OOS評価から除外。FR-DISCLOSURE-SKIP: 後追い取得が非同期書き込みの間に同じ銘柄を二重に出さない。FR-SCHED-12: 保有・注文中の銘柄は観察用でも通常の Trader・決済の経路に通す、場外は観察用銘柄を監視リストに入れない、観察用かどうかを読めないときはその回だけ飛ばす。欠け（FR-SETTINGS-8/9・FR-MCP-17/20）の許容を 5 分から 15 分へ。Policy・Risk・発注・Paper・Live・設定の既定値は変わらない | issue #1052 #1053 #1054 #1055 |
 | 1.159 | 2026-11-13 | FR-TRADER-6（モデル比較トライアル）を追加。FR-SETTINGS-1 の許可キーを 19 件に（`OPENROUTER_*`は任意・Setup Guard の必須に入れない） | issue #1059 |
 | 1.160 | 2026-11-13 | FR-MCP-37（意思決定モデル比較の読み取りツール`jev_trial_compare`/`jev_trial_cost`）を追加。FR-MCP-4 の読み取りのツールを 16 に、合計を 35 に更新 | issue #1060 |
+| 1.161 | 2026-11-14 | FR-SETTINGS-7 のバックアップ先を、未設定なら無効から、DBと同じ階層の既定フォルダ（同一ディスク）へ保存へ変更し、Settingsの既定表示・同一ディスクの警告・起動ログを追記 | issue #890 |

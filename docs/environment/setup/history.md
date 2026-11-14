@@ -55,3 +55,4 @@
 | 1.56 | 2026-10-21 | 「Settings画面で設定する運用項目」のPolicy Engineに、Paper用の最低エントリー品質（`policy.paper.{long,short}.min_entry_quality`。既定`good`）をLive用と並べて追記した（issue #861）。 | Paper の取引が 0 件だったため |
 | 1.57 | 2026-10-26 | Git Hooksのpre-commit `golangci-lint`に`GOLANGCI_LINT_CACHE`をworktree直下`.cache/golangci-lint`へ固定し`--allow-parallel-runners`を付けた旨を追記（issue #822）。 | 複数worktreeでキャッシュが共有され別worktreeのパスが混ざるため |
 | 1.58 | 2026-10-29 | 「Makefileターゲット」に、パスに`#`を含むチェックアウトでも`make generate`が通るようTailwind CLIを`tailwind-hash-path-fix.cjs`のpreload付きで起動する旨を追記（issue #926）。 | ブランチ名`feat/#925`から作るworktreeでTailwindが`\0#`のままパスをfsに渡して失敗するため |
+| 1.59 | 2026-11-14 | 「Settings画面で設定する運用項目」のバックアップ先ディレクトリの未設定時を「無効」から既定フォルダ（DBと同じ階層の`backups/`。同一ディスクのためディスク故障に耐えない）へ変更し、指定先の扱い（自動作成は既定のみ・未マウント時は失敗）を追記 | issue #890 |
