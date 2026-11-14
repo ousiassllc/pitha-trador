@@ -23,7 +23,7 @@
 | Settings 画面の MCP パネルのハンドラと画面部品（`GET /settings/mcp-panel`、`POST /settings/mcp`、`POST /settings/mcp/key`、`POST /settings/mcp/{start,stop,restart}`、`POST /settings/mcp/write`＝書き込み許可のチェックと監査ログの表示） | `internal/web/handler/mcpsettings`、`internal/web/organisms/mcp`、`static/src/components/copy-button` |
 | DB を `mode=ro` + `PRAGMA query_only=ON` で開く（`sqlitedb.Open` は呼ばない） | `internal/service/paperresultsmcp/readdb` |
 | 設定ツール（issue #806・#807）の本体: 狭い書き込み接続（`Writer`。`mode=rw`・ファイルを作らない・マイグレーションなし・`runtime_settings` の upsert と監査の INSERT だけ）、書き込み許可の読み取り、監査ログの追記と一覧、`settings_get` / `settings_diff` の読み取りモデル、Paper 資金の分母の読み取り、Settings 画面側の `Gate`（スイッチの切り替えと GUI の変更の監査） | `internal/service/paperresultsmcp/mcpset`（ツール定義は `internal/service/paperresultsmcp/settings_tools.go`） |
-| MCP が書けるキーのホワイトリスト（21 キー。Jev のシャドーの 2 キー `jev.shadow.enabled` / `jev.shadow.candidate_version` を含む。issue #929）・書き込みスイッチのキー・マスク方針 | `internal/config/mcpwritesettings` |
+| MCP が書けるキーのホワイトリスト（22 キー。Jev のシャドーの 2 キー `jev.shadow.enabled` / `jev.shadow.candidate_version`（issue #929）と、研究用ラベルの記録スイッチ `research.labels.enabled`（issue #1073）を含む）・書き込みスイッチのキー・マスク方針 | `internal/config/mcpwritesettings` |
 | 監査ログの表（マイグレーション `000040`） | `db/migrations/000040_create_mcp_settings_audit.*.sql` |
 | GUI の保存の監査（ホワイトリストのキーの保存・既定への戻しを同じ表に記録。シャドーの 2 キーの画面での変更は `jevprompt.Service` を通るため記録されない） | `internal/service/paperresultsmcp/mcpset`（`Audited`。`opsettings.Service` を包んで Save/Reset を記録）、配線は `internal/bootstrap/router_options.go`。シャドーの 2 キーの `settings_get` / `settings_set` は `mcpset/jevshadow.go`（`jevprompt.Service` と同じ検証で保存する） |
 | 調整の実験（issue #871）: 語彙・検査・SQL・前後比較と判定（`internal/service/paperresultsmcp/experiment`）、ツール定義（`experiment_tools.go`）、書き込み（`mcpset/experiments.go`。`Writer` と `Gate`）、表（マイグレーション `000046`）、Settings の節（`internal/web/handler/mcpsettings/experiments*.go`、`internal/web/organisms/mcp/experiments.templ`）。テストは `experimenttests` と `experiment` と `internal/router/mcproute/experiments_test.go` |
@@ -116,3 +116,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.16 | 2026-10-30 | §2 に `disclosure_skip_summary`（`disclosureskipdiag`・`disclosureskiptests`）を追加 | issue #935 |
 | 1.17 | 2026-11-13 | §2 に `jev_trial_compare` / `jev_trial_cost`（`trialquery`・`trialtool`・`trialtests`）を追加。MCP が書けるキーは増えない（`jev.trial.*` は含まない） | issue #1060 |
 | 1.18 | 2026-11-14 | §2 に `jev_evaluation`（`evaldiag`・`evaltests`）と `research_horizon_summary`（`researchdiag`・`researchtests`）を追加（登録はどちらも `jev_models_tool.go`）。読み取りのツールは 18 つ・合計 37。MCP が書けるキーは増えない | issue #1073・#1074 |
+| 1.19 | 2026-11-15 | §2 のホワイトリストを 21 → 22 キーにした（`research.labels.enabled`） | issue #1073 / #1074（PR #1077 の直し） |

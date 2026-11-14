@@ -65,4 +65,4 @@ JST の日ごとの「記録を終えた」印と件数。記録部品は、そ�
 
 ## 保持と量
 
-`market_snapshots` は 90 日で削除されるが、この 3 表はそのままにしている（削除すると、足が無くなったあとに作り直せない結果が消えるため。方針は未決。`docs/architecture/paper-results-mcp-research-labels.md` §保持と量）。
+`market_snapshots` は 90 日で削除される。`research_horizon_labels` の行は、Settings の `research.labels.retention_days`（既定 90 日、1〜3650）より古い JST 日のものを日次タスクが削除する（索引 `(day, horizon, sample_bucket)` の範囲を 1000 行ずつ、間を置いて）。`research_label_days` と `research_label_day_stats` は削除しない（印は削除済みの日の再ラベルを防ぎ、日ごとの和は期間の平均を残す。1 日 7 行ほど）。記録そのものが Settings の `research.labels.enabled`（既定オフ）の下にあり、オフの間は書き込みも削除もしない。`docs/architecture/paper-results-mcp-research-labels.md` §5。

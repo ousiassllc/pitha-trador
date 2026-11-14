@@ -14,7 +14,7 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 
 | 引数 | 内容 |
 |---|---|
-| `from` / `to` | 他のツールと同じ期間（JST の暦日、`[from, to)`、最大 366 日、既定は直近 30 日）。判断の時刻（`jev_decisions.timestamp`）で切る |
+| `from` / `to` | 他のツールと同じ期間（JST の暦日、`[from, to)`、最大 366 日、既定は直近 30 日）。判断の時刻（`jev_decisions.timestamp`）で切る。出力の日（`first_decision_day` / `last_decision_day`・日ごとの区間・`days`）もすべて JST の日で、UTC の日ではない |
 | `horizon_minutes` | 任意。ラベルの保有時間（分、1〜60）。省略は**いまの `calibration.barrier_timeout_minutes`**。保存済みラベルとの突き合わせも同じホライズンで行う |
 | `prompt_version` | 任意。この版（`question_version`。例 `trader-v4`）の判断だけ。省略は全版（版ごとに別集計） |
 | `model_id` | 任意。この `model_id` の判断だけ（100 文字まで）。省略は全モデル（モデルごとに別集計） |
@@ -104,3 +104,4 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-14 | 新規 | issue #1073 |
+| 1.1 | 2026-11-15 | 日の区切りが JST であること、出力の net bps が「いまの設定（`calibration.barrier_*`・`cost.*`）で付け直した値」で保存済みラベルの値ではないことを、引数表と冒頭の説明に明記 | issue #1073（PR #1077 の直し） |

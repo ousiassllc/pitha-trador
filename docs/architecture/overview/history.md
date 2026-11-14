@@ -141,3 +141,4 @@
 | 1.134 | 2026-11-13 | §6（`integrations.md`）に、トライアル専用のワイヤ層拡張（緩い検証`systemone.DecodeTrial`・可変`Endpoint`・リクエストの`provider`・トライアル専用クライアント`trialwire`）を追記。`jev.Client`・ライブの検証・接続先・既定値は変えない | issue #1058 |
 | 1.135 | 2026-11-13 | §6 に意思決定モデル比較のトライアルを追加（`integrations-jev-trial.md`新設。合成`ShadowSubmitter`・Paper 専用・既定オフ・アーム別の費用の出所と上限・402/403/429/529 の停止・隔離テスト） | issue #1059 |
 | 1.136 | 2026-11-14 | §3 のディレクトリ構成に`repository/researchlabel`・`service/researchlabel`（研究用ホライズンラベル。日次メンテナンスタスク`research_labels`）を追加。§4 の Retention に、研究用の 3 表は保持のパージ対象外（削除の方針は未決）と追記。取引に使わない研究専用の記録 | issue #1074 |
+| 1.137 | 2026-11-15 | §4 の Retention の行を、研究用ホライズンラベルの行を日次タスク`research_labels`が Settings の保持期間（既定90日）で自分で削除する形に直し、記録は`research.labels.enabled`（既定オフ）である旨を追記。メンテナンスランナーは`ErrMore`のチャンクのあいだ mutex を放す（`maintenance.ErrMore`） | issue #1073 / #1074（PR #1077 の直し） |

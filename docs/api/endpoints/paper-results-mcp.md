@@ -60,9 +60,7 @@
 
 引数: `from`, `to`、`limit`（既定 50、最大 200）、`cursor`（前回応答の `next_cursor`。無ければ先頭）。
 
-並び: `closed_at` 降順、`id` 降順。対象は §3.1 と同じクローズ済み。
-
-各行のフィールドは次だけ。
+並び: `closed_at` 降順、`id` 降順。対象は §3.1 と同じクローズ済み。各行のフィールドは次だけ。
 
 | フィールド | 列 |
 |------------|----|
@@ -214,7 +212,7 @@
 
 ### 3.10 設定ツール（issue #806・#807）
 
-設定ツールが触れるのは、次のホワイトリストの 21 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+設定ツールが触れるのは、次のホワイトリストの 22 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -237,6 +235,7 @@
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
 | `jev.shadow.enabled` | 文字列（`text`） | Jev のプロンプトのシャドー比較の有効（issue #929。Settings 画面の「シャドーを有効にする」）。既定は `false` | `true` / `false`（`1` / `0` も可）。`true` にできるのは候補の版が設定済みのときだけ。`false` はいつでも可 |
 | `jev.shadow.candidate_version` | 文字列（`text`） | シャドーが動かす候補の版（issue #929。Settings 画面の「シャドーの候補の版」）。既定は空（候補なし） | このビルドに登録済み（`jev_shadow_cost` の `registered_versions`）で、ライブの版と違う版 |
+| `research.labels.enabled` | 文字列（`text`） | 研究用ホライズンラベル（#1074）の日次記録のオン・オフ（issue #1073。Settings 画面の「研究用ホライズンラベルの記録」）。既定は `0`（オフ）。オフの間は日次タスクが何も書かない。記録は研究専用の表に書くだけで取引には使わない | `1`（オン）または `0`（オフ）。保持期間 `research.labels.retention_days` は書けない |
 
 Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）・秘密・発注・送金・Kill Switch 解除に関するキーは無い。`jev.shadow.*` で入るのは上の 2 キーだけで、ライブの版 `jev.trader_prompt_version`・費用の上限 `jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`・`jev.shadow.throttle` は書けない。ホワイトリスト外のキーは `key_not_allowed`（HTTP 403）。`value` は文字列でも数値でもよい（Settings 画面に入れる文字列と同じ。数値キーに `2.5` でも `"2.5"` でも可。`jev.shadow.enabled` は `"true"` / `"false"` / `"1"` / `"0"`、JSON の数値 1 / 0 も可）。真偽値（JSON の `true` / `false`。`jev.shadow.enabled` でも同じ）・null・配列・オブジェクトは `invalid_argument`。
 
@@ -317,7 +316,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
-- 設定ツール: ホワイトリストの 21 キーはすべて MCP から更新でき、GUI（`opsettings`。シャドーの 2 キーは `jevprompt.Service`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・シャドーのライブの版・費用の上限・止めた記録など・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`（シャドーの候補の版が未登録・ライブの版と同じ・空、候補なしでの `jev.shadow.enabled` の `true` を含む）。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ。設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
+- 設定ツール: ホワイトリストの 22 キーはすべて MCP から更新でき、GUI（`opsettings`。シャドーの 2 キーは `jevprompt.Service`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・シャドーのライブの版・費用の上限・止めた記録など・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`（シャドーの候補の版が未登録・ライブの版と同じ・空、候補なしでの `jev.shadow.enabled` の `true` を含む）。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ。設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 注文案ツールの受け入れ条件は `paper-results-mcp-proposals.md` §5（スイッチ・同一トランザクション・冪等・引数の規則・1 日の上限・認証なしで SQL 0 件・書き込みの狭さ・`mode` の CHECK・オンにする手段が無いこと）
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
