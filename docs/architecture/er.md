@@ -154,3 +154,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.82 | 2026-11-14 | `er/tables-system.md`の`runtime_settings`の`system.backup_dir`の説明を、未設定で無効から未設定ならDBと同じ階層の既定フォルダを使う、へ更新（スキーマ変更なし） | issue #890 |
 | 1.83 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
 | 1.84 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
+| 1.85 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
