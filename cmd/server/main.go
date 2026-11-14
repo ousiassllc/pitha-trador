@@ -18,6 +18,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/migrationwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
@@ -89,6 +90,7 @@ func run() error {
 	engine := router.New(append(
 		append(bootstrap.RouterOptions(services, state, secretsRepo), mcpwire.RouterOptions(mcp)...),
 		router.WithAllowedHosts(allowedHosts(addr, allowNonLoopback, os.Getenv(EnvAllowedHosts))...),
+		migrationwire.Option(state.DB, state.Paths.DBPath),
 	)...)
 
 	// ctx is canceled on SIGINT/SIGTERM: the signal that stops the HTTP

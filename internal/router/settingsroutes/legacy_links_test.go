@@ -20,7 +20,7 @@ var legacyDialogPages = map[string][]string{
 	"asset-buckets": {"modal-asset-buckets"},
 	"broker":        {"modal-broker", "modal-kabu", "modal-tachibana", "modal-tachibana-conn", "modal-tachibana-source", "modal-tachibana-nightly", "modal-tachibana-intraday", "modal-tachibana-screen"},
 	"integrations":  {"modal-jev", "modal-luna", "modal-sol", "modal-opus", "modal-news-feed", "modal-slack", "modal-mcp", "modal-jev-prompt"},
-	"maintenance":   {"modal-update", "modal-error-log", "modal-data-export", "modal-backup", "modal-logdir", "modal-logsettings"},
+	"maintenance":   {"modal-update", "modal-error-log", "modal-data-export", "modal-migration", "modal-backup", "modal-logdir", "modal-logsettings"},
 }
 
 func TestLegacyDialogLinks_StillOpenTheirDialog(t *testing.T) {
