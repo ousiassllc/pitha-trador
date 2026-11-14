@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/migration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
@@ -58,6 +59,8 @@ type options struct {
 	healthAlertSource   system.HealthAlertSource
 	errorLogExporter    system.ErrorLogExporter
 	dataExporter        export.DataExporter
+	migrationExporter   migration.Exporter // nil until WithMigration: the PC migration endpoints answer 500
+	migrationImporter   migration.Importer
 	heartbeatRecorder   middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts        []string                     // nil until WithAllowedHosts: no Host/Origin validation
 	wsBase              string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
@@ -290,6 +293,11 @@ func WithErrorLogExporter(exporter system.ErrorLogExporter) Option {
 
 // WithDataExporter backs `GET /api/v1/export` (FR-EXPORT-7); unset, it is a 500.
 func WithDataExporter(e export.DataExporter) Option { return func(o *options) { o.dataExporter = e } }
+
+// WithMigration backs `/api/v1/migration/*` (the PC migration bundle, FR-MIGRATE-*); unset, they are a 500.
+func WithMigration(e migration.Exporter, i migration.Importer) Option {
+	return func(o *options) { o.migrationExporter, o.migrationImporter = e, i }
+}
 
 // WithHeartbeatRecorder enables operator heartbeat recording (FR-RISK-6, middleware.Heartbeat):
 // every authenticated UI request (session cookie present; `/static`, WebSocket upgrades and

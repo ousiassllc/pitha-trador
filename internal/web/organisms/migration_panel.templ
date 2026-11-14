@@ -1,0 +1,104 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// MigrationPanel renders the Settings screen's PC 移行 section
+// (`#migration-panel`, FR-MIGRATE-*, issue #1075): 書き出し is a plain GET form
+// to `/api/v1/migration/export` whose attachment the browser/WebView saves
+// (hx-disable, like DataExportPanel); 取り込み is driven by
+// static/src/components/migration/pitha-migration.ts, which fills the
+// <template>s below (so every Tailwind class stays in this file) from the
+// preview API. Nothing is replaced from this screen: 「取り込みを予約する」
+// stages the file and the database is swapped at the next start. There is
+// deliberately no way to put secrets into the file, so no option for it.
+templ MigrationPanel() {
+	<section id="migration-panel" class="flex flex-col gap-6 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-migration-panel data-testid="migration-panel">
+		<h3 class="sr-only">PC 移行</h3>
+		<div class="flex flex-col gap-3" data-testid="migration-export">
+			<h4 class="text-lg font-semibold text-ink">書き出し（今までの PC で）</h4>
+			<p class="text-ink">アプリのデータと設定を 1 つのファイル（<code>.pitha-bundle</code>）にまとめます。新しい PC に同じアプリを入れ、下の「取り込み」で読み込むと、同じ状態から再開できます。</p>
+			<form method="get" action="/api/v1/migration/export" hx-disable class="flex items-center gap-2" data-testid="migration-export-form">
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "migration-export-download"}}) {
+					移行ファイルを書き出す
+				}
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-migration-export", Label: "PC 移行ファイルの説明"}) {
+					ファイルには、注文・シグナル・判断・ラベル・市場スナップショットなどのデータと、秘密情報以外の設定が入ります。API キー・パスワード・トークン・Slack Webhook URL・立花証券の認証 ID と第二暗証番号・秘密鍵ファイルのパスは入りません（入れる選択肢はありません）。バックアップ先とログフォルダの設定も、新しい PC のフォルダが別なので入りません。バックアップのフォルダ（<code>backups/</code>）とスナップショットの退避フォルダ（<code>snapshot_archive/</code>）はデータベースの外にあるため、ファイルには入りません。別にコピーしてください。
+				}
+			</form>
+		</div>
+		<div class="flex flex-col gap-3" data-testid="migration-import">
+			<h4 class="text-lg font-semibold text-ink">取り込み（新しい PC で）</h4>
+			<p class="text-ink">書き出したファイルを選び、「内容を確認」を押します。確認だけでは何も変わりません。内容に問題がなければ取り込みを予約し、アプリを再起動すると入れ替わります。取り込み前のデータは安全コピーとして残ります。</p>
+			<p class="text-ink">パスワードや API キーはファイルに入らないので、取り込み後に「初回セットアップ」と各設定で入れ直してください。バックアップ先も、新しい PC で設定し直してください。</p>
+			<div class="flex flex-wrap items-end gap-3">
+				<label class="flex flex-col gap-2">
+					<span class="text-ink">移行ファイル</span>
+					@atoms.Input(atoms.InputProps{Name: "bundle", Type: "file", Class: "w-auto", Attrs: templ.Attributes{"accept": ".pitha-bundle", "data-migration-file": true, "data-testid": "migration-file"}})
+				</label>
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"data-migration-preview": true, "data-testid": "migration-preview"}}) {
+					内容を確認
+				}
+			</div>
+			<p class="text-ink" role="status" aria-live="polite" data-migration-message data-testid="migration-message"></p>
+			<div class="flex flex-col gap-3" data-migration-result data-testid="migration-result"></div>
+			<div class="flex flex-col gap-2">
+				<p class="whitespace-pre-line text-ink" data-migration-status data-testid="migration-status"></p>
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"data-migration-cancel-pending": true, "hidden": true, "data-testid": "migration-cancel-pending"}}) {
+					予約した取り込みをやめる
+				}
+			</div>
+		</div>
+		<template data-migration-error-template>
+			@atoms.InlineAlert("取り込めません", "")
+		</template>
+		<template data-migration-row-template>
+			// Wrapped in a table: a bare <tr> is dropped by some HTML parsers outside a table context.
+			<table aria-label="行の雛形">
+				<tbody>
+					<tr class="border-t border-border">
+						<td class="py-1 pr-4 pl-2 font-mono" data-field="name"></td>
+						<td class="py-1 pr-4 text-right tabular-nums" data-field="current"></td>
+						<td class="py-1 pr-2 text-right tabular-nums" data-field="bundle"></td>
+					</tr>
+				</tbody>
+			</table>
+		</template>
+		<template data-migration-preview-template>
+			<div class="flex flex-col gap-3">
+				<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+					<dt class="text-mute">ファイルの作成日時</dt>
+					<dd data-field="created_at"></dd>
+					<dt class="text-mute">書き出したアプリのバージョン</dt>
+					<dd data-field="app_version"></dd>
+					<dt class="text-mute">データベースの版</dt>
+					<dd data-field="schema"></dd>
+				</dl>
+				<div class="max-h-64 overflow-y-auto rounded-md border border-border">
+					<table class="w-full text-left" data-testid="migration-counts">
+						<caption class="sr-only">テーブルごとの行数（現在のデータと、ファイルの内容）</caption>
+						<thead>
+							<tr>
+								<th scope="col" class="py-1 pr-4 pl-2 font-semibold">テーブル</th>
+								<th scope="col" class="py-1 pr-4 text-right font-semibold">現在</th>
+								<th scope="col" class="py-1 pr-2 text-right font-semibold">ファイル</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+				<label class="flex items-center gap-2" data-migration-needs-replace hidden>
+					@atoms.Checkbox(atoms.CheckboxProps{Name: "replace", Attrs: templ.Attributes{"data-migration-replace": true, "data-testid": "migration-replace"}})
+					<span>現在のデータを、このファイルの内容で置き換えることを理解しました</span>
+				</label>
+				<div class="flex flex-wrap items-center gap-2">
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{"data-migration-confirm": true, "data-testid": "migration-confirm"}}) {
+						取り込みを予約する
+					}
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"data-migration-cancel": true, "data-testid": "migration-cancel"}}) {
+						やめる
+					}
+				</div>
+			</div>
+		</template>
+	</section>
+}

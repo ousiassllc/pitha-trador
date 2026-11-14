@@ -72,7 +72,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithOrderProposalSource(proposalview.Reader{DB: state.DB}),
 		router.WithHomeSource(homeview.Reader{DB: state.DB}),
 		router.WithSecretsStore(secretsRepo),
-		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
+		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithDefaultBackupDir(startup.DefaultBackupDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
 		router.WithJevPromptSettings(jevprompt.New(state.DB)),
 		router.WithJevTrialSettings(jevtrial.New(state.DB).WithKeyStore(secretsRepo)),

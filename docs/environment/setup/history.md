@@ -55,3 +55,7 @@
 | 1.56 | 2026-10-21 | 「Settings画面で設定する運用項目」のPolicy Engineに、Paper用の最低エントリー品質（`policy.paper.{long,short}.min_entry_quality`。既定`good`）をLive用と並べて追記した（issue #861）。 | Paper の取引が 0 件だったため |
 | 1.57 | 2026-10-26 | Git Hooksのpre-commit `golangci-lint`に`GOLANGCI_LINT_CACHE`をworktree直下`.cache/golangci-lint`へ固定し`--allow-parallel-runners`を付けた旨を追記（issue #822）。 | 複数worktreeでキャッシュが共有され別worktreeのパスが混ざるため |
 | 1.58 | 2026-10-29 | 「Makefileターゲット」に、パスに`#`を含むチェックアウトでも`make generate`が通るようTailwind CLIを`tailwind-hash-path-fix.cjs`のpreload付きで起動する旨を追記（issue #926）。 | ブランチ名`feat/#925`から作るworktreeでTailwindが`\0#`のままパスをfsに渡して失敗するため |
+| 1.59 | 2026-11-14 | 「Settings画面で設定する運用項目」のバックアップ先ディレクトリの未設定時を「無効」から既定フォルダ（DBと同じ階層の`backups/`。同一ディスクのためディスク故障に耐えない）へ変更し、指定先の扱い（自動作成は既定のみ・未マウント時は失敗）を追記 | issue #890 |
+| 1.60 | 2026-11-14 | 「Settings画面で設定する運用項目」に、`market_snapshots`の削除前退避先（DBと同じ階層の`snapshot_archive/`。設定項目なし・同じPC内のみ・DBバックアップ対象外・容量の目安）を追記 | issue #1072 |
+| 1.61 | 2026-11-14 | 「PC 移行」節と手順書`setup/pc-migration.md`を追加（旧PCで書き出し→新PCへインストール→Setup→取り込み→再起動→秘密・バックアップ先の入れ直し。安全コピーからの戻し方、別フォルダ`backups/`・`snapshot_archive/`の扱い）。バックアップ先の項の「PC移行は#1075」を手順書への参照に | issue #1075 |
+| 1.62 | 2026-11-15 | `setup/pc-migration.md`の除外設定に立花の接続先URL（`base_url`）を追加し、「確認の有効期限」の原因から事実と異なる「アプリの再起動」を改め、展開サイズの上限と、予約後にデータが増えた場合の失敗を追記 | issue #1075 |

@@ -66,11 +66,11 @@ func TestBackup_DirectoryWithURIMetacharacters(t *testing.T) {
 // creating an empty SQLite file there (mode=rw).
 func TestOpenBackupCopy_DoesNotCreateMissingFile(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.db")
-	err := verifyCopy(context.Background(), missing)
+	err := VerifyCopy(context.Background(), missing)
 	if err == nil {
-		t.Fatal("verifyCopy of a missing file succeeded")
+		t.Fatal("VerifyCopy of a missing file succeeded")
 	}
 	if _, statErr := os.Stat(missing); !os.IsNotExist(statErr) {
-		t.Errorf("verifyCopy created %q (stat err %v)", missing, statErr)
+		t.Errorf("VerifyCopy created %q (stat err %v)", missing, statErr)
 	}
 }

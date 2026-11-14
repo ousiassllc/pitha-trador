@@ -48,7 +48,7 @@ var pages = []Page{
 	{PageResults, "予測モデル", "判断のラベル・メタラベリング・相場状態・板情報の設定"},
 	{PageBroker, "証券会社・データ", "kabuステーション・立花証券 e支店の接続と監視銘柄"},
 	{PageIntegrations, "外部連携・AI", "Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP（AIの注文提案の受け付け）"},
-	{PageMaintenance, "システム", "稼働ログ・アップデート・エラーログ・データエクスポート・バックアップ・ログ設定・スリープ防止"},
+	{PageMaintenance, "システム", "稼働ログ・アップデート・エラーログ・データエクスポート・PC移行・バックアップ・ログ設定・スリープ防止"},
 }
 
 // Pages returns the Settings pages in display order.
@@ -198,6 +198,7 @@ var dialogs = []Dialog{
 	{PageMaintenance, "modal-update", []string{"update-panel"}},
 	{PageMaintenance, "modal-error-log", nil},
 	{PageMaintenance, "modal-data-export", nil},
+	{PageMaintenance, "modal-migration", nil},
 	{PageMaintenance, "modal-backup", nil},
 	{PageMaintenance, "modal-logdir", nil},
 	{PageMaintenance, "modal-logsettings", nil},

@@ -55,8 +55,9 @@ func (e *InvalidValueError) Error() string { return "opsettings: invalid value: 
 // effective value as text: the stored value when Overridden, otherwise the
 // config/strategy.yaml value ("" for the path settings, which have no yaml
 // value). Default describes what applies while nothing is stored: the yaml
-// value for thresholds, the default log directory for the log directory, ""
-// (disabled) for the backup directory. Warning is a non-empty operator hint
+// value for thresholds, the default log directory for the log directory, the
+// default same-PC backup folder for the backup directory (issue #890; ""
+// without WithDefaultBackupDir). Warning is a non-empty operator hint
 // when the stored value looks unusable (e.g. a backup directory that is not
 // available right now).
 type Value struct {
@@ -73,6 +74,8 @@ type Service struct {
 	policy        config.PolicyConfig
 	screener      config.FastScreenerConfig
 	defaultLogDir string
+	// defaultBackupDir is set by WithDefaultBackupDir ("": no default shown).
+	defaultBackupDir string
 	// riskReference is set by WithRiskReference (nil: no consistency check).
 	riskReference *dailyguardsettings.RiskReference
 	// paperBase is the Paper limits of config/risk.yaml (WithRiskReference):
@@ -182,6 +185,8 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 		switch {
 		case key == config.KeyBackupDir && v.Current != "":
 			v.Warning = backupDirWarning(v.Current)
+		case key == config.KeyBackupDir && v.Default != "":
+			v.Warning = defaultBackupDirWarning
 		case kindOf(key) == kindPrivateKey && v.Current != "":
 			v.Warning = privateKeyWarning(v.Current)
 		}

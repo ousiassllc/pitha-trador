@@ -5,6 +5,14 @@
 //	jobs             succeeded rows after 7 days, failed rows after 30 days
 //	market_snapshots rows (and their market_snapshot_vectors entry) after 90 days
 //
+// With a snapshot archiver (WithSnapshotArchiver, issue #1072) the
+// market_snapshots rows are first copied to verified per-day files on the
+// local disk (internal/service/snapshotarchive), and only the verified UTC
+// dates before the cutoff are deleted: the cutoff is aligned down to the
+// start of its UTC date, so the effective window is 90 to 91 days. When
+// archiving or verifying fails, nothing is deleted from market_snapshots
+// (fail closed) and the error is returned with the other tables' errors.
+//
 // Only finished jobs (status succeeded/failed) are ever deleted; pending and
 // running rows are live queue state. Audit tables (kill_switch_events,
 // kill_switch_resolutions, jev_decisions, orders, ...) are deliberately not
@@ -32,10 +40,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
+	"github.com/ousiassllc/pitha-trador/internal/service/snapshotarchive"
 )
 
 // Default retention windows, in days.
@@ -72,10 +82,26 @@ type Service struct {
 	batchPause time.Duration // wait after each full batch so other writers can take the lock
 	now        func() time.Time
 	sleep      func(ctx context.Context, d time.Duration) error // sleepContext; injectable for tests
+	archiver   SnapshotArchiver                                 // nil: market_snapshots are deleted without an archive
+}
+
+// SnapshotArchiver archives and verifies the market_snapshots dates before
+// cutoff and returns what may be deleted (snapshotarchive.Archiver).
+type SnapshotArchiver interface {
+	ArchiveBefore(ctx context.Context, cutoff time.Time) (snapshotarchive.Result, error)
+}
+
+// Option customises a Service.
+type Option func(*Service)
+
+// WithSnapshotArchiver makes the market_snapshots purge archive first and
+// delete only what the archiver verified.
+func WithSnapshotArchiver(a SnapshotArchiver) Option {
+	return func(s *Service) { s.archiver = a }
 }
 
 // New returns a Service purging db according to policy.
-func New(db *sql.DB, policy Policy) *Service {
+func New(db *sql.DB, policy Policy, opts ...Option) *Service {
 	if policy.SucceededJobDays <= 0 {
 		policy.SucceededJobDays = DefaultSucceededJobDays
 	}
@@ -85,7 +111,7 @@ func New(db *sql.DB, policy Policy) *Service {
 	if policy.SnapshotDays <= 0 {
 		policy.SnapshotDays = DefaultSnapshotDays
 	}
-	return &Service{
+	s := &Service{
 		db:         db,
 		policy:     policy,
 		batchSize:  defaultBatchSize,
@@ -93,6 +119,10 @@ func New(db *sql.DB, policy Policy) *Service {
 		now:        time.Now,
 		sleep:      sleepContext,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Purge runs one pass over every table. A failure on one table does not
@@ -115,7 +145,7 @@ func (s *Service) Purge(ctx context.Context) error {
 			return s.purgeJobs(ctx, jobqueue.JobStatusFailed, cutoff(s.policy.FailedJobDays))
 		}},
 		{"market snapshots", func() (int64, error) {
-			return s.purgeSnapshots(ctx, cutoff(s.policy.SnapshotDays))
+			return s.purgeSnapshots(ctx, now.AddDate(0, 0, -s.policy.SnapshotDays))
 		}},
 	} {
 		n, err := step.run()
@@ -132,12 +162,13 @@ func (s *Service) Purge(ctx context.Context) error {
 const deleteExpiredJobsSQL = `DELETE FROM jobs WHERE id IN (
 	SELECT id FROM jobs WHERE status = ? AND finished_at < ? LIMIT ?)`
 
-// selectExpiredSnapshotIDsSQL picks one batch of expired snapshot ids. It is
+// selectExpiredSnapshotIDsSQL picks one batch of expired snapshot ids (id
+// <= ? keeps rows newer than the archived state out of the purge). It is
 // served by market_snapshots_timestamp_idx, whose order (timestamp, rowid)
 // matches ORDER BY, so no full scan or sort happens inside the write
 // transaction.
 const selectExpiredSnapshotIDsSQL = `SELECT id FROM market_snapshots
-	WHERE timestamp < ? ORDER BY timestamp, id LIMIT ?`
+	WHERE timestamp < ? AND id <= ? ORDER BY timestamp, id LIMIT ?`
 
 // purgeJobs deletes jobs with the given terminal status finished before
 // cutoff (an RFC3339 UTC string, as stored), returning how many were
@@ -191,11 +222,22 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 // purgeSnapshots deletes market_snapshots timestamped before cutoff along
 // with their market_snapshot_vectors rows (a vec0 virtual table has no
 // foreign key, so the application keeps the two in step, er.md
-// §ベクトルインデックス), returning how many snapshots were deleted.
-func (s *Service) purgeSnapshots(ctx context.Context, cutoff string) (int64, error) {
+// §ベクトルインデックス), returning how many snapshots were deleted. With an
+// archiver the dates before cutoff are archived and verified first; if that
+// fails nothing is deleted.
+func (s *Service) purgeSnapshots(ctx context.Context, cutoff time.Time) (int64, error) {
+	bound, maxID := sqlutil.FormatTime(cutoff), int64(math.MaxInt64)
+	if s.archiver != nil {
+		res, err := s.archiver.ArchiveBefore(ctx, cutoff)
+		if err != nil {
+			slog.Error("retention: market_snapshots archive failed; nothing deleted from market_snapshots", "error", err)
+			return 0, fmt.Errorf("archive before delete (market_snapshots left undeleted): %w", err)
+		}
+		bound, maxID = res.DeleteBefore, res.MaxID
+	}
 	var total int64
 	for {
-		n, err := s.purgeSnapshotBatch(ctx, cutoff)
+		n, err := s.purgeSnapshotBatch(ctx, bound, maxID)
 		total += n
 		if err != nil || n < int64(s.batchSize) {
 			return total, err
@@ -206,14 +248,14 @@ func (s *Service) purgeSnapshots(ctx context.Context, cutoff string) (int64, err
 	}
 }
 
-func (s *Service) purgeSnapshotBatch(ctx context.Context, cutoff string) (int64, error) {
+func (s *Service) purgeSnapshotBatch(ctx context.Context, cutoff string, maxID int64) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	rows, err := tx.QueryContext(ctx, selectExpiredSnapshotIDsSQL, cutoff, s.batchSize)
+	rows, err := tx.QueryContext(ctx, selectExpiredSnapshotIDsSQL, cutoff, maxID, s.batchSize)
 	if err != nil {
 		return 0, err
 	}

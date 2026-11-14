@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/migration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
@@ -171,6 +172,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	huma.Get(api, "/orders", h.symbol.APIOrders)
 	huma.Get(api, "/logs/errors", system.NewErrorLogHandler(o.errorLogExporter).APIErrorLogs)
 	huma.Get(api, "/export", export.NewHandler(o.dataExporter).API)
+	migration.New(o.migrationExporter, o.migrationImporter).Register(api, engine)
 	insightapi.New(o.insightProvider).Register(api)
 	h.calibration.Register(api)
 	huma.Get(api, "/policy-proposals", proposals.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)

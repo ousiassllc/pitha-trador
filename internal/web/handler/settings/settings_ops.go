@@ -122,10 +122,10 @@ func onOffLabel(stored string) string {
 }
 
 // defaultLabel names what applies while nothing is stored; an empty default
-// (the backup directory) is "disabled".
+// is "unset".
 func defaultLabel(def string) string {
 	if def == "" {
-		return "未設定（無効）"
+		return "未設定"
 	}
 	return def
 }
