@@ -63,8 +63,11 @@ type Arm struct {
 	// means DefaultArmDailyCostCapUSD.
 	DailyCostCapUSD float64 `json:"daily_cost_cap_usd,omitempty"`
 	// ListPriceUSDPerMtok is the list price per million input tokens used to
-	// estimate a call whose response reports no cost. 0 or omitted: unknown (such
-	// a call is counted at WorstCaseUSDPerMtok and marked unknown).
+	// estimate a call whose response reports no cost (the estimate is stored as
+	// cost_usd). 0 or omitted: unknown (such a call is counted at
+	// WorstCaseUSDPerMtok and marked unknown). The caps count an estimated call at
+	// CountingUSDPerMtok, which is not below WorstCaseUSDPerMtok unless the route
+	// is pinned (provider_only).
 	ListPriceUSDPerMtok float64 `json:"list_price_usd_per_mtok,omitempty"`
 	// ProviderOnly restricts OpenRouter routing to these providers
 	// (provider.only); with it set, fallbacks are disabled.
@@ -81,6 +84,28 @@ func (a Arm) CapUSD() float64 {
 		return a.DailyCostCapUSD
 	}
 	return DefaultArmDailyCostCapUSD
+}
+
+// RoutePinned reports whether the arm's route is fixed: with provider_only set,
+// OpenRouter is told not to fall back to another provider, so the arm is served
+// by one of the named providers. Without it the serving provider can change from
+// call to call and its price is not known in advance.
+func (a Arm) RoutePinned() bool { return len(a.ProviderOnly) > 0 }
+
+// CountingUSDPerMtok is the price per million input tokens the daily caps count a
+// call at when its response reports no cost: the configured list price for an arm
+// whose route is pinned (RoutePinned), otherwise never below WorstCaseUSDPerMtok
+// (an unpinned route can be served by a dearer provider than the list price was
+// taken from, so a low configured price cannot lower what the caps count). An arm
+// without a list price is counted at WorstCaseUSDPerMtok either way.
+func (a Arm) CountingUSDPerMtok() float64 {
+	if a.ListPriceUSDPerMtok <= 0 {
+		return WorstCaseUSDPerMtok
+	}
+	if a.RoutePinned() {
+		return a.ListPriceUSDPerMtok
+	}
+	return max(a.ListPriceUSDPerMtok, WorstCaseUSDPerMtok)
 }
 
 // DataCollectionOrDefault is DataCollection, "deny" when empty.

@@ -26,13 +26,14 @@ const CompareDescription = "意思決定モデルの比較（お試し）の読�
 	"common_success の部分集合の同じ指標を informational として返す。rank は over_cohort の並べ替えで、昇格・採用の推奨ではない（成功した行だけで順位は作らない）。" +
 	"truncation_suspected・rag_includes_live_model_answers の行・llm_cutoff_status の内訳は除外せず件数で出す。" +
 	"見送りの反実仮想ラベル（既存）は NONE・答えなしの判断について counterfactual_proxy（proxy: true）に別に出し、実現した結果の指標に混ぜない。" +
+	"cohort から落ちた判断（お試しが呼ばなかった見送り。同時実行枠・最短間隔・日次上限・キーなし・プロンプト未登録・停止中・429/529 の待機）の件数を fairness.skipped に理由別に出す（欠測率の分母には入れない）。" +
 	"多数決・合議・勝者・推奨の項目は無い。エラー本文・応答本文は返さない"
 
 // CostDescription is jev_trial_cost's description.
 const CostDescription = "意思決定モデルの比較（お試し）の費用の読み取り専用の集計: 期間の JST の日ごと・合計・アームごとに、呼び出し数と " +
 	"reported（応答が報告した費用）・list_price_estimate（定価×トークンの推定）・unknown（どちらも無い。実費は null で 0 円ではない。" +
 	"unknown_counted_usd は上限の判定に数えた最悪値側の額で、他の合計に混ぜない）を出所別に、counted_total_usd（上限の判定に数えた額）。" +
-	"limits に、いまの全体上限・アームごとの上限と今日の数えた額・止まった記録（理由と日だけ）・失敗回数・429/529 の止まり・有効かどうか（enabled）を読み取りで返す。" +
+	"limits に、いまの全体上限・アームごとの上限と今日の数えた額・止まった記録（理由と日だけ）・失敗回数・429/529 の止まり・有効かどうか（enabled）・今日の見送り（呼ばなかった比較）の件数 skipped_today（理由別）を読み取りで返す。" +
 	"設定の変更はできない（有効化・上限・アームは Settings 画面だけ）。API キー・エラー本文・応答本文は返さない"
 
 // SchemaProperties are the tools' own arguments besides the period.

@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev 意思決定モデル比較のトライアル）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。issue #1059）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
+`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。issue #1059）と `jev_trial_skips`（マイグレーション `000055`。issue #1062）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
 
 ## jev_trial_decisions
 
@@ -42,7 +42,7 @@ erDiagram
 | status | varchar(8) | NOT NULL, CHECK IN | `ok`＝全問に答えた／`failed`＝応答が得られなかった（通信・HTTP エラー・不正な応答）／`refused`＝全問を拒否／`partial`＝一部の質問を拒否 |
 | failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response`）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
 | http_status | integer | NULL可 | HTTP エラー応答のステータス。それ以外は NULL |
-| error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない。`sk-…`・`Bearer …` は `[redacted]` に伏せる |
+| error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない。設定済みの OpenRouter キー文字列（部分一致）・`sk-…`・`Bearer …` は `[redacted]` に伏せる |
 | direction | varchar(10) | NULL可, CHECK | `LONG` / `SHORT` / `NONE`。拒否・欠落した質問は **NULL**（`NONE` や 0 で補わない） |
 | regime | varchar(10) | NULL可, CHECK | `TREND` / `RANGE` / `BREAKOUT` / `CHAOTIC` |
 | entry_quality | varchar(12) | NULL可, CHECK | `poor` / `fair` / `good` / `strong` / `exceptional` |
@@ -53,7 +53,7 @@ erDiagram
 | input_tokens / output_tokens | integer | NULL可, CHECK 0 以上 | 応答の `usage`。応答が無い・`usage` が無い行は NULL |
 | cost_usd | numeric(12,8) | NULL可, CHECK 0 以上 | 報告値 `usage.cost`、または定価×入力トークンの推定。**どちらも無ければ NULL（0 ではない）** |
 | cost_source | varchar(20) | NOT NULL, CHECK IN | `reported`＝応答の `usage.cost`／`list_price_estimate`＝アームの定価（1M 入力トークンあたり）×入力トークン数の推定／`unknown`＝どちらも無い |
-| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
+| counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値（処理先を固定していないアーム〈`provider_only` なし〉は、定価と最悪単価の高い方で数えた額。`cost_usd` は定価での推定額のまま）、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
 | request_bytes / state_bytes | integer | NOT NULL, 既定 0 | リクエスト本文・`state` の大きさ（バイト）。切り詰め疑いを後から判断する材料 |
 | truncation_suspected | integer | NOT NULL, 既定 0, CHECK IN (0, 1) | 報告された入力トークン数に対してリクエストが大きすぎる（`request_bytes / input_tokens` が `trial.TruncationSuspectBytesPerToken`＝6 を超える。未計測の目安）とき 1。**疑いの印であって断定ではない**。Clef 系の切り詰めの有無が実測できるまで、同じ入力での公平な比較とは扱わない |
 | llm_cutoff_status | varchar(20) | NOT NULL, 既定 `unverified`, CHECK 空でない | モデルの学習データ終了日の確認状態。**既定は `unverified`**（日付を推測で作らない）。公開日以降の局面だけで評価する（下記） |
@@ -69,6 +69,32 @@ erDiagram
 ### `rag_includes_live_model_answers` の扱い
 
 トライアルは、ライブの判定に使った RAG 文脈（類似する過去事例）をそのまま各アームに送る。その過去事例にはライブ Jev の過去の答え（と後の結果）が含まれるため、`rag_includes_live_model_answers=1` の行は、アームがライブの答えの影響を受けうる条件で答えている。RAG を送らなかった（過去事例が 0 件の）行は 0。`jev_trial_compare` はこの印の行も除外せず、件数と内訳で出す。
+
+## jev_trial_skips
+
+お試しが、ライブの判定に対してアームを**呼ばなかった**記録（見送り。issue #1062）。ライブの判定ごと・アームごとに 1 行、理由つき。`jev_trial_decisions` には行を残さない見送りが、比較の cohort（選んだアームすべてに聞いた判断）から静かに抜けるのを数えるための表で、**答え・費用・status を持たない**（呼ばなかった判断を成功や失敗の行としては扱わない）。取引・RAG の索引・Calibration・メタモデルの学習・既存シャドーのどれも、この表を読まない。ライブの `jev_decisions` と決定経路は変えない。
+
+```mermaid
+erDiagram
+    jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判定ごとに紐付く"
+    jev_trial_skips {
+        integer id PK
+        integer jev_decision_id FK
+        varchar arm_id
+        varchar reason
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|--------|-----|------|------|
+| id | integer | PK, AUTOINCREMENT | |
+| jev_decision_id | integer | NOT NULL, FK → `jev_decisions.id` | 見送ったライブの判定 |
+| arm_id | varchar(48) | NOT NULL, CHECK 空でない | 見送ったアーム（`jev.trial.arms` の `id`） |
+| reason | varchar(40) | NOT NULL, CHECK 空でない | 見送りの理由の固定コード（`jevtrial.SkipReasons`。コード側が検証する。`concurrency_full` / `min_interval` / `daily_cap_overall` / `daily_cap_arm` / `key_not_set` / `prompt_version_unregistered` / `stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other` / `throttled` / `check_failed`）。意味は `architecture/overview/integrations-jev-trial.md` |
+| created_at | text | NOT NULL | 見送りを決めた時刻（UTC の RFC3339）。`jev_trial_cost` の今日の見送りは **JST の日**で切る |
+
+制約・インデックス: `UNIQUE (jev_decision_id, arm_id)`（同じ組の 2 回目は無視。最初の理由が残る）、`INDEX (created_at)`。ライブの判定を消す処理は無い（保持の対象外）ため、外部キーの削除時の動きは指定しない。読む側（MCP の `jev_trial_compare` / `jev_trial_cost`）は件数だけを返し、行は返さない。
 
 ## 関連する `runtime_settings` のキー
 
@@ -91,3 +117,4 @@ erDiagram
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。`jev_trial_decisions`（`000054`）と、関連する `runtime_settings` のキー（`jev.trial.*`） | issue #1059 |
+| 1.1 | 2026-11-14 | `jev_trial_skips`（`000055`。呼ばなかった比較の理由別の記録）を追加。`error_excerpt` の伏せ字に設定済みキーの部分一致を追記。`counted_cost_usd` の数え方（定価に依らない）を追記 | issue #1062 / #1068 / #1065 |

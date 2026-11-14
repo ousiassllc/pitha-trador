@@ -28,18 +28,21 @@ func (e *env) halt(key string) *jevtrialsettings.Halt {
 func TestOverallCapStopsEveryArmAndResumesTheNextJSTDay(t *testing.T) {
 	e := newEnv(t, metalabelsettings.ModePaper, nil)
 	costly := okResp()
-	costly.ReportedCostUSD = new(0.0006)
+	costly.ReportedCostUSD = new(0.004)
 	a1, a2 := e.addArm("a1", answer(costly, 3000)), e.addArm("a2", answer(costly, 3000))
 	e.enable(defaultArm("a1"), defaultArm("a2"))
-	e.set(jevtrialsettings.KeyDailyCostCapUSD, "0.001")
+	// A call is reserved at about 0.0016 (its request at the worst-case price): whichever
+	// order the two calls end in, the cap has room for the other's reservation on top of
+	// one stored call (0.004 + 0.0016), and the two calls together reach it (0.008).
+	e.set(jevtrialsettings.KeyDailyCostCapUSD, "0.006")
 
-	e.evaluate() // both are called (nothing spent yet): 0.0012 counted
+	e.evaluate() // both are called (nothing spent yet): 0.008 counted
 	e.evaluate() // the overall cap is reached: neither is called
 	if a1.calls() != 1 || a2.calls() != 1 {
 		t.Fatalf("calls a1=%d a2=%d, want 1 each: the overall cap must stop every arm", a1.calls(), a2.calls())
 	}
 	h := e.halt(jevtrialsettings.KeyHalt)
-	if h == nil || h.Reason != jevtrialsettings.HaltReasonDailyCostCap || h.CapUSD != 0.001 || h.SpentUSD < 0.0012-1e-9 {
+	if h == nil || h.Reason != jevtrialsettings.HaltReasonDailyCostCap || h.CapUSD != 0.006 || h.SpentUSD < 0.008-1e-9 {
 		t.Fatalf("halt record = %+v", h)
 	}
 	e.advance(24 * time.Hour) // the next JST day
@@ -52,10 +55,10 @@ func TestOverallCapStopsEveryArmAndResumesTheNextJSTDay(t *testing.T) {
 func TestArmCapStopsThatArmOnly(t *testing.T) {
 	e := newEnv(t, metalabelsettings.ModePaper, nil)
 	costly := okResp()
-	costly.ReportedCostUSD = new(0.0006)
+	costly.ReportedCostUSD = new(0.002)
 	a1, a2 := e.addArm("a1", answer(costly, 3000)), e.addArm("a2", answer(costly, 3000))
 	capped := defaultArm("a1")
-	capped.DailyCostCapUSD = 0.0005
+	capped.DailyCostCapUSD = 0.0018 // room for one reservation (about 0.0015), reached by the call's cost
 	e.enable(capped, defaultArm("a2"))
 
 	e.evaluate()

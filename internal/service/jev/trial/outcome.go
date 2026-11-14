@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
@@ -54,7 +55,9 @@ func ragCarriesLiveAnswers(c rag.Context) bool { return len(c.Cases) > 0 }
 
 // buildDecision turns one call's outcome into the row to store, and the cost it
 // was counted at. Answers stay nil where the model refused or reported none.
-func buildDecision(arm jevtrialsettings.Arm, in armInput, r callResult, now time.Time) jevtrial.Decision {
+// secrets are configured credential strings redacted from an error excerpt
+// wherever they appear (see redact).
+func buildDecision(arm jevtrialsettings.Arm, in armInput, r callResult, now time.Time, secrets []string) jevtrial.Decision {
 	d := jevtrial.Decision{
 		JevDecisionID:               in.live,
 		ArmID:                       arm.ID,
@@ -69,7 +72,7 @@ func buildDecision(arm jevtrialsettings.Arm, in armInput, r callResult, now time
 		CreatedAt:                   now.UTC(),
 	}
 	if r.err != nil {
-		fillFailure(&d, r)
+		fillFailure(&d, r, secrets)
 		return d
 	}
 	fillAnswer(&d, arm, r)
@@ -104,12 +107,12 @@ func fillAnswer(d *jevtrial.Decision, arm jevtrialsettings.Arm, r callResult) {
 	d.CostUSD, d.CostSource, d.CountedCostUSD = c.USD, c.Source, c.CountedUSD
 }
 
-func fillFailure(d *jevtrial.Decision, r callResult) {
+func fillFailure(d *jevtrial.Decision, r callResult, secrets []string) {
 	d.Status = jevtrial.StatusFailed
 	var status *int
 	d.FailureCode, status = classifyFailure(r.err)
 	d.HTTPStatus = status
-	d.ErrorExcerpt = textutil.Excerpt(errorText(r.err), jevtrial.MaxErrorExcerptBytes)
+	d.ErrorExcerpt = textutil.Excerpt(errorText(r.err, secrets), jevtrial.MaxErrorExcerptBytes)
 	httpStatus := 0
 	if status != nil {
 		httpStatus = *status
@@ -122,19 +125,28 @@ func fillFailure(d *jevtrial.Decision, r callResult) {
 // vendor's explanation), else the error's own message.
 //
 // Credentials are redacted: some vendors echo the rejected key in a 401/403 body.
-func errorText(err error) string {
+func errorText(err error, secrets []string) string {
 	var apiErr *jev.APIError
 	if errors.As(err, &apiErr) {
-		return redact(apiErr.Body)
+		return redact(apiErr.Body, secrets)
 	}
-	return redact(err.Error())
+	return redact(err.Error(), secrets)
 }
 
 // credential matches an API-key-looking token or a bearer credential.
 var credential = regexp.MustCompile(`(?i)(bearer\s+[A-Za-z0-9._~+/=-]+|\bsk-[A-Za-z0-9._-]{4,})`)
 
-// redact replaces anything that looks like a credential in s.
-func redact(s string) string { return credential.ReplaceAllString(s, "[redacted]") }
+// redact replaces every occurrence of a configured secret (an exact substring
+// match, whatever form it appears in) and then anything that looks like a
+// credential (credential) in s. An empty secret is ignored.
+func redact(s string, secrets []string) string {
+	for _, secret := range secrets {
+		if secret != "" {
+			s = strings.ReplaceAll(s, secret, "[redacted]")
+		}
+	}
+	return credential.ReplaceAllString(s, "[redacted]")
+}
 
 // classifyFailure maps a call error to its failure code and, for an HTTP error
 // answer, the status.

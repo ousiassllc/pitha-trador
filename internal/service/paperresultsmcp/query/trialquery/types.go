@@ -54,7 +54,9 @@ var entryQualityOrder = []string{
 const Notice = "rank は並べ替えにすぎず、昇格・採用の推奨ではない（勝者・推奨・多数決・合議の項目は無い）。" +
 	"truncation_suspected や rag_includes_live_model_answers が付いた行、llm_cutoff_status が unverified の行が残る間は、同じ入力での公平な比較ではない" +
 	"（これらの行は除外せず、件数を fairness に出す）。失敗・拒否・一部拒否の行は「答えなし」として分母に入れ、成功した行だけで順位を作らない。" +
-	"NONE の答えには方向の結果が無いので当たり外れに数えず、方向を補って勝たせない。見送りの反実仮想ラベルは counterfactual_proxy に proxy として別に出す"
+	"NONE の答えには方向の結果が無いので当たり外れに数えず、方向を補って勝たせない。見送りの反実仮想ラベルは counterfactual_proxy に proxy として別に出す。" +
+	"cohort は選んだアームすべてに聞けた判断だけで、お試しが呼ばなかった判断（同時実行枠の満杯・最短間隔・日次上限・キーなし・プロンプト未登録・停止中・429/529 の待機）は cohort から落ちる。" +
+	"落ちた判断の件数は fairness.skipped に理由別に並べる（欠測率の分母には入れない。成績の良い局面だけが残る選択バイアスの目安として読む）"
 
 // RowCounts counts jev_trial_decisions rows. The denominator of MissingRate is
 // Total: failed, refused and partial rows are in it.
