@@ -31,6 +31,8 @@ func (spentResults) Insert(context.Context, jevtrial.Decision) (jevtrial.Decisio
 	return jevtrial.Decision{}, nil
 }
 
+func (spentResults) InsertSkip(context.Context, jevtrial.Skip) error { return nil }
+
 func (r spentResults) SpentBetween(context.Context, time.Time, time.Time) (judgement.TrialSpend, error) {
 	return judgement.TrialSpend{CountedCostUSD: r.total}, nil
 }
@@ -54,7 +56,7 @@ func TestMayCallReservesInFlightCallsAgainstTheOverallCap(t *testing.T) {
 	now := time.Now()
 	const r = 0.001
 	mayCall := func(arm string) *reservation {
-		res, err := tr.mayCall(context.Background(), cfg, jevtrialsettings.Arm{ID: arm}, now, r)
+		res, _, err := tr.mayCall(context.Background(), cfg, jevtrialsettings.Arm{ID: arm}, now, r)
 		if err != nil {
 			t.Fatalf("mayCall: %v", err)
 		}
@@ -93,14 +95,14 @@ func TestMayCallReservesInFlightCallsAgainstTheArmCap(t *testing.T) {
 	cfg := jevtrialsettings.Settings{CapUSD: 1}
 	arm := jevtrialsettings.Arm{ID: "a1", DailyCostCapUSD: 0.0015}
 	now := time.Now()
-	first, err := tr.mayCall(context.Background(), cfg, arm, now, 0.001)
+	first, _, err := tr.mayCall(context.Background(), cfg, arm, now, 0.001)
 	if err != nil || first == nil {
 		t.Fatalf("first = %v %v: 0.0003 stored + 0.001 reserved fits under 0.0015", first, err)
 	}
-	if second, err := tr.mayCall(context.Background(), cfg, arm, now, 0.001); err != nil || second != nil {
-		t.Fatalf("second = %v %v: 0.0003 + 2 × 0.001 exceeds the arm's cap", second, err)
+	if second, skip, err := tr.mayCall(context.Background(), cfg, arm, now, 0.001); err != nil || second != nil || skip != jevtrial.SkipDailyCapArm {
+		t.Fatalf("second = %v %v %q: 0.0003 + 2 × 0.001 exceeds the arm's cap (skip reason daily_cap_arm)", second, err, skip)
 	}
-	other, err := tr.mayCall(context.Background(), cfg, jevtrialsettings.Arm{ID: "a2", DailyCostCapUSD: 0.0015}, now, 0.001)
+	other, _, err := tr.mayCall(context.Background(), cfg, jevtrialsettings.Arm{ID: "a2", DailyCostCapUSD: 0.0015}, now, 0.001)
 	if err != nil || other == nil {
 		t.Fatalf("another arm = %v %v: only its own reservations count against its cap, 0.0003 + 0.001 fits", other, err)
 	}

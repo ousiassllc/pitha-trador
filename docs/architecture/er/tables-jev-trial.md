@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev 意思決定モデル比較のトライアル）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。issue #1059）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
+`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。issue #1059）と `jev_trial_skips`（マイグレーション `000055`。issue #1062）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
 
 ## jev_trial_decisions
 
@@ -70,6 +70,32 @@ erDiagram
 
 トライアルは、ライブの判定に使った RAG 文脈（類似する過去事例）をそのまま各アームに送る。その過去事例にはライブ Jev の過去の答え（と後の結果）が含まれるため、`rag_includes_live_model_answers=1` の行は、アームがライブの答えの影響を受けうる条件で答えている。RAG を送らなかった（過去事例が 0 件の）行は 0。`jev_trial_compare` はこの印の行も除外せず、件数と内訳で出す。
 
+## jev_trial_skips
+
+お試しが、ライブの判定に対してアームを**呼ばなかった**記録（見送り。issue #1062）。ライブの判定ごと・アームごとに 1 行、理由つき。`jev_trial_decisions` には行を残さない見送りが、比較の cohort（選んだアームすべてに聞いた判断）から静かに抜けるのを数えるための表で、**答え・費用・status を持たない**（呼ばなかった判断を成功や失敗の行としては扱わない）。取引・RAG の索引・Calibration・メタモデルの学習・既存シャドーのどれも、この表を読まない。ライブの `jev_decisions` と決定経路は変えない。
+
+```mermaid
+erDiagram
+    jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判定ごとに紐付く"
+    jev_trial_skips {
+        integer id PK
+        integer jev_decision_id FK
+        varchar arm_id
+        varchar reason
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|--------|-----|------|------|
+| id | integer | PK, AUTOINCREMENT | |
+| jev_decision_id | integer | NOT NULL, FK → `jev_decisions.id` | 見送ったライブの判定 |
+| arm_id | varchar(48) | NOT NULL, CHECK 空でない | 見送ったアーム（`jev.trial.arms` の `id`） |
+| reason | varchar(40) | NOT NULL, CHECK 空でない | 見送りの理由の固定コード（`jevtrial.SkipReasons`。コード側が検証する。`concurrency_full` / `min_interval` / `daily_cap_overall` / `daily_cap_arm` / `key_not_set` / `prompt_version_unregistered` / `stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other` / `throttled` / `check_failed`）。意味は `architecture/overview/integrations-jev-trial.md` |
+| created_at | text | NOT NULL | 見送りを決めた時刻（UTC の RFC3339）。`jev_trial_cost` の今日の見送りは **JST の日**で切る |
+
+制約・インデックス: `UNIQUE (jev_decision_id, arm_id)`（同じ組の 2 回目は無視。最初の理由が残る）、`INDEX (created_at)`。ライブの判定を消す処理は無い（保持の対象外）ため、外部キーの削除時の動きは指定しない。読む側（MCP の `jev_trial_compare` / `jev_trial_cost`）は件数だけを返し、行は返さない。
+
 ## 関連する `runtime_settings` のキー
 
 アプリ（トライアルのランナー・Settings 画面）と MCP が同じ DB から読む。**MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）では 1 キーも書けない**（`jev.trial.enabled` を含む）。有効化・アーム・上限の変更はアプリの Settings 画面だけ。自己改善ループ（Sol/Opus）が書ける `policy.*` にも入らない。いずれも `jev.shadow.*` とは別系統で、キーが重ならない（`evalflow`・`isolationflow` のテストで固定）。
@@ -91,3 +117,4 @@ erDiagram
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。`jev_trial_decisions`（`000054`）と、関連する `runtime_settings` のキー（`jev.trial.*`） | issue #1059 |
+| 1.1 | 2026-11-14 | `jev_trial_skips`（`000055`。呼ばなかった比較の理由別の記録）を追加。`error_excerpt` の伏せ字に設定済みキーの部分一致を追記。`counted_cost_usd` の数え方（定価に依らない）を追記 | issue #1062 / #1068 / #1065 |
