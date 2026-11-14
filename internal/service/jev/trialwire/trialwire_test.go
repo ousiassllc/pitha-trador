@@ -263,3 +263,22 @@ func TestLiveTrader_StillRejectsTheTrialResponse(t *testing.T) {
 		t.Errorf("the live call carries provider")
 	}
 }
+
+// RequestBytes (what the trial reserves a call's cost from, before the call) is the
+// size of the body Trader really sends, routing preferences included.
+func TestRequestBytes_MatchesTheBodyTraderSends(t *testing.T) {
+	server, _ := newServer(t, http.StatusOK, trialResponse)
+	provider := &systemone.Provider{Only: []string{"deepinfra"}, DataCollection: "deny"}
+	client := trialwire.New(trialwire.Config{BaseURL: server.URL, APIKey: "sk-test", Model: "cloudflare/clef-flash", Provider: provider})
+	_, _, sent, err := client.Trader(context.Background(), traderRequest())
+	if err != nil {
+		t.Fatalf("Trader: %v", err)
+	}
+	got, err := trialwire.RequestBytes("cloudflare/clef-flash", provider, traderRequest())
+	if err != nil || got != sent {
+		t.Errorf("RequestBytes = %d (%v), want %d, the size Trader sent", got, err, sent)
+	}
+	if _, err := trialwire.RequestBytes("m", nil, jev.TraderRequest{QuestionVersion: "no-such-version"}); err == nil {
+		t.Error("an unregistered prompt version must be an error")
+	}
+}

@@ -7,7 +7,7 @@
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、設定ツールが呼ばれたときだけ、`runtime_settings` と監査表だけを書く狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
-- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 12 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
+- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 16 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
 ## 2. パッケージ
 
@@ -29,7 +29,7 @@
 | 調整の実験（issue #871）: 語彙・検査・SQL・前後比較と判定（`internal/service/paperresultsmcp/experiment`）、ツール定義（`experiment_tools.go`）、書き込み（`mcpset/experiments.go`。`Writer` と `Gate`）、表（マイグレーション `000046`）、Settings の節（`internal/web/handler/mcpsettings/experiments*.go`、`internal/web/organisms/mcp/experiments.templ`）。テストは `experimenttests` と `experiment` と `internal/router/mcproute/experiments_test.go` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | 適時開示による見送りルールの記録の集計（`disclosure_skip_summary`、issue #935。`disclosure_skip_records` と `calibration_outcomes` を件数としてだけ読む）と、その HTTP のテスト | `internal/service/paperresultsmcp/disclosureskipdiag`、`internal/service/paperresultsmcp/disclosureskiptests` |
-| 意思決定モデル比較（お試し）の読み取り専用ツール（`jev_trial_compare` / `jev_trial_cost`、issue #1060。`jev_trial_decisions`・`calibration_outcomes`・`counterfactual_labels`・`runtime_settings` の `jev.trial.*` を読むだけ）: SQL と集計、引数と説明、HTTP のテスト（ツールの登録は `jev_models_tool.go`）。設計は `architecture/paper-results-mcp-jev-trial.md` | `internal/service/paperresultsmcp/query/trialquery`、`internal/service/paperresultsmcp/trialtool`、`internal/service/paperresultsmcp/trialtests` |
+| 意思決定モデル比較（お試し）の読み取り専用ツール（`jev_trial_compare` / `jev_trial_cost`、issue #1060。`jev_trial_decisions`・`jev_trial_skips`（cohort から落ちた見送りの理由別件数。issue #1062）・`calibration_outcomes`・`counterfactual_labels`・`runtime_settings` の `jev.trial.*` を読むだけ）: SQL と集計、引数と説明、HTTP のテスト（ツールの登録は `jev_models_tool.go`）。設計は `architecture/paper-results-mcp-jev-trial.md` | `internal/service/paperresultsmcp/query/trialquery`、`internal/service/paperresultsmcp/trialtool`、`internal/service/paperresultsmcp/trialtests` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
 | `health_today` の日次停止（`daily_guard`）の読み取り（`runtime_settings` の `system.daily_guard` と日次ガードのしきい値から、アプリの `risk.Engine.DailyHalt` と同じ判定。`query` の行数制限のため分け、設定の読み取りは interface 越しで `query` を import しない。issue #863 の PR での切り出し） | `internal/service/paperresultsmcp/dailyhalt` |

@@ -152,6 +152,16 @@ SELECT arm_id, COALESCE(SUM(counted_cost_usd), 0) FROM jev_trial_decisions WHERE
 	if err := rows.Err(); err != nil {
 		return Limits{}, fmt.Errorf("query: today's jev trial cost: %w", err)
 	}
+	skipped, err := skippedToday(ctx, q, from, to)
+	if err != nil {
+		return Limits{}, err
+	}
+	l.SkippedToday = reasonCounts()
+	for _, byReason := range skipped {
+		for reason, n := range byReason {
+			l.SkippedToday[reason] += n
+		}
+	}
 	for _, a := range cfg.Arms {
 		if len(only) > 0 && !slices.Contains(only, a.ID) {
 			continue
@@ -159,7 +169,7 @@ SELECT arm_id, COALESCE(SUM(counted_cost_usd), 0) FROM jev_trial_decisions WHERE
 		st := jevtrialsettings.LoadArm(ctx, store, a.ID)
 		al := ArmLimits{
 			ArmID: a.ID, Model: a.Model, PromptVersion: a.PromptVersion, DailyCapUSD: a.CapUSD(), ListPriceKnown: a.ListPriceUSDPerMtok > 0,
-			CountedTodayUSD: counted[a.ID], FailuresToday: st.Failures.FailuresOn(today), Halt: haltInfo(st.Halt, today),
+			CountedTodayUSD: counted[a.ID], SkippedToday: armSkips(skipped, a.ID), FailuresToday: st.Failures.FailuresOn(today), Halt: haltInfo(st.Halt, today),
 		}
 		if t := st.Throttle; t != nil {
 			al.Throttle = &ThrottleInfo{Date: t.Date, Reason: t.Reason, Active: t.ActiveAt(now)}
@@ -167,6 +177,43 @@ SELECT arm_id, COALESCE(SUM(counted_cost_usd), 0) FROM jev_trial_decisions WHERE
 		l.Arms = append(l.Arms, al)
 	}
 	return l, nil
+}
+
+// skippedToday counts the skip records created in [from, to) per arm and reason.
+// Every arm's map has every reason (see reasonCounts); an arm without a record is
+// absent, so a caller takes reasonCounts() for it.
+func skippedToday(ctx context.Context, q query.Q, from, to time.Time) (map[string]map[string]int, error) {
+	rows, err := q.QueryContext(ctx, `
+SELECT arm_id, reason, COUNT(*) FROM jev_trial_skips WHERE created_at >= ? AND created_at < ? GROUP BY arm_id, reason`,
+		sqlutil.FormatTime(from), sqlutil.FormatTime(to))
+	if err != nil {
+		return nil, fmt.Errorf("query: today's jev trial skips: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]map[string]int{}
+	for rows.Next() {
+		var arm, reason string
+		var n int
+		if err := rows.Scan(&arm, &reason, &n); err != nil {
+			return nil, fmt.Errorf("query: scan today's jev trial skips: %w", err)
+		}
+		if out[arm] == nil {
+			out[arm] = reasonCounts()
+		}
+		out[arm][reason] += n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query: today's jev trial skips: %w", err)
+	}
+	return out, nil
+}
+
+// armSkips is arm's skip counts, all zero when it has none.
+func armSkips(skipped map[string]map[string]int, arm string) map[string]int {
+	if m := skipped[arm]; m != nil {
+		return m
+	}
+	return reasonCounts()
 }
 
 func haltInfo(h *jevtrialsettings.Halt, today string) *HaltInfo {
