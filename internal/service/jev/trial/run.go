@@ -44,7 +44,7 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 		return nil
 	}
 	end := t.now()
-	d := buildDecision(arm, in, callResult{resp: resp, latency: latency, requestBytes: requestBytes, err: err}, end)
+	d := buildDecision(arm, in, callResult{resp: resp, latency: latency, requestBytes: requestBytes, err: err}, end, t.secrets)
 	if err != nil {
 		// Stop first (it limits further spending), then leave the row.
 		t.stopAfterFailure(arm, d, end)

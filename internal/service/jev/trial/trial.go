@@ -98,6 +98,8 @@ type Trial struct {
 	// its record cannot be written (the cost caps are re-derived from stored
 	// rows, these two are not).
 	halted map[string]string
+	// secrets are redacted from stored error excerpts (WithSecrets).
+	secrets []string
 	// closeMu orders Submit's wg.Add against Close's wg.Wait.
 	closeMu sync.Mutex
 	closed  bool

@@ -19,7 +19,7 @@ import (
 // key no arm is called).
 func TraderOptions(db *sql.DB, client *jev.Client, settings *system.RuntimeSettingsRepository, news jev.NewsSource, keys Keys) []jev.Option {
 	return shadow.TraderOptionsWith(db, client, settings, news, func(s *shadow.Shadow) jev.ShadowSubmitter {
-		t := New(judgement.NewTrialRepository(db), settings, NewCallers(keys), metalabelsettings.RuntimeMode, time.Now)
+		t := New(judgement.NewTrialRepository(db), settings, NewCallers(keys), metalabelsettings.RuntimeMode, time.Now, WithSecrets(keys.APIKey))
 		return Compose(s, t)
 	})
 }

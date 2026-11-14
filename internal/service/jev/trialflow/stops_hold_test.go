@@ -7,6 +7,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
 )
 
 // A 402/403 stop is not re-derived from stored rows like a cost cap is, so it is
@@ -88,5 +89,34 @@ func TestErrorExcerptRedactsCredentials(t *testing.T) {
 	got := e.rowOf("a1").ErrorExcerpt
 	if strings.Contains(got, "sk-or-v1") || strings.Contains(got, "abc.def") || !strings.Contains(got, "[redacted]") {
 		t.Errorf("error_excerpt = %q, want the key and the bearer token redacted", got)
+	}
+}
+
+// The configured key is redacted wherever it appears in the vendor's answer, also
+// in a form that looks like neither sk-… nor Bearer … (a fake key only).
+func TestErrorExcerptRedactsTheConfiguredKey(t *testing.T) {
+	const fakeKey = "fake-or-key-0123456789abcdef"
+	e := newEnv(t, metalabelsettings.ModePaper, nil, trial.WithSecrets(fakeKey))
+	e.addArm("a1", fail(&jev.APIError{StatusCode: 401, Body: "rejected key=" + fakeKey + " (len 28), again " + fakeKey + "; Bearer abc.def-123"}, 3000))
+	e.enable(defaultArm("a1"))
+	e.evaluate()
+	got := e.rowOf("a1").ErrorExcerpt
+	if strings.Contains(got, fakeKey) || strings.Contains(got, "0123456789abcdef") || strings.Contains(got, "abc.def") {
+		t.Errorf("error_excerpt = %q, want the configured key and the bearer token redacted", got)
+	}
+	if !strings.Contains(got, "rejected key=[redacted] (len 28), again [redacted]") {
+		t.Errorf("error_excerpt = %q, want every occurrence of the key replaced and the rest kept", got)
+	}
+}
+
+// Without the option (or with an empty key) nothing but the shaped credentials is
+// redacted; an empty secret must not turn into "replace the empty string".
+func TestErrorExcerptIgnoresAnEmptySecret(t *testing.T) {
+	e := newEnv(t, metalabelsettings.ModePaper, nil, trial.WithSecrets(""))
+	e.addArm("a1", fail(&jev.APIError{StatusCode: 401, Body: "plain vendor message"}, 3000))
+	e.enable(defaultArm("a1"))
+	e.evaluate()
+	if got := e.rowOf("a1").ErrorExcerpt; got != "plain vendor message" {
+		t.Errorf("error_excerpt = %q, want it unchanged", got)
 	}
 }

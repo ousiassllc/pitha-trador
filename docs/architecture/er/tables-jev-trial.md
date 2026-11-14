@@ -42,7 +42,7 @@ erDiagram
 | status | varchar(8) | NOT NULL, CHECK IN | `ok`＝全問に答えた／`failed`＝応答が得られなかった（通信・HTTP エラー・不正な応答）／`refused`＝全問を拒否／`partial`＝一部の質問を拒否 |
 | failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response`）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
 | http_status | integer | NULL可 | HTTP エラー応答のステータス。それ以外は NULL |
-| error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない。`sk-…`・`Bearer …` は `[redacted]` に伏せる |
+| error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない。設定済みの OpenRouter キー文字列（部分一致）・`sk-…`・`Bearer …` は `[redacted]` に伏せる |
 | direction | varchar(10) | NULL可, CHECK | `LONG` / `SHORT` / `NONE`。拒否・欠落した質問は **NULL**（`NONE` や 0 で補わない） |
 | regime | varchar(10) | NULL可, CHECK | `TREND` / `RANGE` / `BREAKOUT` / `CHAOTIC` |
 | entry_quality | varchar(12) | NULL可, CHECK | `poor` / `fair` / `good` / `strong` / `exceptional` |
