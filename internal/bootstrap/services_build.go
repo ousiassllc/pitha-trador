@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -206,13 +207,12 @@ func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, se
 // autoUpdate is non-nil (cmd/desktop only, issue #65), the self-update check.
 func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, autoUpdate updater.Quitter) {
 	schedOpts := []scheduler.Option{
-		scheduler.WithOutcomeLabelSource(s.Outcomes),
-		scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
+		scheduler.WithOutcomeLabelSource(s.Outcomes), scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
 		scheduler.WithRiskMonitor(s.Risk), scheduler.WithAutoResumer(s.Risk),
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0, logging.WithRetentionSource(logsettings.RetentionSource(s.Settings)))),
 		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
-		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()),
+		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()), scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task()),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)

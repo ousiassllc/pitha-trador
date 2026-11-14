@@ -33,6 +33,7 @@ erDiagram
     jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     jev_decisions ||--o{ jev_trial_decisions : "同じ入力を別モデルに聞いた結果がアームごとに紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
+    instruments ||--o{ research_horizon_labels : "スナップショットの足ごとの研究用ラベルを持つ（FKなし・取引に使わない）"
     disclosure_skip_records ||--o{ disclosure_skip_matches : "該当した開示を持つ"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
@@ -58,6 +59,7 @@ erDiagram
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions`（意思決定モデル比較のお試し記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059） |
+| `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
@@ -151,3 +153,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.79 | 2026-11-11 | マイグレーション000052を追加し、`er/tables-system.md`に`session_diagnostics_daily`（立会日ごとのセッションのそろいの日次診断。欠け種別・コード・件数・当時の警告コード。ジョブの7日保持より長く残す）を追加 | issue #1054 |
 | 1.80 | 2026-11-12 | マイグレーション000053を追加し、`counterfactual_labels`に`skip_kind`（`risk_rejected`/`guard_skipped`/`no_signal`。Risk 却下とガード見送りを列で分ける）と`cutoff_unverified`（cutoff 未確認のあいだの記録の印。学習・評価の行には入れない）を足し、ビュー`calibration_outcome_origins`の`origin`を`skipped`から`risk_rejected`/`guard_skipped`/`no_signal`に分けた。`calibration_outcomes`は変えない | issue #1052 |
 | 1.81 | 2026-11-13 | マイグレーション000054を追加し、`er/tables-jev-trial.md`に`jev_trial_decisions`（別モデルの答え・失敗・費用の出所・切り詰め疑い・RAG フラグ・cutoff の状態）と`jev.trial.*`のキーを新設。`er/tables-system.md`の`secrets`許可キーに`OPENROUTER_API_KEY`/`OPENROUTER_BASE_URL`（任意）を加え 19 件にした | issue #1059 |
+| 1.82 | 2026-11-14 | マイグレーション000055を追加し、`er/tables-research.md`を新設して`research_horizon_labels`（全スナップショットの 30 分・60 分・引けまでのコスト前後の bps。`snapshot_id`に外部キーなし）・`research_label_days`（記録を終えた JST の日の印）・`research_label_day_stats`（日×ホライズン×側の和）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1074 |
