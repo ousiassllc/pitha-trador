@@ -76,6 +76,9 @@ type Replay struct {
 	// (papersettings, issue #804) laid over it when MetaSettings is set.
 	Risk      config.RiskLimits
 	Positions *trading.PositionRepository
+	// Mode is which min_entry_quality the replay judges by (issue #874): ""
+	// is ReplayLive, the Live value as before; ReplayPaper is Paper's own.
+	Mode ReplayMode
 }
 
 // NewReplay builds the Replay of a database whose models/positions it reads, with
@@ -146,6 +149,9 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 	thresholds := b.thresholds
 	if thresholds.Policy, err = b.policy.CurrentThresholds(ctx); err != nil {
 		return fmt.Errorf("backtestsource: current policy thresholds for backtest: %w", err)
+	}
+	if thresholds.Policy, err = b.ReplayPolicy(ctx, thresholds.Policy); err != nil {
+		return fmt.Errorf("backtestsource: %s replay thresholds for backtest: %w", b.Mode(), err)
 	}
 	models, meta, err := b.metaReplay(ctx)
 	if err != nil {

@@ -1,0 +1,39 @@
+package evaluation
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// periodSelector is the evaluation period selector: a GET form of the two
+// dates (decided-at/closed-at days, JST, the end inclusive) beside preset
+// links. It reloads the page; nothing is stored. Everything in the section
+// below is computed over the chosen range.
+templ periodSelector(p Period) {
+	<div class="mt-4 flex flex-wrap items-end gap-4" data-testid="evaluation-period">
+		<form class="flex flex-wrap items-end gap-4" method="get" action="/performance">
+			<div class="flex flex-col text-sm text-ink">
+				<label for="evaluation-from">評価期間の開始日</label>
+				@atoms.Input(atoms.InputProps{ID: "evaluation-from", Name: "eval_from", Type: "date", Class: "mt-2", Attrs: templ.Attributes{"value": p.From}})
+			</div>
+			<div class="flex flex-col text-sm text-ink">
+				<label for="evaluation-to">終了日</label>
+				@atoms.Input(atoms.InputProps{ID: "evaluation-to", Name: "eval_to", Type: "date", Class: "mt-2", Attrs: templ.Attributes{"value": p.To}})
+			</div>
+			@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
+				期間を指定して表示
+			}
+		</form>
+		<ul class="flex flex-wrap gap-3 text-sm">
+			for _, l := range p.Links {
+				<li>
+					if l.Current {
+						<span class="text-ink" aria-current="true">{ l.Label }</span>
+					} else {
+						<a class="text-accent underline decoration-mute" href={ templ.SafeURL(l.Href) }>{ l.Label }</a>
+					}
+				</li>
+			}
+		</ul>
+		if p.Error != "" {
+			<p class="w-full rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="evaluation-period-error">{ p.Error }</p>
+		}
+	</div>
+}

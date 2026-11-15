@@ -4,8 +4,10 @@
 // default good) in place of policy.long|short.min_entry_quality (default
 // strong, the Live values); in any other mode the policy.* values apply
 // unchanged and the Paper keys are not even read. Every other threshold is
-// shared. It wraps the engine's policy.PolicySource, so the backtest and the
-// Execution Engine, which read the RuntimePolicy directly, are unaffected.
+// shared. It wraps the engine's policy.PolicySource, so the Execution Engine,
+// which reads the RuntimePolicy directly, is unaffected; the backtest replays
+// with the Live value unless its Paper replay mode is selected, which applies
+// Overlay (issue #874, internal/bootstrap/backtestsource).
 package paperentryquality
 
 import (
@@ -46,7 +48,15 @@ func (p Policy) CurrentThresholds(ctx context.Context) (config.PolicyConfig, err
 	if err != nil || p.Mode != metalabelsettings.ModePaper {
 		return cfg, err
 	}
-	paper, err := p.Source.PaperEntryQuality(ctx)
+	return Overlay(ctx, p.Source, cfg)
+}
+
+// Overlay returns cfg with the Paper minimum entry quality of src in place of
+// its Live one (every other threshold unchanged). The Policy Engine applies it
+// in Paper, and the backtest and proposal-evaluation replay apply it in their
+// Paper replay mode (issue #874), so all three judge an entry by the same value.
+func Overlay(ctx context.Context, src Source, cfg config.PolicyConfig) (config.PolicyConfig, error) {
+	paper, err := src.PaperEntryQuality(ctx)
 	if err != nil {
 		return config.PolicyConfig{}, fmt.Errorf("paperentryquality: read the Paper min entry quality: %w", err)
 	}

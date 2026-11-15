@@ -41,9 +41,22 @@ func experimentsProps(rows []experiment.Summary, notice string) mcp.ExperimentsP
 			Variable: variableName(e.Variable), Change: changeText(e.Variable), By: createdBy(e),
 			BeforeTrades: s.BeforeTrades, AfterTrades: s.AfterTrades,
 			Verdict: s.Verdict, VerdictLabel: verdictLabel(s.Verdict), Running: e.Status == experiment.StatusRunning,
+			Error: rowErrorText(s.Error),
 		})
 	}
 	return props
+}
+
+// rowErrorText is what the list shows in place of the verdict of a row that
+// could not be summarised ("" for none).
+func rowErrorText(code string) string {
+	switch code {
+	case "":
+		return ""
+	case experiment.SummaryLimitExceeded:
+		return fmt.Sprintf("集計できません（前後どちらかの期間のクローズ済み取引が %s 件を超えています）", dailyguardsettings.FormatYen(float64(query.MaxClosedScan)))
+	}
+	return "集計できません（取得に失敗しました。ログを確認してください）"
 }
 
 func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
@@ -55,6 +68,9 @@ func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 		MinTradesNote: minTradesNote(c.MinTrades), MinTradesHelp: minTradesHelp(c.MinTradesSource),
 		TestNote: testNote(c.PerTradePnl), TestHelp: testHelp(c.PerTradePnl),
 		Metrics: metricRows(c), Rejects: rejectRows(c.Before.RiskRejections, c.After.RiskRejections),
+	}
+	if c.Verdict == experiment.VerdictSwitchUnconfirmed {
+		p.VerdictHelp = c.Switch.Detail
 	}
 	for _, f := range c.Confounders {
 		p.Confounders = append(p.Confounders, confounderLine(f))
@@ -99,11 +115,27 @@ func confounderText(f experiment.Confounder) string {
 	switch f.Kind {
 	case experiment.KindSetting:
 		return fmt.Sprintf("交絡: %s設定 %s が変わりました（%s、監査 ID %d）。", when, f.Name, jst(f.At), deref(f.AuditID))
+	case experiment.ConfounderPolicy:
+		return policyText(when, f)
 	case experiment.KindModel:
 		return fmt.Sprintf("交絡: %s Jev（%s）のモデルが複数使われました: %v。", when, f.Name, f.Values)
 	default:
 		return fmt.Sprintf("交絡: %s Jev（%s）のプロンプトの版が複数使われました: %v。", when, f.Name, f.Values)
 	}
+}
+
+// policyText is the line of a Self-Improvement policy proposal applied or
+// rolled back (issue #879); Name is its version ("" when the row has none).
+func policyText(when string, f experiment.Confounder) string {
+	what := "適用されました"
+	if len(f.Values) == 1 && f.Values[0] == experiment.PolicyRolledBack {
+		what = "取り消されました"
+	}
+	version := "方針の提案"
+	if f.Name != "" {
+		version = "方針の提案 " + f.Name
+	}
+	return fmt.Sprintf("交絡: %s%s が%s（%s）。", when, version, what, jst(f.At))
 }
 
 func statusLabel(s string) string {
@@ -126,6 +158,8 @@ func verdictLabel(v string) string {
 		return "判定なし（交絡あり）"
 	case experiment.VerdictAborted:
 		return "判定なし（中止）"
+	case experiment.VerdictSwitchUnconfirmed:
+		return "判定なし（切り替えを確認できない）"
 	case experiment.VerdictNotComputable:
 		return "判定なし（信頼区間を計算できない）"
 	case experiment.VerdictImproved:

@@ -85,7 +85,7 @@ func (g *Gate) Experiments(ctx context.Context, limit int) ([]experiment.Summary
 		if err != nil {
 			return err
 		}
-		out, err = experiment.SummarizeAll(ctx, tx, "", limit, g.now(), 0, capital)
+		out, err = experiment.SummarizeAll(ctx, tx, "", limit, g.now(), 0, capital, g.summaries)
 		return err
 	})
 	return out, err
