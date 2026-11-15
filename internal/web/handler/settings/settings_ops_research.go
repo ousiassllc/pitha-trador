@@ -5,12 +5,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/researchjobsettings"
 )
 
-// researchJobsGroup holds the switches and retentions of the research-only daily jobs of
-// issues #1089 (daily Jev evaluation record) and #1092 (research model).
-var researchJobsGroup = opsGroup{id: "research-jobs", name: "研究用の日次評価の記録と学習",
-	description: "Jev の評価の主な数字を毎日 1 行ずつ研究専用の表に残す記録と、特徴量だけで学習する研究用モデル（AI を使わない）の夜間の学習です。どちらも取引の判断・Risk・発注・Paper ガード・Live・Jev・メタモデルには一切使いません。",
+// researchJobsGroup holds the switches and retentions of the research-only jobs of
+// issues #1089 (daily Jev evaluation record), #1092 (research model) and #1094 (dataset export).
+var researchJobsGroup = opsGroup{id: "research-jobs", name: "研究用の日次評価の記録・学習・書き出し",
+	description: "Jev の評価の主な数字を毎日 1 行ずつ研究専用の表に残す記録と、特徴量だけで学習する研究用モデル（AI を使わない）の夜間の学習と、学習用データセットの書き出し（ローカルのフォルダだけ）です。いずれも取引の判断・Risk・発注・Paper ガード・Live・Jev・メタモデルには一切使いません。",
 	note: "どちらも既定はオフ（無効）で、オフの間は日次タスクが何も書きません。オンにすると 16:00 JST 以降のメンテナンスチェック（10 分ごと）から、それぞれ今日までの未記録の日を 1 日ずつ処理します。" +
-		"保持期間より古い行は、それぞれの研究用の表だけから削除されます。保存した値は再起動不要で、次のチェックから反映されます。環境変数では設定できません。",
+		"保持期間より古い行は、それぞれの研究用の表だけから削除されます。書き出しは Paper 実績 MCP の training_dataset_export を呼んだときだけ動き、オフの間は何も書き出しません（書き出したファイルは自動では削除されません）。保存した値は再起動不要で、次のチェックから反映されます。環境変数では設定できません。",
 	fields: []opsField{
 		{key: researchjobsettings.KeyEvalEnabled, label: "評価の日次記録", onOff: true, hint: "オンで有効、オフで無効です。既定はオフ（無効）です。"},
 		{key: researchjobsettings.KeyEvalRetentionDays, label: "評価の記録の保持期間（日）", placeholder: "365",
@@ -18,6 +18,7 @@ var researchJobsGroup = opsGroup{id: "research-jobs", name: "研究用の日次�
 		{key: researchjobsettings.KeyModelEnabled, label: "研究用モデルの夜間の学習", onOff: true, hint: "オンで有効、オフで無効です。既定はオフ（無効）です。予測は研究専用の表に残すだけで、取引には使いません。"},
 		{key: researchjobsettings.KeyModelRetentionDays, label: "研究用モデルの記録の保持期間（日）", placeholder: "90",
 			hint: "1〜3650 の整数です。この日数（JST の日）より古い学習の記録と予測を研究用の表から削除します。既定は 90 日です。"},
+		{key: researchjobsettings.KeyExportEnabled, label: "学習用データセットの書き出し", onOff: true, hint: "オンで有効、オフで無効です。既定はオフ（無効）です。書き出し先は DB と同じ階層の exports フォルダ（ローカルだけ。外部へは送りません）です。"},
 	}}
 
 // promotionGroup holds the criteria of the read-only promotion checklist (issue #1091).

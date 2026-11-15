@@ -1,12 +1,13 @@
 // Package researchjobsettings holds the Settings-screen switches and retentions of
-// the two research-only daily jobs of issues #1089 and #1092: the daily record of the
+// the research-only jobs of issues #1089, #1092 and #1094: the daily record of the
 // Jev evaluation (table jev_evaluation_daily) and the nightly walk-forward training of
-// the feature-only research model (tables research_model_runs / research_model_predictions).
+// the feature-only research model (tables research_model_runs / research_model_predictions),
+// and the switch of the training-dataset export tool.
 //
 // The keys live in runtime_settings (docs/architecture/er.md §runtime_settings); there is
 // no yaml or environment source and they are not on the Paper results MCP's settings_set
 // whitelist. Both jobs write only their own research tables and never a trading input,
-// but they are writes the trading process makes, so both are OFF by default: while
+// but they are writes the trading process makes, so all three are OFF by default: while
 // nothing is stored (or the stored value is damaged) the jobs write nothing.
 package researchjobsettings
 
@@ -16,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 )
 
 // Keys of the runtime_settings rows.
@@ -28,6 +30,9 @@ const (
 	KeyModelEnabled = "research.model.enabled"
 	// KeyModelRetentionDays is how many JST days of research model runs and predictions are kept.
 	KeyModelRetentionDays = "research.model.retention_days"
+	// KeyExportEnabled switches the training-dataset export (issue #1094): while off, the MCP's
+	// training_dataset_export tool writes nothing and says so. The JSON integer 1 or 0.
+	KeyExportEnabled = "research.export.enabled"
 )
 
 // Defaults and bounds, in JST days. Both switches default to off.
@@ -41,16 +46,18 @@ const (
 
 // Keys returns every runtime_settings key of this package.
 func Keys() []string {
-	return []string{KeyEvalEnabled, KeyEvalRetentionDays, KeyModelEnabled, KeyModelRetentionDays}
+	return []string{KeyEvalEnabled, KeyEvalRetentionDays, KeyModelEnabled, KeyModelRetentionDays, KeyExportEnabled}
 }
 
 // IsKey reports whether key is one of Keys.
 func IsKey(key string) bool {
-	return key == KeyEvalEnabled || key == KeyEvalRetentionDays || key == KeyModelEnabled || key == KeyModelRetentionDays
+	return slices.Contains(Keys(), key)
 }
 
-// IsSwitchKey reports whether key is one of the two on/off switches.
-func IsSwitchKey(key string) bool { return key == KeyEvalEnabled || key == KeyModelEnabled }
+// IsSwitchKey reports whether key is one of the on/off switches.
+func IsSwitchKey(key string) bool {
+	return key == KeyEvalEnabled || key == KeyModelEnabled || key == KeyExportEnabled
+}
 
 // DefaultText is the value a key shows while nothing is stored.
 func DefaultText(key string) string {
