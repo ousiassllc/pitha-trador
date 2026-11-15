@@ -42,3 +42,4 @@
 | 1.35 | 2026-10-30 | §5 の読み取りのツールに `disclosure_skip_summary`（適時開示による見送りルールの記録の集計。読み取り専用。API 仕様は `paper-results-mcp-disclosure-skip.md` §3.31）を追加し、ツール数を 14 / 合計 33 に（§1 の「合計 31」は実際の 32 と合っていなかったので、33 に直した） | issue #935 |
 | 1.36 | 2026-11-11 | §5 に立会日のそろい（#1054）を追加: `health_today` に日中の欠け `intraday_gaps[]` と要対応コード `partial_session`、`collection_status` に `session_gaps`、`session_diagnostics` の各日に `recorded`。アプリが立会後に残す日次記録 `session_diagnostics_daily`（マイグレーション000052）を読む。読み取り専用のまま。ツール数は変わらない | issue #1054 |
 | 1.37 | 2026-11-13 | §5 に`jev_trial_compare`/`jev_trial_cost`を追加（分割章`paper-results-mcp-jev-trial.md`。コホート・common_success・欠測率・over_cohort/over_answered・NONE と反実仮想の proxy・費用の出所別の定義）。読み取り専用で、`jev.trial.*`は書き込みの許可リストに入れない | issue #1060 |
+| 1.38 | 2026-11-15 | §5 の `session_diagnostics` に、kabu の日の実行時の監視リストの大きさ（`watch_list_runtime_days`。アプリの `watchlistsize.Recorder` が立会中に件数だけを残す。読み取りのみで、立花の `watch_lists` の扱いは変えない）を追加 | issue #920 |

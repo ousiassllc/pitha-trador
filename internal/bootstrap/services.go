@@ -33,6 +33,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
@@ -72,7 +73,8 @@ type Services struct {
 	DailyBars    *market.DailyBarRepository
 	DailyBarRuns *market.DailyBarRunRepository
 	// WatchLists stores the 立花 監視リスト decided each night (issue #730).
-	WatchLists *market.WatchListRepository
+	WatchLists     *market.WatchListRepository
+	watchListSizes *watchlistruntime.Repository // kabu runtime watch list size per day (issue #920)
 
 	RAG           *rag.Service
 	Broker        broker.Broker      // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
@@ -195,6 +197,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
+	svc.watchListSizes = watchlistruntime.New(state.DB)
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)

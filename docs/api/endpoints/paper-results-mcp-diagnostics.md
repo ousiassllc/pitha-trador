@@ -15,8 +15,8 @@
 | `retention` | `snapshot_days`（90）/ `succeeded_job_days`（7）/ `failed_job_days`（30）。これより前の日の数は `null` |
 | `note` | 上の限界の固定の注記 |
 | `timed_out` | 内部の時間予算（`QueryTimeout` の手前。architecture §5）を超えたとき `true`。`query_timeout`（504）で全部捨てず、読めた分を返す。全部読めたら `false` |
-| `broker_provider` | 保存されているブローカーの選択（`runtime_settings` の `broker.provider`。issue #914）: `kabu`（行が無い・読めない値のときも。アプリの起動時の読み方と同じ）/ `tachibana` / `unknown`（読めなかった）。`watch_lists` に書くのは立花のアダプタだけで、kabu の監視リストはメモリ上にあり保存されないため、kabu では空の表が毎日になる。そこで kabu の日は `watch_list_empty` でなく `watch_list_not_applicable` を出す。`unknown` のときは従来どおり `watch_list_empty` を出す（このツールは落ちない）。アプリは起動時に 1 度だけ読むので、変更後の最初の起動までは実際のブローカーと違いうる。kabu の実行時の監視リストの大きさは、この DB からは分からない |
-| `incomplete[]` | 読めなかった項目: `current` / `market_data_jobs` / `other_queue_jobs` / `watch_lists` / `daily_records` / `broker_provider` / `snapshot_rows:<JST 日>` / `succeeded_without_snapshot:<JST 日>`。全部読めたら空配列。日は新しい順に読むので、読めないのは古い日。ここに挙がった項目から作る数は `null`（`null` は「保持期間で消えた」ではなく「読めなかった」）で、そこから作る `observations[]` は出さない |
+| `broker_provider` | 保存されているブローカーの選択（`runtime_settings` の `broker.provider`。issue #914）: `kabu`（行が無い・読めない値のときも。アプリの起動時の読み方と同じ）/ `tachibana` / `unknown`（読めなかった）。`watch_lists` に書くのは立花のアダプタだけで、kabu の監視リストはメモリ上にあるため、kabu では空の表が毎日になる。そこで kabu の日は、実行時の大きさの記録（`watch_list_runtime_days`。issue #920。下の `watch_list`）が無いかぎり `watch_list_empty` でなく `watch_list_not_applicable`（「その日の記録が無い」）を出し、記録が立会中ずっと 0 件だった日だけ `watch_list_empty` を出す。`unknown` のときは従来どおり `watch_list_empty` を出す（このツールは落ちない）。アプリは起動時に 1 度だけ読むので、変更後の最初の起動までは実際のブローカーと違いうる。kabu の実行時の監視リストの大きさは、この DB からは分からない |
+| `incomplete[]` | 読めなかった項目: `current` / `market_data_jobs` / `other_queue_jobs` / `watch_lists` / `runtime_watch_lists` / `daily_records` / `broker_provider` / `snapshot_rows:<JST 日>` / `succeeded_without_snapshot:<JST 日>`。全部読めたら空配列。日は新しい順に読むので、読めないのは古い日。ここに挙がった項目から作る数は `null`（`null` は「保持期間で消えた」ではなく「読めなかった」）で、そこから作る `observations[]` は出さない |
 
 `days[]` の要素:
 
@@ -27,9 +27,9 @@
 | `market_data_jobs.succeeded` / `failed` | その日（`finished_at` の JST 日）に終わった `market-data` ジョブの件数。成功 7 日・失敗 30 日の保持より前の日（日の 00:00 が削除の境より前）は `null`（0 ではない） |
 | `market_data_jobs.succeeded_without_snapshot` | 成功したジョブのうち、`payload_json` の固定キー `instrument_id` の銘柄の `market_snapshots` 行が `started_at`〜`finished_at` の間に無いものの数（レート制限で板取得を見送った `nil` 成功など）。`succeeded` が `null` の日は `null` |
 | `other_queue_jobs_finished` | `market-data` と廃止済み `feature-calc` 以外のキューで、その日に終わった（成功・失敗）ジョブ数。アプリが動いていたことの間接的な目安。`null` は成功ジョブの保持より前 |
-| `watch_list` | （時間切れで読めなかった日だけ `null`）`present`（`watch_lists` に行があるか）、`source`（`daily_screen` / `fixed` / `carried_over` / `fixed_fallback`。無ければ `null`）、`entries`（`watch_list_entries` の件数） |
+| `watch_list` | （時間切れで読めなかった日だけ `null`）`present`（`watch_lists` に行があるか）、`source`（`daily_screen` / `fixed` / `carried_over` / `fixed_fallback`。無ければ `null`）、`entries`（`watch_list_entries` の件数）。**kabu**（`broker_provider` が `kabu`）で、その日の実行時の大きさの記録（`watch_list_runtime_days`。アプリが立会中に 1 分ごと、メモリ上の監視リストの**件数**だけを残す。銘柄コードは保存も返却もしない。issue #920）がある日は、それを返す: `present: true`、`source: "ranking"`、`entries`（その日の立会中の最後の観測の件数）、`peak_entries`（その日の最大件数。この記録のときだけ付く）。同じ日に立花の保存リストがあっても kabu では記録を優先する。立花・`unknown` のときは記録を読まず従来どおり（`peak_entries` は付かない） |
 | `recorded` | アプリが大引けの後に残した日次記録（`session_diagnostics_daily`。issue #1054）。`collection_status.session_gaps.days[]` の要素と同じ形（`gap_kind`・`gap_codes[]`・`gaps[]`・`alert_codes[]`・`watch_checks`・`first_snapshot_at` など）。ジョブ・スナップショットの保持期間より後も残るので、上の件数が `null` の日でも読める。記録の無い日・観測中の日、または時間切れ（`incomplete[]` に `daily_records`）のときは `null` |
-| `observations[]` | 固定コード。`no_snapshots`（行 0）/ `no_market_data_jobs`（成功も失敗も 0）/ `all_market_data_jobs_failed`（成功 0・失敗あり）/ `succeeded_without_snapshot`（上の数が 1 以上）/ `watch_list_empty`（ウォッチリストが無いか 0 件）/ `other_queues_idle`（他キューが 0）。件数が `null` のコードは出さない。原因の断定ではなく手がかり | 日次記録が日中の欠け（`gap_kind=intraday`）なら `intraday_gap`（コードは `recorded.gap_codes[]`。#1054）も付く
+| `observations[]` | 固定コード。`no_snapshots`（行 0）/ `no_market_data_jobs`（成功も失敗も 0）/ `all_market_data_jobs_failed`（成功 0・失敗あり）/ `succeeded_without_snapshot`（上の数が 1 以上）/ `watch_list_empty`（ウォッチリストが無いか 0 件。kabu では記録の `peak_entries` が 0＝立会中ずっと 0 件の日）/ `watch_list_not_applicable`（kabu で、その日の実行時の大きさの記録が無い日。アプリが止まっていた・全銘柄スキャン運用・この記録の開始前など）/ `other_queues_idle`（他キューが 0）。件数が `null` のコードは出さない。原因の断定ではなく手がかり | 日次記録が日中の欠け（`gap_kind=intraday`）なら `intraday_gap`（コードは `recorded.gap_codes[]`。#1054）も付く
 
 例（2026-10-21 17:45 JST に `{"from":"2026-10-14","to":"2026-10-17"}`。一部）:
 
@@ -63,6 +63,7 @@
 | 1.0 | 2026-10-21 | 新規。`session_diagnostics` の定義 | issue #850 |
 | 1.1 | 2026-10-22 | 窓を 14 日にし、`window.requested_from`、`timed_out`、`incomplete[]`、`current`・`watch_list` の `null` を追加 | issue #850 |
 | 1.2 | 2026-10-26 | `broker_provider` を追加し、kabu のときは `watch_list_empty` の代わりに `watch_list_not_applicable` を出す（立花・`unknown` は従来どおり）。`incomplete[]` に `broker_provider` が加わりうる | issue #914 |
+| 1.3 | 2026-11-15 | kabu のとき `days[].watch_list` に、実行時の監視リストの大きさ（`watch_list_runtime_days`。`present`・`source: "ranking"`・`entries`・`peak_entries`）を返す。記録が立会中ずっと 0 件の日は `watch_list_empty`、記録が無い日は `watch_list_not_applicable`（立花・`unknown` は従来どおり）。`incomplete[]` に `runtime_watch_lists` が加わりうる | issue #920 |
 
 ## 3.8.2 立会日のそろい（issue #1054）
 

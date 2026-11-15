@@ -31,11 +31,14 @@ const (
 	ObsSucceededWithoutSnapshot = "succeeded_without_snapshot"
 	// ObsWatchListEmpty: no watch list was decided for the day, or it is empty,
 	// with the 立花 adapter (the only writer of watch_lists) or a broker
-	// selection that could not be read.
+	// selection that could not be read; or, with kabu, a runtime size
+	// that was 0 for the whole session (issue #920).
 	ObsWatchListEmpty = "watch_list_empty"
-	// ObsWatchListNotApplicable: the same days with kabu selected. kabu keeps
-	// its watch list in memory and never writes watch_lists, so the empty table
-	// says nothing about the runtime watch list (issue #914).
+	// ObsWatchListNotApplicable: the same days with kabu selected and no runtime
+	// size recorded for the day. kabu keeps its watch list in memory and never
+	// writes watch_lists, so the empty table says nothing about it (issue #914).
+	// A kabu day whose recorded runtime size was 0 all session is
+	// ObsWatchListEmpty instead (issue #920).
 	ObsWatchListNotApplicable = "watch_list_not_applicable"
 	// ObsIntradayGap: the day's record (Day.Recorded) shows an incomplete
 	// session although snapshots exist: a missing 前場/後場, a late start, a long
@@ -68,12 +71,17 @@ type MarketDataJobDay struct {
 	SucceededWithoutSnapshot *int `json:"succeeded_without_snapshot"`
 }
 
-// WatchListDay is the day's watch list (watch_lists / watch_list_entries). The
-// table is written by the 立花 adapter only (see ObsWatchListNotApplicable).
+// WatchListDay is the day's watch list: the 立花 adapter's saved list
+// (watch_lists / watch_list_entries) or, with kabu, the size the runtime
+// watch list had that day (watch_list_runtime_days, issue #920).
 type WatchListDay struct {
 	Present bool    `json:"present"`
 	Source  *string `json:"source"`
 	Entries int     `json:"entries"`
+	// PeakEntries is set only for a kabu runtime record (Source "ranking",
+	// watch_list_runtime_days, issue #920): Entries is then the last in-session
+	// size and PeakEntries the largest of the day. Absent for a 立花 list.
+	PeakEntries *int `json:"peak_entries,omitempty"`
 }
 
 // Day is the diagnosis of one TSE trading day (JST).
@@ -129,7 +137,7 @@ type Diagnostics struct {
 	// items listed in Incomplete were not read, and the fields they feed are
 	// null (a null is then "not read", not "deleted by the retention").
 	// Incomplete names them: "current", "market_data_jobs", "other_queue_jobs",
-	// "watch_lists", "daily_records", "snapshot_rows:<JST date>" and
+	// "watch_lists", "runtime_watch_lists", "daily_records", "snapshot_rows:<JST date>" and
 	// "succeeded_without_snapshot:<JST date>" and "broker_provider". Both are empty/false when
 	// everything was read.
 	TimedOut   bool     `json:"timed_out"`

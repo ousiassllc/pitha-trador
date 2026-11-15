@@ -56,6 +56,7 @@ erDiagram
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events` |
 | `docs/architecture/er/tables-disclosure.md` | `disclosure_items` / `disclosure_fetches` / `disclosure_skip_records` / `disclosure_skip_matches`（適時開示による見送りルールの記録。取引に使わない。issue #935） |
+| `docs/architecture/er/tables-watch-runtime.md` | `watch_list_runtime_days`（kabuの実行時の監視リストの日次の大きさ。件数と取得元のみ。issue #920） |
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
@@ -157,3 +158,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.84 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
 | 1.85 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
 | 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
+| 1.87 | 2026-11-15 | マイグレーション000056を追加し、`er/tables-watch-runtime.md`に`watch_list_runtime_days`（kabuの実行時の監視リストの大きさを立会日・取得元ごとに1行。件数・最新・ピーク・観測回数のみで銘柄コードは持たない。保持期間の削除対象外）を追加。`watch_lists`の意味は変えない | issue #920 |
