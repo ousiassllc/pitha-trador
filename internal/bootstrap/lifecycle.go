@@ -26,7 +26,7 @@ func (s *Services) Start(ctx context.Context) error {
 
 	dailyguardseed.Run(ctx, s.Settings, time.Now())
 	paperrisk.Seed(ctx, s.Settings, s.Risk, time.Now())
-	s.aiRoles.Record(ctx, s.AIRoles) // which provider/model each AI role runs on since this start (issue #1080)
+	s.aiRoles.Record(ctx) // which provider/model each AI role runs on since this start (issue #1080)
 	s.syncUniverse(ctx)
 
 	if err := s.Broker.Start(ctx); err != nil {

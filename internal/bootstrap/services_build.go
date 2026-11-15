@@ -23,7 +23,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/config/airole"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -80,7 +79,6 @@ func (s *Services) buildRepositories(db *sql.DB) {
 	s.Settings = system.NewRuntimeSettingsRepository(db)
 	s.Outcomes.SetForeignTraderVersions(jev.LiveCohortScope(s.Settings)) // the live prompt's cohort only (issue #881)
 	s.Proposals = judgement.NewProposalRepository(db)
-	s.AIRoles = system.NewAIRoleRepository(db)
 }
 
 // wireActivity builds the System Activity Log (functional.md §4.15): it reads
@@ -99,7 +97,7 @@ func (s *Services) wireActivity() {
 // is not switched off the service still exists (its cache is simply always
 // empty, so no news_context is injected and no news flag is raised) but its
 // polling loop is not started; start-up never depends on either. dbPath: the file the disclosure skip record (#935) opens.
-func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
+func (s *Services) buildExternalClients(db *sql.DB, secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
 	infoAPIMax := 0
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
@@ -110,14 +108,14 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	s.OrderFlow = orderflow.NewTracker()
 	s.rankingWatchMaxAge = snapshotagesettings.Load(context.Background(), s.Settings)
 	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, s.rankingWatchMaxAge, alertChannels.BrokerNotices(s.Activity))
-	s.aiRoles = airolewire.Resolve(context.Background(), s.Settings, secrets)
+	s.aiRoles = airolewire.Resolve(context.Background(), db, s.Settings, secrets)
 	s.Jev = jev.NewClient(s.aiRoles.JevConfig(jev.Config{ // the default (custom) provider is JEV_BASE_URL / JEV_MODEL / JEV_API_KEY as before
 		Alerts: alertChannels.JevAlerts(),
 		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
 		MaxAttempts: cfg.jevMaxAttempts,
 	}))
 
-	luna := assist.NewLuna(s.aiRoles.Assist(airole.RoleLuna, assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}, s.Jev))
+	luna := assist.NewLuna(s.aiRoles.Luna(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}, s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
 	s.newsEnabled = feedOn && luna.Configured()
 	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath, s.newsEnabled)
@@ -201,8 +199,8 @@ func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, se
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
 		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()), metalabeljob.ChangeGuard(db),
-		selfimprove.WithSol(assist.NewSol(s.aiRoles.Assist(airole.RoleSol, assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey}, s.Jev))),
-		selfimprove.WithOpus(assist.NewOpus(s.aiRoles.Assist(airole.RoleOpus, assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey}, s.Jev))))
+		selfimprove.WithSol(assist.NewSol(s.aiRoles.Sol(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey}, s.Jev))),
+		selfimprove.WithOpus(assist.NewOpus(s.aiRoles.Opus(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey}, s.Jev))))
 }
 
 // buildScheduler builds the Scheduler with its maintenance tasks and, when

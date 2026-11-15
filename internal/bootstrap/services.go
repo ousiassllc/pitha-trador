@@ -68,7 +68,6 @@ type Services struct {
 	KillSwitch  *system.KillSwitchRepository
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository
-	AIRoles     *system.AIRoleRepository // the AI roles' provider/model settings and history (issue #1080)
 
 	// DailyBars/DailyBarRuns store the 立花 nightly 日足 batch (issue #729).
 	DailyBars    *market.DailyBarRepository
@@ -199,7 +198,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
-	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
+	svc.buildExternalClients(state.DB, secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)

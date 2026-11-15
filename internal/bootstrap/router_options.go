@@ -16,7 +16,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/service/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/service/dataexport"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
@@ -76,7 +75,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithDefaultBackupDir(startup.DefaultBackupDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
 		router.WithJevPromptSettings(jevprompt.New(state.DB)),
-		router.WithAIRoleSettings(airoles.New(services.Settings, services.AIRoles, secretsRepo)),
+		router.WithAIRoleSettings(services.aiRoles.Settings(services.Settings, secretsRepo)),
 		router.WithJevTrialSettings(jevtrial.New(state.DB).WithKeyStore(secretsRepo)),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),

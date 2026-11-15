@@ -13,24 +13,29 @@ package airolewire
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/airole"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/service/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
 )
 
-// Roles is every role's resolved connection.
+// Roles is every role's resolved connection and the store of their settings and history.
 type Roles struct {
 	conns map[string]airole.Connection
+	store *system.AIRoleRepository
 }
 
-// Resolve reads each role's setting from g (runtime_settings, read only) and
+// Resolve reads each role's setting from settings (runtime_settings, read only) and
 // resolves it against secrets. A setting that cannot be read or parsed falls back
-// to the default, never to a different provider.
-func Resolve(ctx context.Context, g airole.Getter, secrets config.Secrets) Roles {
+// to the default, never to a different provider. db holds the roles' history.
+func Resolve(ctx context.Context, db *sql.DB, settings airole.Getter, secrets config.Secrets) Roles {
+	g := settings
 	loaded := airole.Load(ctx, g)
 	for role, why := range loaded.Damaged {
 		slog.Warn("bootstrap: ai role setting ignored; running on the default", "role", role, "reason", why)
@@ -39,7 +44,13 @@ func Resolve(ctx context.Context, g airole.Getter, secrets config.Secrets) Roles
 	for role, set := range loaded.Settings {
 		conns[role] = airole.Resolve(role, set, secrets)
 	}
-	return Roles{conns: conns}
+	return Roles{conns: conns, store: system.NewAIRoleRepository(db)}
+}
+
+// Settings is the Settings screen's service over the roles' settings and history;
+// keys says whether each provider's key is set (never its value).
+func (r Roles) Settings(settings airole.Getter, keys airoles.KeyStore) *airoles.Service {
+	return airoles.New(settings, r.store, keys)
 }
 
 // Connection is role's connection.
@@ -68,6 +79,21 @@ func (r Roles) Assist(role string, own assist.Config, live assist.Asker) (*assis
 	return client, assist.WithJev(asker)
 }
 
+// Luna, Sol and Opus are Assist for that role, in the form assist.NewLuna, NewSol and NewOpus take their arguments.
+func (r Roles) Luna(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
+	return r.Assist(airole.RoleLuna, own, live)
+}
+
+// Sol is Assist for the Sol role.
+func (r Roles) Sol(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
+	return r.Assist(airole.RoleSol, own, live)
+}
+
+// Opus is Assist for the Opus role.
+func (r Roles) Opus(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
+	return r.Assist(airole.RoleOpus, own, live)
+}
+
 // JevConfig is base with the live Jev role's connection (URL, key, model) filled in.
 func (r Roles) JevConfig(base jev.Config) jev.Config {
 	c := r.conns[airole.RoleJev]
@@ -87,22 +113,17 @@ func TrialKeys(secrets config.Secrets) trial.Keys {
 	return trial.Keys{APIKey: secrets.OpenRouterAPIKey, BaseURL: secrets.OpenRouterBaseURL, Custom: custom}
 }
 
-// Recorder is the history store; *system.AIRoleRepository implements it.
-type Recorder interface {
-	RecordStarted(ctx context.Context, role string, running airole.Setting) (bool, error)
-}
-
 // Record records the provider and model each role runs on since this start
 // (only a change from the last record writes a row). A failure is logged and
 // does not stop the start.
-func (r Roles) Record(ctx context.Context, rec Recorder) {
+func (r Roles) Record(ctx context.Context) {
 	for _, role := range airole.Roles() {
 		c := r.conns[role]
 		running := airole.Setting{Provider: c.Provider, Model: c.Model}
 		if role == airole.RoleJev && running.Model == "" {
 			running.Model = jev.DefaultModel // the client's own default
 		}
-		if _, err := rec.RecordStarted(ctx, role, running); err != nil {
+		if _, err := r.store.RecordStarted(ctx, role, running); err != nil {
 			slog.Warn("bootstrap: record ai role", "role", role, "error", err)
 		}
 	}

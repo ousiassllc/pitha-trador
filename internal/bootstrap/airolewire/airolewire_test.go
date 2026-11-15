@@ -2,12 +2,15 @@ package airolewire_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/airolewire"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/airole"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
@@ -49,7 +52,7 @@ func liveJev(roles airolewire.Roles) *jev.Client {
 // provider layer. The JEV_*/SOL_*/OPENROUTER_* values are only read.
 func TestDefaultsCallTheSameEndpointKeyAndModelAsBefore(t *testing.T) {
 	srv, secrets := newServers(t)
-	roles := airolewire.Resolve(context.Background(), settingsStore{}, secrets)
+	roles := airolewire.Resolve(context.Background(), nil, settingsStore{}, secrets)
 	live := liveJev(roles)
 
 	// The live Jev: JEV_BASE_URL + /v1/systemone, the JEV key, the JEV model.
@@ -101,7 +104,7 @@ func TestOpenRouterRolesCallOpenRouterWithItsKeyAndModel(t *testing.T) {
 		}
 		stored[airole.Key(role)] = v
 	}
-	roles := airolewire.Resolve(context.Background(), stored, secrets)
+	roles := airolewire.Resolve(context.Background(), nil, stored, secrets)
 	live := liveJev(roles)
 
 	ask(t, live)
@@ -120,7 +123,7 @@ func TestOpenRouterRolesCallOpenRouterWithItsKeyAndModel(t *testing.T) {
 	// No OpenRouter key: the role is not configured (it is skipped); nothing is sent anywhere.
 	noKey := secrets
 	noKey.OpenRouterAPIKey = ""
-	roles = airolewire.Resolve(context.Background(), stored, noKey)
+	roles = airolewire.Resolve(context.Background(), nil, stored, noKey)
 	live = liveJev(roles)
 	for _, role := range []string{airole.RoleSol, airole.RoleOpus, airole.RoleLuna} {
 		if _, asker := roles.AssistBackend(role, assist.Config{Label: role}, live); asker.Configured() {
@@ -138,7 +141,7 @@ func TestOpenRouterRolesCallOpenRouterWithItsKeyAndModel(t *testing.T) {
 // role runs on the default, which is the connection it had before.
 func TestDamagedSettingRunsOnTheDefault(t *testing.T) {
 	srv, secrets := newServers(t)
-	roles := airolewire.Resolve(context.Background(), settingsStore{airole.Key("jev"): `{"provider":"openrouter"}`}, secrets)
+	roles := airolewire.Resolve(context.Background(), nil, settingsStore{airole.Key("jev"): `{"provider":"openrouter"}`}, secrets)
 	if c := roles.Connection(airole.RoleJev); c.Provider != airole.ProviderCustom || c.APIKey != "fake-jev-key" {
 		t.Fatalf("jev = %+v", c)
 	}
@@ -161,28 +164,43 @@ func TestTrialKeys(t *testing.T) {
 	}
 }
 
-type recorder map[string]airole.Setting
-
-func (r recorder) RecordStarted(_ context.Context, role string, running airole.Setting) (bool, error) {
-	r[role] = running
-	return true, nil
-}
-
-// The start-up record says what each role runs on: the effective model for the live Jev.
-func TestRecordHasTheRunningPairOfEveryRole(t *testing.T) {
-	v, _ := airole.Encode("sol", airole.Setting{Provider: "openrouter", Model: "vendor/sol"})
-	roles := airolewire.Resolve(context.Background(), settingsStore{airole.Key("sol"): v}, config.Secrets{JevAPIKey: "fake-jev-key"})
-	got := recorder{}
-	roles.Record(context.Background(), got)
-	want := recorder{
+// The start-up record says what each role runs on (the effective model for the live Jev) and only a change writes a row.
+func TestRecordHasTheRunningPairOfEveryRoleOnce(t *testing.T) {
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	repo := system.NewAIRoleRepository(db)
+	if err := repo.Save(ctx, "sol", airole.Setting{Provider: "openrouter", Model: "vendor/sol"}); err != nil {
+		t.Fatal(err)
+	}
+	roles := airolewire.Resolve(ctx, db, system.NewRuntimeSettingsRepository(db), config.Secrets{JevAPIKey: "fake-jev-key"})
+	roles.Record(ctx)
+	roles.Record(ctx)
+	want := map[string]airole.Setting{
 		"jev":  {Provider: "custom", Model: "jev-latest"},
 		"sol":  {Provider: "openrouter", Model: "vendor/sol"},
 		"opus": {Provider: "custom"},
 		"luna": {Provider: "custom"},
 	}
 	for role, set := range want {
-		if got[role] != set {
-			t.Errorf("%s: recorded %+v, want %+v", role, got[role], set)
+		if last, ok, err := repo.LastStarted(ctx, role); err != nil || !ok || last.After != set {
+			t.Errorf("%s: running = %+v ok=%v err=%v, want %+v", role, last.After, ok, err, set)
 		}
+	}
+	rows, err := repo.History(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := 0
+	for _, r := range rows {
+		if r.Kind == system.AIRoleStarted {
+			started++
+		}
+	}
+	if started != len(want) {
+		t.Errorf("started rows = %d after two records, want one per role (%d)", started, len(want))
 	}
 }

@@ -119,4 +119,4 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
-| 1.16 | 2026-11-15 | Settings「外部連携・AI」に「役割ごとのプロバイダーとモデル」のカードを追加し、並びを「AI のプロバイダー（独自 API・OpenRouter）→ 役割ごとのモデル → そのほかの接続先」にした。Jev の接続カードを「独自 API（Jev）」、OpenRouter のカードを「OpenRouter」に改めた | issue #1080 |
+| 1.18 | 2026-11-15 | Settings「外部連携・AI」に「役割ごとのプロバイダーとモデル」のカードを追加し、並びを「AI のプロバイダー（独自 API・OpenRouter）→ 役割ごとのモデル → そのほかの接続先」にした。Jev の接続カードを「独自 API（Jev）」、OpenRouter のカードを「OpenRouter」に改めた | issue #1080 |
