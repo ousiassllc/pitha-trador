@@ -28,6 +28,10 @@ type SettingsProps struct {
 	// MCP shows the MCP card and modal (issue #792); false (no MCP admin
 	// service wired) hides them.
 	MCP bool
+	// MCPExperiments shows the 調整の実験 card and modal next to the MCP card
+	// (they used to sit inside the MCP modal); false (no write gate, which
+	// holds the experiments, wired) hides them.
+	MCPExperiments bool
 	// JevPrompt shows the Jev prompt card and modal (issue #872); false (no
 	// service wired) hides them.
 	JevPrompt bool
@@ -140,6 +144,20 @@ templ SettingsPage(props SettingsProps) {
 							Name:        "MCP",
 							ActionLabel: "開く",
 							Status:      settingsHelp("help-settings-mcp", "MCP の説明", "Paper の実績と Jev の判断を外部の AI クライアントが読み取るための MCP の有効/無効・待受アドレス・API キー・状態を確認・設定できます。基本設定はホワイトリストにある項目だけ変更できます。"),
+						})
+					</ul>
+				</section>
+			}
+			if props.MCP && props.MCPExperiments && props.Has("modal-mcp-experiments") {
+				<section aria-labelledby="settings-mcp-experiments-heading">
+					<h2 id="settings-mcp-experiments-heading" class="mb-6 text-2xl font-semibold text-ink">調整の実験</h2>
+					<ul class="flex flex-col gap-3" data-testid="mcp-experiments-list">
+						@molecules.SettingsCard(molecules.SettingsCardProps{
+							ID:          "mcp-experiments",
+							ModalID:     "modal-mcp-experiments",
+							Name:        "調整の実験（前後比較）",
+							ActionLabel: "開く",
+							Status:      settingsHelp("help-settings-mcp-experiments", "調整の実験の説明", "設定などを変える前と後の成績を比べた一覧と判定を見られます。実験は ふだん MCP から記録され、この画面からは予備として手で記録できます。"),
 						})
 					</ul>
 				</section>
@@ -264,6 +282,14 @@ templ SettingsPage(props SettingsProps) {
 				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
 			}
 			<script type="module" src="/static/dist/js/copy-button/pitha-copy-button.js"></script>
+		}
+		if props.MCP && props.MCPExperiments && props.Has("modal-mcp-experiments") {
+			@molecules.Modal("modal-mcp-experiments", "調整の実験（前後比較）") {
+				// Filled in by `GET /settings/mcp/experiments`
+				// (internal/web/organisms/mcp, Experiments) on load; its forms and
+				// buttons swap this element's content in place.
+				<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-target="this" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
+			}
 		}
 		if props.JevPrompt && props.Has("modal-jev-prompt") {
 			@molecules.Modal("modal-jev-prompt", "Jev プロンプトの版とシャドー比較") {

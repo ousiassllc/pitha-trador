@@ -25,6 +25,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -59,8 +60,9 @@ func (tachibanaSession) Capabilities() broker.Capabilities {
 func (tachibanaSession) Status() broker.SessionStatus { return broker.SessionStatus{} }
 
 // newEngine returns the router wired like production for the Settings screen:
-// operational settings, a broker session, the MCP settings and the Jev prompt
-// section (issue #872), so /settings
+// operational settings, a broker session, the MCP settings (with its write
+// gate, which holds the 調整の実験 card) and the Jev prompt section (issue
+// #872), so /settings
 // renders every card and dialog across its pages.
 func newEngine(t *testing.T, s secrets) *gin.Engine {
 	t.Helper()
@@ -83,6 +85,7 @@ func newEngine(t *testing.T, s secrets) *gin.Engine {
 		router.WithOperationalSettings(opsettings.New(opsStore{}, strategy, t.TempDir())),
 		router.WithBrokerSession(tachibanaSession{}),
 		router.WithMCPSettings(mcp),
+		router.WithMCPWriteGate(mcpset.NewGate(jevDB)),
 		router.WithJevPromptSettings(jevprompt.New(jevDB)),
 		router.WithJevTrialSettings(jevtrial.New(jevDB)),
 	)

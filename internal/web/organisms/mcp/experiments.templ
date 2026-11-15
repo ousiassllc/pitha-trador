@@ -76,18 +76,22 @@ type ExperimentDetailProps struct {
 	Rejects     []RejectRow
 }
 
-// Experiments renders the tuning-experiment section of the MCP card
-// (`GET /settings/mcp/experiments`, issue #871): the list with each
-// experiment's verdict, the form that records a new one (one variable only),
-// and a slot (`#mcp-experiment-detail`) the 比較 buttons fill with a
-// before / after comparison. It only records and compares; it changes no
-// setting.
+// Experiments renders the tuning-experiment section (`GET
+// /settings/mcp/experiments`, issue #871) into `#mcp-experiments`, the body of
+// the 調整の実験 dialog (`modal-mcp-experiments`) on the Settings page: what
+// there is to read comes first, the list with each experiment's before / after
+// verdict and a slot (`#mcp-experiment-detail`) the 比較 buttons fill with the
+// comparison. The form that records a new one (one variable only) comes last
+// and is closed until 「手で記録する」 is opened: experiments are normally
+// recorded from the MCP, the form is the fallback. It only records and
+// compares; it changes no setting.
 templ Experiments(props ExperimentsProps) {
-	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments">
+	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
-			<h4 class="text-lg font-semibold text-ink">調整の実験（前後比較）</h4>
+			<h3 class="sr-only">調整の実験（前後比較）</h3>
+			<span class="text-ink">設定などを変える前と後の成績を比べます。</span>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
-				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP から行ってから記録します）。
+				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は MCP、または Settings の各項目から行ってから記録します）。実験は ふだん MCP から記録されます。この画面の「手で記録する」は予備です。
 			}
 		</div>
 		<div class="flex items-center gap-2 text-sm text-warning">
@@ -99,7 +103,6 @@ templ Experiments(props ExperimentsProps) {
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="mcp-experiments-notice">{ props.Notice }</p>
 		}
-		@experimentForm(props.SettingNames)
 		<div id="mcp-experiment-close-error" data-testid="mcp-experiment-close-error"></div>
 		if len(props.Rows) == 0 {
 			<span class="text-sm text-mute" data-testid="mcp-experiments-empty">実験はありません。</span>
@@ -134,6 +137,7 @@ templ Experiments(props ExperimentsProps) {
 			</table>
 		}
 		<div id="mcp-experiment-detail" data-testid="mcp-experiment-detail"></div>
+		@experimentForm(props.SettingNames)
 	</section>
 }
 
@@ -146,62 +150,67 @@ templ closeButton(id int64, status, label, testID string) {
 	}
 }
 
-// experimentForm records one experiment: a hypothesis and ONE variable (kind,
-// name, before, after). A request with two variables cannot be made here and
-// the server refuses it too. settingNames are the names the Settings screen
-// gives the settings the MCP may change, offered for the name of a setting.
+// experimentForm records one experiment by hand: a hypothesis and ONE
+// variable (kind, name, before, after). It sits in a closed <details>
+// (「手で記録する」): the MCP normally records experiments, this is the
+// fallback. A request with two variables cannot be made here and the server
+// refuses it too. settingNames are the names the Settings screen gives the
+// settings the MCP may change, offered for the name of a setting.
 templ experimentForm(settingNames []string) {
-	<form class="flex flex-col gap-2" hx-post="/settings/mcp/experiments" hx-target="#mcp-experiments" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-experiment-form">
-		<span class="flex items-center gap-2 text-ink">
-			実験を記録する
-			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-form", Label: "実験の記録の説明"}) {
-				変える変数は 1 つだけです。名前には、設定なら設定画面での項目名（候補から選べます。MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
-			}
-		</span>
-		<label class="flex flex-col gap-2">
-			<span>仮説</span>
-			@atoms.Textarea(atoms.TextareaProps{Name: "hypothesis", Attrs: templ.Attributes{"rows": "2", "maxlength": "500", "required": true, "data-testid": "mcp-experiment-hypothesis"}})
-		</label>
-		<div class="flex flex-wrap gap-2">
-			<label class="flex flex-col gap-2">
-				<span>変数の種類</span>
-				@atoms.Select(atoms.SelectProps{Name: "kind", Attrs: templ.Attributes{"data-testid": "mcp-experiment-kind"}}) {
-					<option value="setting" selected>設定</option>
-					<option value="model">Jev のモデル</option>
-					<option value="prompt">Jev のプロンプトの版</option>
+	<details class="rounded-md border border-border bg-bone p-3" data-testid="mcp-experiment-manual">
+		<summary class="cursor-pointer text-ink" data-testid="mcp-experiment-manual-toggle">手で記録する</summary>
+		<form class="mt-3 flex flex-col gap-2" hx-post="/settings/mcp/experiments" hx-target="#mcp-experiments" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-experiment-form">
+			<span class="flex items-center gap-2 text-ink">
+				実験を記録する
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-form", Label: "実験の記録の説明"}) {
+					変える変数は 1 つだけです。名前には、設定なら設定画面での項目名（候補から選べます。MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
 				}
-			</label>
+			</span>
 			<label class="flex flex-col gap-2">
-				<span>名前</span>
-				@atoms.Input(atoms.InputProps{Name: "name", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
-				<datalist id="mcp-experiment-setting-names">
-					for _, name := range settingNames {
-						<option value={ name }></option>
+				<span>仮説</span>
+				@atoms.Textarea(atoms.TextareaProps{Name: "hypothesis", Attrs: templ.Attributes{"rows": "2", "maxlength": "500", "required": true, "data-testid": "mcp-experiment-hypothesis"}})
+			</label>
+			<div class="flex flex-wrap gap-2">
+				<label class="flex flex-col gap-2">
+					<span>変数の種類</span>
+					@atoms.Select(atoms.SelectProps{Name: "kind", Attrs: templ.Attributes{"data-testid": "mcp-experiment-kind"}}) {
+						<option value="setting" selected>設定</option>
+						<option value="model">Jev のモデル</option>
+						<option value="prompt">Jev のプロンプトの版</option>
 					}
-				</datalist>
-			</label>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			<label class="flex flex-col gap-2">
-				<span>変更前の値</span>
-				@atoms.Input(atoms.InputProps{Name: "before", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
-			</label>
-			<label class="flex flex-col gap-2">
-				<span>変更後の値</span>
-				@atoms.Input(atoms.InputProps{Name: "after", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
-			</label>
-			<label class="flex flex-col gap-2">
-				<span>開始時刻（JST）</span>
-				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "w-auto", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
-			</label>
-		</div>
-		<div id="mcp-experiment-form-error" data-testid="mcp-experiment-form-error"></div>
-		<div>
-			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-experiment-create"}}) {
-				記録する
-			}
-		</div>
-	</form>
+				</label>
+				<label class="flex flex-col gap-2">
+					<span>名前</span>
+					@atoms.Input(atoms.InputProps{Name: "name", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
+					<datalist id="mcp-experiment-setting-names">
+						for _, name := range settingNames {
+							<option value={ name }></option>
+						}
+					</datalist>
+				</label>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<label class="flex flex-col gap-2">
+					<span>変更前の値</span>
+					@atoms.Input(atoms.InputProps{Name: "before", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
+				</label>
+				<label class="flex flex-col gap-2">
+					<span>変更後の値</span>
+					@atoms.Input(atoms.InputProps{Name: "after", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
+				</label>
+				<label class="flex flex-col gap-2">
+					<span>開始時刻（JST）</span>
+					@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "w-auto", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
+				</label>
+			</div>
+			<div id="mcp-experiment-form-error" data-testid="mcp-experiment-form-error"></div>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-experiment-create"}}) {
+					記録する
+				}
+			</div>
+		</form>
+	</details>
 }
 
 // ExperimentDetail renders one experiment's comparison into

@@ -96,6 +96,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		mcpHandler := mcpsettings.New(o.mcpSettings)
 		if o.mcpWriteGate != nil {
 			mcpHandler.WithWriteGate(o.mcpWriteGate)
+			settingsHandler.WithMCPExperiments()
 		}
 		mcpHandler.Register(engine)
 	}
