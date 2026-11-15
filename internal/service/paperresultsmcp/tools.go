@@ -1,25 +1,24 @@
 package paperresultsmcp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtestjob"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query/shadowquery"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessiondiag"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/tooldef"
 )
 
 // Listing limits (API spec §2).
 const (
-	defaultListLimit = 50
 	maxListLimit     = 200
 	maxMetalabelList = 50
 )
@@ -37,6 +36,7 @@ type toolEnv struct {
 	policy      *config.PolicyConfig           // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
 	writer      func() (*mcpset.Writer, error) // the narrow write connection, opened on first use
 	experiments *experiment.SummaryCache       // experiments_list's rows of finished experiments
+	backtests   *backtestjob.Manager           // backtest_start's job manager (backtesttool)
 }
 
 // tool is one entry of the dispatch table. The table is the complete set of
@@ -60,50 +60,21 @@ type tool struct {
 // runFunc executes the tool's SQL and returns the data and the row count to log.
 type runFunc func(ctx context.Context, env toolEnv) (data any, count int, err error)
 
-// strictDecode unmarshals raw into dst, rejecting unknown fields, wrong types and trailing data; empty raw is {}.
+// The argument and schema helpers are tooldef's, shared with the tool packages;
+// the two that fail return the root's *toolError.
+var (
+	periodSchema = tooldef.PeriodSchema
+	objectSchema = tooldef.ObjectSchema
+	limitProp    = tooldef.LimitProp
+)
+
 func strictDecode(raw json.RawMessage, dst any) *toolError {
-	if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		raw = json.RawMessage("{}")
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return &toolError{code: CodeInvalidArgument, cause: err}
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return fail(CodeInvalidArgument)
-	}
-	return nil
+	return toolErrorOf(tooldef.StrictDecode(raw, dst))
 }
 
-// resolveLimit applies the default and the tool maximum. A limit above the
-// maximum is limit_exceeded; below 1 is an invalid argument.
 func resolveLimit(requested *int, maxLimit int) (int, *toolError) {
-	if requested == nil {
-		return min(defaultListLimit, maxLimit), nil
-	}
-	switch {
-	case *requested < 1:
-		return 0, fail(CodeInvalidArgument)
-	case *requested > maxLimit:
-		return 0, fail(CodeLimitExceeded)
-	}
-	return *requested, nil
-}
-
-func periodSchema(extra map[string]any) map[string]any {
-	props := map[string]any{
-		"from": map[string]any{"type": "string", "description": "JST の開始日 YYYY-MM-DD（含む）。to と両方指定するか、両方省略（直近 30 日）"},
-		"to":   map[string]any{"type": "string", "description": "JST の終了日 YYYY-MM-DD（含まない）。期間は最大 366 日"},
-	}
-	for k, v := range extra {
-		props[k] = v
-	}
-	return map[string]any{"type": "object", "properties": props, "additionalProperties": false}
-}
-
-func limitProp(maxLimit int) map[string]any {
-	return map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": min(defaultListLimit, maxLimit)}
+	n, f := tooldef.ResolveLimit(requested, maxLimit)
+	return n, toolErrorOf(f)
 }
 
 // tools is the dispatch table: the nine read tools of the API spec §3, then

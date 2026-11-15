@@ -24,14 +24,15 @@ func TestResearchHorizonLabelsAreReadOnlyByTheirRecorderAndTheResearchTool(t *te
 		"domain/researchlabel",
 	}
 	readers := []string{
-		"internal/repository/researchlabel/",                  // the record's own repository
-		"internal/service/researchlabel/",                     // the recorder
-		"internal/bootstrap/researchlabeljob/",                // wires the recorder into the maintenance task
-		"internal/bootstrap/services_build.go",                // registers that task (one line)
-		"internal/domain/researchlabel/",                      // the record's value types
-		"internal/service/paperresultsmcp/researchdiag/",      // the read-only MCP query
-		"internal/service/paperresultsmcp/jev_models_tool.go", // registers that tool (next to the other read-only diagnostic tools)
-		"db/migrations/",                                      // the schema
+		"internal/repository/researchlabel/",                        // the record's own repository
+		"internal/service/researchlabel/",                           // the recorder
+		"internal/bootstrap/researchlabeljob/",                      // wires the recorder into the maintenance task
+		"internal/bootstrap/services_build.go",                      // registers that task (one line)
+		"internal/domain/researchlabel/",                            // the record's value types
+		"internal/service/paperresultsmcp/researchdiag/",            // the read-only MCP query
+		"internal/service/paperresultsmcp/experiment/labelcompare/", // the read-only label-based experiment comparison (issue #1088)
+		"internal/service/paperresultsmcp/jev_models_tool.go",       // registers that tool (next to the other read-only diagnostic tools)
+		"db/migrations/", // the schema
 	}
 
 	for _, dir := range []string{"internal", "cmd"} {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/labeltool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 )
 
@@ -33,14 +34,6 @@ func (e toolEnv) paperCapital(ctx context.Context) (float64, error) {
 func noArgs(raw json.RawMessage) *toolError {
 	var a struct{}
 	return strictDecode(raw, &a)
-}
-
-func objectSchema(props map[string]any, required ...string) map[string]any {
-	s := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
-	if len(required) > 0 {
-		s["required"] = required
-	}
-	return s
 }
 
 var settingsTools = []tool{
@@ -68,6 +61,8 @@ var settingsTools = []tool{
 		schema: objectSchema(map[string]any{
 			"key":   map[string]any{"type": "string", "description": "settings_get が返すキー"},
 			"value": map[string]any{"type": []string{"string", "number"}, "description": "新しい値（Settings 画面に入れる文字列と同じ。数値キーは数値でも可）"},
+
+			"hypothesis": labeltool.HypothesisProp(),
 		}, "key", "value"),
 		writes:   true,
 		noPeriod: true,
@@ -75,6 +70,8 @@ var settingsTools = []tool{
 			var a struct {
 				Key   string          `json:"key"`
 				Value json.RawMessage `json:"value"`
+
+				Hypothesis *string `json:"hypothesis"` // optional: also records an experiment (issue #1088)
 			}
 			if err := strictDecode(raw, &a); err != nil {
 				return periodArgs{}, nil, err
@@ -96,14 +93,18 @@ var settingsTools = []tool{
 				if err != nil {
 					return nil, 0, err
 				}
-				entry, err := w.Set(ctx, e.client, a.Key, value)
+				entry, exp, err := labeltool.Set(ctx, w, e.client, a.Key, value, a.Hypothesis, experimentFailureOf)
+				err = writeFailureOf(err)
 				if err != nil {
-					return nil, 0, writeFailureOf(err)
+					return nil, 0, err
 				}
 				spec, _ := mcpwritesettings.Lookup(a.Key)
 				out := map[string]any{
 					"key": a.Key, "unit": spec.Unit, "value": entry.After, "before": entry.Before,
 					"audit_id": entry.ID, "at": entry.At,
+				}
+				if exp != nil {
+					out["experiment"] = exp // only when a hypothesis was given (issue #1088)
 				}
 				if metalabelsettings.IsCutoffKey(a.Key) {
 					// The write is committed; a failed status read only omits the field.

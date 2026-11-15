@@ -61,6 +61,8 @@ erDiagram
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
 | `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074） |
+| `docs/architecture/er/tables-backtest.md` | `backtest_runs`（MCP から実行したバックテストの記録: 状態・パラメータの組・コードの版・データの期間・結果の JSON。研究専用で取引・設定に使わない。issue #1086） |
+| `docs/architecture/er/tables-virtual-paper.md` | `virtual_paper_profiles` / `virtual_paper_trades` / `virtual_paper_days`（仮想 Paper のプロファイルと仮想取引の記録。`paper_orders`・`positions`・資金には書かない。issue #1087） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
@@ -161,3 +163,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
 | 1.87 | 2026-11-14 | マイグレーション000056を追加し、`er/tables-research.md`を新設して`research_horizon_labels`（全スナップショットの 30 分・60 分・引けまでのコスト前後の bps。`snapshot_id`に外部キーなし）・`research_label_days`（記録を終えた JST の日の印）・`research_label_day_stats`（日×ホライズン×側の和）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1074 |
 | 1.88 | 2026-11-15 | `er/tables-research.md`の保持を実装に合わせて書き換え（`research_horizon_labels`の行を`research.labels.retention_days`（既定90日）より古い日から日次タスクが削除。印・日ごとの和は残す。記録は`research.labels.enabled`既定オフ）。`er/tables-system.md`の`runtime_settings`に`research.labels.enabled` / `research.labels.retention_days`と`research_labels`の最終成功日を追記（マイグレーションの変更なし） | issue #1073 / #1074（PR #1077 の直し） |
+| 1.89 | 2026-11-15 | マイグレーション000057・000058を追加し、`er/tables-backtest.md`を新設して`backtest_runs`（MCP のバックテストの記録）を、`er/tables-virtual-paper.md`を新設して`virtual_paper_profiles`・`virtual_paper_trades`・`virtual_paper_days`（仮想 Paper の記録）を追加。どちらも他の表への外部キーも既存の表への変更も無い研究専用の表で、取引に使わない | issue #1086 / #1087 |

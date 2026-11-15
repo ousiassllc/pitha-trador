@@ -108,7 +108,7 @@ func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range, clie
 	defer func() { _ = tx.Rollback() }()
 	return run(ctx, toolEnv{
 		q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now(),
-		client: client, paperLimits: s.opts.PaperLimits, policy: s.opts.PolicyThresholds, writer: s.Writer, experiments: s.experiments,
+		client: client, paperLimits: s.opts.PaperLimits, policy: s.opts.PolicyThresholds, writer: s.Writer, experiments: s.experiments, backtests: s.backtests,
 	})
 }
 

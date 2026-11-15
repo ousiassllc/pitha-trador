@@ -44,21 +44,21 @@ var proposalTools = []string{
 	"order_proposals_list", "order_proposal_get", "order_proposal_summary",
 }
 
-// experimentTools are the tools of issue #871: record a tuning experiment and
-// end it (these two write one row each), and list / compare them (read only).
+// experimentTools (issue #871): create / close write one row each; list / compare only read.
 var experimentTools = []string{"experiment_create", "experiment_close", "experiments_list", "experiment_compare"}
 
-// jevShadowTools are the tools of issue #872: the shadow comparison and its
-// cost (reads) and the explicit promotion of a prompt version (the one write).
+// jevShadowTools (issue #872): two reads and the one explicit write (promoting a prompt version).
 var jevShadowTools = []string{"jev_shadow_compare", "jev_shadow_cost", "jev_prompt_promote"}
 
-// writingTools are the tools that change state; every other tool is annotated
-// read-only.
+// researchTools (issues #1086 / #1087): backtest_start and the virtual Paper profile create / stop write one research row each; the rest read.
+var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_compare"}
+
+// writingTools are the tools that change state; every other tool is annotated read-only.
 var writingTools = []string{
 	"settings_set", "settings_write_enable", "settings_write_disable",
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
-	"experiment_create", "experiment_close",
-	"jev_prompt_promote",
+	"experiment_create", "experiment_close", "jev_prompt_promote",
+	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {
@@ -82,9 +82,9 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the eighteen read tools, the six settings tools, the
-// six order-proposal tools, the four experiment tools and the three Jev prompt tools
-// (37 in all); only the nine writing tools are not marked read-only.
+// tools/list returns exactly the eighteen read tools, the six settings tools, the six order-proposal tools,
+// the four experiment tools, the three Jev prompt tools and the six research tools (43 in all);
+// only the twelve writing tools are not marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -112,12 +112,12 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools)
+	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -132,7 +132,7 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) {
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchTools, name) {
 			continue // their reach is pinned in settingstests and proposaltests
 		}
 		if !slices.Contains(allTools, name) {

@@ -43,6 +43,9 @@ const (
 	CodeMultipleVariables    Code = "multiple_variables"
 	CodeExperimentNotFound   Code = "experiment_not_found"
 	CodeExperimentNotRunning Code = "experiment_not_running"
+	// The research-backtest tools' codes (issue #1086).
+	CodeBacktestNotFound    Code = "backtest_not_found"
+	CodeBacktestUnavailable Code = "backtest_unavailable"
 )
 
 type codeInfo struct {
@@ -73,6 +76,8 @@ var codeTable = map[Code]codeInfo{
 	CodeMultipleVariables:    {http.StatusUnprocessableEntity, "1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。"},
 	CodeExperimentNotFound:   {http.StatusNotFound, "その experiment_id の実験はありません。experiments_list で確認してください。"},
 	CodeExperimentNotRunning: {http.StatusConflict, "この実験はもう終わっています（再び開くことはできません）。"},
+	CodeBacktestNotFound:     {http.StatusNotFound, "その run_id のバックテストはありません。backtest_list で確認してください。"},
+	CodeBacktestUnavailable:  {http.StatusServiceUnavailable, "バックテストを実行できません（再生用のデータを読む設定が無い、または読めません）。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.
