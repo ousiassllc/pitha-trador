@@ -50,6 +50,13 @@ type Row struct {
 	Attrs                        Attrs
 }
 
+// CohortCount is the decision count of one (model_id, question_version) cohort: Decisions
+// read (before exclusions) and Evaluated, the rows that reached the comparison set.
+type CohortCount struct {
+	ModelID, QuestionVersion string
+	Decisions, Evaluated     int
+}
+
 // Meta describes what Rows evaluated.
 type Meta struct {
 	HorizonMinutes int
@@ -57,6 +64,10 @@ type Meta struct {
 	Decisions int
 	// CutoffApplied: decisions before metalabel.llm_cutoff were dropped.
 	CutoffApplied bool
+	// TakeProfitBps, StopLossBps and BarrierCostBps are the label settings in force (calibration.barrier_*).
+	TakeProfitBps, StopLossBps, BarrierCostBps float64
+	// Cohorts are the per-cohort counts, oldest cohort first.
+	Cohorts []CohortCount
 }
 
 // Rows evaluates the decisions of [r.From, r.To) like Run and returns the
@@ -69,7 +80,12 @@ func Rows(ctx context.Context, q query.Q, r query.Range, req Request) ([]Row, Me
 		return nil, Meta{}, err
 	}
 	var out []Row
+	meta := Meta{
+		HorizonMinutes: c.horizon, Decisions: c.decisions, CutoffApplied: c.cutoff.Applied,
+		TakeProfitBps: c.base.TakeProfitBps, StopLossBps: c.base.StopLossBps, BarrierCostBps: c.base.CostBps,
+	}
 	for _, acc := range c.order {
+		meta.Cohorts = append(meta.Cohorts, CohortCount{ModelID: acc.key.model, QuestionVersion: acc.key.version, Decisions: acc.decisions, Evaluated: len(acc.rows)})
 		for _, e := range acc.rows {
 			out = append(out, Row{
 				DecisionID: e.id, At: e.at, Day: e.day, ModelID: acc.key.model, QuestionVersion: acc.key.version,
@@ -80,7 +96,7 @@ func Rows(ctx context.Context, q query.Q, r query.Range, req Request) ([]Row, Me
 		}
 	}
 	sortRows(out)
-	return out, Meta{HorizonMinutes: c.horizon, Decisions: c.decisions, CutoffApplied: c.cutoff.Applied}, nil
+	return out, meta, nil
 }
 
 // sortRows orders rows by time then decision id (cohorts interleave).
