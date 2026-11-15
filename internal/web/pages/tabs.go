@@ -13,6 +13,7 @@ const (
 	tabActuals     = "actuals"
 	tabBacktest    = "backtest"
 	tabCalibration = "calibration"
+	tabTrial       = "trial"
 )
 
 // BacktestTabHref is the バックテスト tab of the 成績 page. The old
@@ -27,11 +28,16 @@ func candidateTabs(current string) []molecules.Tab {
 	}
 }
 
-// resultTabs is the 成績 tab bar: 実績, バックテスト and 予測の精度.
+// TrialTabHref is the お試し tab of the 成績 page: the read-only results of the
+// model-comparison trial.
+const TrialTabHref = "/performance/trial"
+
+// resultTabs is the 成績 tab bar: 実績, バックテスト, 予測の精度 and お試し.
 func resultTabs(current string) []molecules.Tab {
 	return []molecules.Tab{
 		{Label: "実績", Href: "/performance", Current: current == tabActuals},
 		{Label: "バックテスト", Href: BacktestTabHref, Current: current == tabBacktest},
 		{Label: "予測の精度", Href: "/calibration", Current: current == tabCalibration},
+		{Label: "お試し", Href: TrialTabHref, Current: current == tabTrial},
 	}
 }

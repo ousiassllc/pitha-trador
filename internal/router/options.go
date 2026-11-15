@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -46,6 +47,7 @@ type options struct {
 	orderProposals      orderproposals.Source
 	watchlistSource     watchlist.Source
 	homeSource          home.Source
+	trialResults        trialresults.Source
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
@@ -168,12 +170,6 @@ func WithOrderProposalSource(source orderproposals.Source) Option {
 // tests) renders the "not maintained" notice.
 func WithWatchlistSource(source watchlist.Source) Option {
 	return func(o *options) { o.watchlistSource = source }
-}
-
-// WithHomeSource backs the read-only Home screen (`GET /`, issue #896) with its
-// database reads (handler/home.Source); cmd/* pass bootstrap/homeview's Reader.
-func WithHomeSource(source home.Source) Option {
-	return func(o *options) { o.homeSource = source }
 }
 
 // WithBacktestRunner overrides `GET /performance`'s backing

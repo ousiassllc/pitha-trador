@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/trialview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -71,6 +72,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithActivitySource(services.Activity),
 		router.WithOrderProposalSource(proposalview.Reader{DB: state.DB}),
 		router.WithHomeSource(homeview.Reader{DB: state.DB}),
+		router.WithTrialResultsSource(trialview.Reader{DB: state.DB}),
 		router.WithSecretsStore(secretsRepo),
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithDefaultBackupDir(startup.DefaultBackupDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),

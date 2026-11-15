@@ -24,6 +24,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/swagger"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
@@ -75,6 +76,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	performanceHandler.Register(engine)
+	trialresults.New(o.trialResults).Register(engine)
 	orderproposals.NewHandler(o.orderProposals).Register(engine)
 
 	engine.GET("/activity", h.activity.Page)
