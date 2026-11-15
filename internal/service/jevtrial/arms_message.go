@@ -29,7 +29,7 @@ func armsMessage(err error) string {
 	case jevtrialsettings.ArmsErrID:
 		return "アームの id は英小文字・数字・. _ - の 1〜48 文字で指定してください"
 	case jevtrialsettings.ArmsErrProvider:
-		return which + " の provider は openrouter にしてください"
+		return which + " の provider は openrouter・custom・codex_chatgpt のどれかにしてください（OpenRouter 専用の項目 provider_only・data_collection・zdr と、codex_chatgpt の費用の項目 daily_cost_cap_usd・list_price_usd_per_mtok は、その provider では使えません）"
 	case jevtrialsettings.ArmsErrModel:
 		return which + " の model を 1〜" + strconv.Itoa(jevtrialsettings.MaxModelLen) + " 文字で指定してください"
 	case jevtrialsettings.ArmsErrPromptVersion:

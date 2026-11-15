@@ -88,6 +88,8 @@ type State struct {
 	// whether OPENROUTER_API_KEY is set. The value is never read out.
 	KeyKnown bool
 	KeySet   bool
+	// Codex is the ChatGPT subscription provider's state (codex.go).
+	Codex CodexStatus
 }
 
 // Service reads and changes the trial settings.
@@ -148,6 +150,9 @@ func (s *Service) State(ctx context.Context) (State, error) {
 	if cfg.Halt.HaltOn(st.TodayDate) {
 		st.Halt = cfg.Halt
 	}
+	if st.Codex, err = s.codexStatus(ctx, cfg.Codex, from, to, now); err != nil {
+		return State{}, err
+	}
 	for _, arm := range cfg.Arms {
 		as, err := s.armStatus(ctx, arm, from, to, now, st.TodayDate)
 		if err != nil {
@@ -185,15 +190,20 @@ func (s *Service) SetEnabled(ctx context.Context, on bool) error {
 	return s.settings.Set(ctx, jevtrialsettings.KeyEnabled, jevtrialsettings.Switch(on), s.now())
 }
 
+// normalizeArms is armsJSON trimmed, "[]" when blank.
+func normalizeArms(armsJSON string) string {
+	armsJSON = strings.TrimSpace(armsJSON)
+	if armsJSON == "" {
+		return "[]"
+	}
+	return armsJSON
+}
+
 // ValidateArms checks the arms JSON the operator typed ("" is no arm): it must
 // parse as jevtrialsettings arms and every arm's prompt version must be
 // registered in this build. It returns the value to store.
 func ValidateArms(armsJSON string) (string, error) {
-	armsJSON = strings.TrimSpace(armsJSON)
-	if armsJSON == "" {
-		armsJSON = "[]"
-	}
-	arms, err := jevtrialsettings.ParseArms(armsJSON)
+	arms, err := jevtrialsettings.ParseArms(normalizeArms(armsJSON))
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, armsMessage(err))
 	}
@@ -205,10 +215,16 @@ func ValidateArms(armsJSON string) (string, error) {
 	return jevtrialsettings.EncodeArms(arms)
 }
 
-// SetArms saves the arms (a JSON array; "" or "[]" for none).
+// SetArms saves the arms (a JSON array; "" or "[]" for none). An arm of the
+// ChatGPT subscription is refused while the provider's own switch is off (Save
+// checks it against the form's switch instead).
 func (s *Service) SetArms(ctx context.Context, armsJSON string) error {
 	value, err := ValidateArms(armsJSON)
 	if err != nil {
+		return err
+	}
+	cfg := jevtrialsettings.Load(ctx, s.settings)
+	if err := validateCodex(Form{CodexEnabled: cfg.Codex.Enabled}, armsJSON); err != nil {
 		return err
 	}
 	return s.settings.Set(ctx, jevtrialsettings.KeyArms, value, s.now())
@@ -234,48 +250,4 @@ func (s *Service) SetCap(ctx context.Context, usd float64) error {
 // (jevtrialsettings.DefaultDailyCostCapUSD) applies again.
 func (s *Service) ResetCap(ctx context.Context) error {
 	return s.settings.Delete(ctx, jevtrialsettings.KeyDailyCostCapUSD)
-}
-
-// Form is what the Settings form submits. Cap is nil for a blank field (the
-// default applies).
-type Form struct {
-	Enabled  bool
-	ArmsJSON string
-	Cap      *float64
-}
-
-// Save validates the whole form first and only then writes it, so a rejected
-// form changes nothing.
-func (s *Service) Save(ctx context.Context, f Form) error {
-	if _, err := ValidateArms(f.ArmsJSON); err != nil {
-		return err
-	}
-	if f.Cap != nil {
-		if err := ValidateCap(*f.Cap); err != nil {
-			return err
-		}
-	}
-	// Turning the trial off comes first, so a later write that fails cannot leave
-	// it on; turning it on comes last, after everything it depends on is saved.
-	if !f.Enabled {
-		if err := s.SetEnabled(ctx, false); err != nil {
-			return err
-		}
-	}
-	if err := s.SetArms(ctx, f.ArmsJSON); err != nil {
-		return err
-	}
-	var err error
-	if f.Cap == nil {
-		err = s.ResetCap(ctx)
-	} else {
-		err = s.SetCap(ctx, *f.Cap)
-	}
-	if err != nil {
-		return err
-	}
-	if f.Enabled {
-		return s.SetEnabled(ctx, true)
-	}
-	return nil
 }

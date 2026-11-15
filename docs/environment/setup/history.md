@@ -61,3 +61,4 @@
 | 1.62 | 2026-11-14 | 「PC 移行」節と手順書`setup/pc-migration.md`を追加（旧PCで書き出し→新PCへインストール→Setup→取り込み→再起動→秘密・バックアップ先の入れ直し。安全コピーからの戻し方、別フォルダ`backups/`・`snapshot_archive/`の扱い）。バックアップ先の項の「PC移行は#1075」を手順書への参照に | issue #1075 |
 | 1.63 | 2026-11-15 | `setup/pc-migration.md`の除外設定に立花の接続先URL（`base_url`）を追加し、「確認の有効期限」の原因から事実と異なる「アプリの再起動」を改め、展開サイズの上限と、予約後にデータが増えた場合の失敗を追記 | issue #1075 |
 | 1.64 | 2026-11-15 | AI のプロバイダー（独自 API／OpenRouter）と役割ごとのモデルの設定手順`setup/ai-providers.md`を追加し、`setup.md`から参照 | issue #1080 |
+| 1.65 | 2026-11-15 | 環境変数`PITHA_CODEX_HOME`・`PITHA_CODEX_BIN`と、ChatGPT のサブスク（Codex CLI のログイン）をトライアルのアームに使う手順を`setup/ai-providers.md`に追加 | issue #1081 |

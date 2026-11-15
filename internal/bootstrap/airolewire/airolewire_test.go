@@ -150,6 +150,31 @@ func TestDamagedSettingRunsOnTheDefault(t *testing.T) {
 	srv.or.Expect(t, "OpenRouter")
 }
 
+// The Codex CLI and its dedicated CODEX_HOME come from the environment only (no
+// secret, nothing in the database); without PITHA_CODEX_HOME no Codex arm is
+// Configured, so the person's own Codex home is never used.
+func TestTrialKeysCodexConnectionComesFromTheEnvironment(t *testing.T) {
+	t.Setenv(airolewire.EnvCodexHome, "")
+	t.Setenv(airolewire.EnvCodexBin, "")
+	t.Setenv("CODEX_HOME", "/the/persons/own/home") // the parent's CODEX_HOME is not used
+	if k := airolewire.TrialKeys(config.Secrets{}); k.Codex != (trial.CodexConn{}) {
+		t.Errorf("codex = %+v, want none without the environment", k.Codex)
+	}
+	arm := jevtrialsettings.Arm{ID: "cx", Provider: jevtrialsettings.ProviderCodexChatGPT, Model: "m", PromptVersion: "trader-v3"}
+	if trial.NewCallers(airolewire.TrialKeys(config.Secrets{}))(arm).Configured() {
+		t.Error("a Codex arm is Configured without PITHA_CODEX_HOME")
+	}
+	t.Setenv(airolewire.EnvCodexHome, "/trial/codex-home")
+	t.Setenv(airolewire.EnvCodexBin, "/opt/codex")
+	k := airolewire.TrialKeys(config.Secrets{})
+	if k.Codex != (trial.CodexConn{Bin: "/opt/codex", Home: "/trial/codex-home"}) {
+		t.Errorf("codex = %+v", k.Codex)
+	}
+	if !trial.NewCallers(k)(arm).Configured() {
+		t.Error("a Codex arm is not Configured with PITHA_CODEX_HOME")
+	}
+}
+
 func TestTrialKeys(t *testing.T) {
 	k := airolewire.TrialKeys(config.Secrets{OpenRouterAPIKey: "o", OpenRouterBaseURL: "https://or.example", JevAPIKey: "j"})
 	if k.APIKey != "o" || k.BaseURL != "https://or.example" || k.Custom != (trial.Endpoint{BaseURL: jev.DefaultBaseURL, APIKey: "j"}) {

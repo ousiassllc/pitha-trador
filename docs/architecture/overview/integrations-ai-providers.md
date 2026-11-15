@@ -1,6 +1,6 @@
 # アーキテクチャ設計: AI のプロバイダー設定（役割ごとにプロバイダーとモデルを選ぶ。issue #1080）
 
-`docs/architecture/overview/integrations.md` §6（Jev API連携）から分割した節。AI を呼ぶ役割ごとに「どのプロバイダーの、どのモデルか」を選ぶ層。意思決定モデル比較のトライアル（`overview/integrations-jev-trial.md`）のアームのプロバイダー選択もこの層と同じ id を使う。ChatGPT のサブスクのプロバイダー（issue #1081）はこの層の対象外で、`internal/config/airole`にプロバイダーの定数と`Resolve`の分岐を 1 つ足せば加えられる形にしてある。
+`docs/architecture/overview/integrations.md` §6（Jev API連携）から分割した節。AI を呼ぶ役割ごとに「どのプロバイダーの、どのモデルか」を選ぶ層。意思決定モデル比較のトライアル（`overview/integrations-jev-trial.md`）のアームのプロバイダー選択もこの層と同じ id を使う。ChatGPT のサブスクのプロバイダー（issue #1081。`codex_chatgpt`）はこの層の対象外で、**トライアルのアームの`provider`だけ**に足した（AI の役割には選べない。`overview/integrations-codex-chatgpt.md`）。ライブに使うかどうかは、トライアルの成績を見てから別に決める。
 
 ## 位置づけ
 

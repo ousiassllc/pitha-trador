@@ -51,7 +51,10 @@ const (
 const KeyPrefix = "jev.trial."
 
 // Keys returns the keys that exist independently of an arm.
-func Keys() []string { return []string{KeyEnabled, KeyArms, KeyDailyCostCapUSD, KeyHalt} }
+func Keys() []string {
+	return []string{KeyEnabled, KeyArms, KeyDailyCostCapUSD, KeyHalt,
+		KeyCodexEnabled, KeyCodexDailyCallCap, KeyCodexDailyTokenCap, KeyCodexHalt, KeyCodexLogin}
+}
 
 // HaltKey, FailuresKey and ThrottleKey are arm's per-arm keys.
 func HaltKey(arm string) string     { return PrefixHaltArm + arm }
@@ -145,6 +148,8 @@ type Settings struct {
 	CapIsDefault bool
 	// Halt is the recorded stop of the whole trial, nil for none.
 	Halt *Halt
+	// Codex is the state of the ChatGPT subscription provider (issue #1081).
+	Codex CodexSettings
 	// ReadErr is the first failed READ (not a damaged value). While it is set the
 	// stop records are unknown, so a caller about to spend money must not treat
 	// "no record" as "not stopped".
@@ -190,6 +195,7 @@ func Load(ctx context.Context, store Store) (s Settings) {
 			slog.Warn("jevtrialsettings: ignoring the stored halt record", "error", err)
 		}
 	}
+	s.Codex = loadCodex(rd)
 	return s
 }
 

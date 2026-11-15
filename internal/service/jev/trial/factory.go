@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/codexwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/systemone"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 )
@@ -24,6 +25,17 @@ type Keys struct {
 	APIKey  string
 	BaseURL string
 	Custom  Endpoint
+	// Codex is the ChatGPT subscription through the Codex CLI (issue #1081): it
+	// holds no key, only where the CLI and its dedicated CODEX_HOME are.
+	Codex CodexConn
+}
+
+// CodexConn is where the Codex CLI is: Bin is the executable (empty: "codex" on
+// PATH), Home the dedicated CODEX_HOME a person logged in to beforehand. Without a
+// Home no Codex arm is ever called.
+type CodexConn struct {
+	Bin  string
+	Home string
 }
 
 // Endpoint is one provider connection: the API root (never empty for a
@@ -58,6 +70,7 @@ func NewCallers(keys Keys) func(jevtrialsettings.Arm) Caller {
 		mu     sync.Mutex
 		cached = map[string]cachedCaller{}
 	)
+	codexLogin := codexwire.NewLogin(codexwire.Config{Bin: keys.Codex.Bin, Home: keys.Codex.Home})
 	return func(arm jevtrialsettings.Arm) Caller {
 		cfg, err := json.Marshal(arm)
 		if err != nil {
@@ -67,6 +80,11 @@ func NewCallers(keys Keys) func(jevtrialsettings.Arm) Caller {
 		defer mu.Unlock()
 		if c, ok := cached[arm.ID]; ok && c.config == string(cfg) {
 			return c.client
+		}
+		if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
+			client := codexwire.New(codexwire.Config{Bin: keys.Codex.Bin, Home: keys.Codex.Home, Model: arm.Model}, codexLogin)
+			cached[arm.ID] = cachedCaller{config: string(cfg), client: client}
+			return client
 		}
 		ep := keys.endpointFor(arm)
 		client := trialwire.New(trialwire.Config{
@@ -83,7 +101,7 @@ func NewCallers(keys Keys) func(jevtrialsettings.Arm) Caller {
 
 type cachedCaller struct {
 	config string
-	client *trialwire.Client
+	client Caller
 }
 
 // providerFor is the routing preference of an OpenRouter arm (none for a custom

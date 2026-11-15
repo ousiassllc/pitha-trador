@@ -15,6 +15,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"os"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/airole"
@@ -101,16 +102,26 @@ func (r Roles) JevConfig(base jev.Config) jev.Config {
 	return base
 }
 
+// Environment variables of the ChatGPT subscription provider (issue #1081). They
+// name where the Codex CLI and its dedicated CODEX_HOME are; they hold no secret.
+// Without EnvCodexHome no Codex arm is ever called (the person's own Codex home is
+// never used).
+const (
+	EnvCodexHome = "PITHA_CODEX_HOME"
+	EnvCodexBin  = "PITHA_CODEX_BIN"
+)
+
 // TrialKeys are the connections of the providers a trial arm can name:
-// OpenRouter as before, and the custom provider (the Jev connection's URL and
+// OpenRouter as before, the custom provider (the Jev connection's URL and
 // key, whose default URL is filled in here because the trial client's own default
-// is OpenRouter's).
+// is OpenRouter's) and the Codex CLI (EnvCodexHome, EnvCodexBin).
 func TrialKeys(secrets config.Secrets) trial.Keys {
 	custom := trial.Endpoint{BaseURL: secrets.JevBaseURL, APIKey: secrets.JevAPIKey}
 	if custom.BaseURL == "" {
 		custom.BaseURL = jev.DefaultBaseURL
 	}
-	return trial.Keys{APIKey: secrets.OpenRouterAPIKey, BaseURL: secrets.OpenRouterBaseURL, Custom: custom}
+	return trial.Keys{APIKey: secrets.OpenRouterAPIKey, BaseURL: secrets.OpenRouterBaseURL, Custom: custom,
+		Codex: trial.CodexConn{Bin: os.Getenv(EnvCodexBin), Home: os.Getenv(EnvCodexHome)}}
 }
 
 // Record records the provider and model each role runs on since this start

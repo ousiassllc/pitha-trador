@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/codexwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/systemone"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -72,7 +73,7 @@ func buildDecision(arm jevtrialsettings.Arm, in armInput, r callResult, now time
 		CreatedAt:                   now.UTC(),
 	}
 	if r.err != nil {
-		fillFailure(&d, r, secrets)
+		fillFailure(&d, arm, r, secrets)
 		return d
 	}
 	fillAnswer(&d, arm, r)
@@ -107,7 +108,7 @@ func fillAnswer(d *jevtrial.Decision, arm jevtrialsettings.Arm, r callResult) {
 	d.CostUSD, d.CostSource, d.CountedCostUSD = c.USD, c.Source, c.CountedUSD
 }
 
-func fillFailure(d *jevtrial.Decision, r callResult, secrets []string) {
+func fillFailure(d *jevtrial.Decision, arm jevtrialsettings.Arm, r callResult, secrets []string) {
 	d.Status = jevtrial.StatusFailed
 	var status *int
 	d.FailureCode, status = classifyFailure(r.err)
@@ -118,6 +119,9 @@ func fillFailure(d *jevtrial.Decision, r callResult, secrets []string) {
 		httpStatus = *status
 	}
 	c := FailedCost(httpStatus, r.requestBytes)
+	if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
+		c = SubscriptionCost()
+	}
 	d.CostUSD, d.CostSource, d.CountedCostUSD = c.USD, c.Source, c.CountedUSD
 }
 
@@ -156,7 +160,14 @@ func classifyFailure(err error) (code string, status *int) {
 		return httpFailureCode(apiErr.StatusCode), new(apiErr.StatusCode)
 	}
 	var netErr net.Error
+	var callErr *codexwire.CallError
 	switch {
+	case errors.As(err, &callErr) && callErr.UsageLimit:
+		return jevtrial.FailureUsageLimit, nil
+	case errors.Is(err, context.DeadlineExceeded):
+		return jevtrial.FailureTimeout, nil
+	case callErr != nil:
+		return jevtrial.FailureCodexFailed, nil
 	case errors.Is(err, systemone.ErrInvalidResponse):
 		return jevtrial.FailureInvalidResponse, nil
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
