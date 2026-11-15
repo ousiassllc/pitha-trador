@@ -123,3 +123,12 @@ func TestTextMasksValuesAfterUnicodeSpaces(t *testing.T) {
 		"authorization:\u00a0Bearer abc12345": "authorization:\u00a0[masked]",
 	})
 }
+
+func TestUnicodeSpaceInputsAreIdempotent(t *testing.T) {
+	for _, in := range []string{"password:\u3000hunter2xx", "Bearer\u00a0abcdef123456", "token\u3000abc12345xyz", "パスワード：\u3000hunter2xx"} {
+		once := mask.Text(in)
+		if twice := mask.Text(once); twice != once {
+			t.Errorf("Text(%q) not idempotent: %q -> %q", in, once, twice)
+		}
+	}
+}
