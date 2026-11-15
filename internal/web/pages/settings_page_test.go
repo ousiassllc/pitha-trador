@@ -15,7 +15,7 @@ import (
 // systemDialogs are the system cards' dialogs the maintenance page holds
 // (settingspages): SettingsPage renders a fixed card only when its dialog id
 // is in SettingsProps.Dialogs.
-var systemDialogs = []string{"modal-update", "modal-error-log", "modal-data-export"}
+var systemDialogs = []string{"modal-update", "modal-error-log", "modal-data-export", "modal-migration"}
 
 func renderSettings(t *testing.T, props pages.SettingsProps) string {
 	t.Helper()
@@ -200,6 +200,40 @@ func TestSettingsPage_DataExportPanelIsPlainDownloadForm(t *testing.T) {
 	}
 }
 
+// FR-MIGRATE-6: the PC 移行 section exports with a plain GET form and imports
+// through the preview / confirm flow; there is no option to put secrets into
+// the file, and the replace confirmation is a checkbox the operator must tick.
+func TestSettingsPage_MigrationPanelHasExportFormAndImportFlowWithoutSecretOption(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
+	for _, want := range []string{
+		`<dialog id="modal-migration"`,
+		`id="migration-panel"`,
+		`<form method="get" action="/api/v1/migration/export" hx-disable`,
+		`data-migration-file`,
+		`accept=".pitha-bundle"`,
+		`data-migration-preview`,
+		`data-migration-confirm`,
+		`data-migration-replace`,
+		`/static/dist/js/migration/pitha-migration.js`,
+		`data-testid="migration-counts"`,
+		`PC 移行`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SettingsPage lacks %q", want)
+		}
+	}
+	start := strings.Index(body, `id="migration-panel"`)
+	panel := body[start : start+strings.Index(body[start:], "</section>")]
+	for _, secretOption := range []string{"include_secrets", "includeSecrets", "秘密情報を含める", "パスワードを含める"} {
+		if strings.Contains(panel, secretOption) {
+			t.Errorf("migration panel offers a secrets option: %q", secretOption)
+		}
+	}
+	if n := strings.Count(panel, "appearance-none"); n != 1 {
+		t.Errorf("migration panel has %d guide-styled checkboxes, want 1 (the replace confirmation)", n)
+	}
+}
+
 // FR-ERRLOG-1: the エラーログ section lives on Settings only; the first-run
 // Setup screen (no Header, no session-guarded fragments) must not offer it.
 func TestSetupPage_HasNoErrorLogPanel(t *testing.T) {
@@ -209,7 +243,7 @@ func TestSetupPage_HasNoErrorLogPanel(t *testing.T) {
 			t.Fatalf("render: %v", err)
 		}
 		body := buf.String()
-		for _, unwanted := range []string{`error-log-panel`, `/api/v1/logs/errors`, `data-export-panel`, `/api/v1/export`} {
+		for _, unwanted := range []string{`error-log-panel`, `/api/v1/logs/errors`, `data-export-panel`, `/api/v1/export`, `migration-panel`, `/api/v1/migration`} {
 			if strings.Contains(body, unwanted) {
 				t.Errorf("complete=%v: SetupPage contains %q, want the error log panel on Settings only", complete, unwanted)
 			}

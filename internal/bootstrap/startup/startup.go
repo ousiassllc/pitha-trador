@@ -5,15 +5,18 @@ package startup
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/service/migratebundle/importflow"
 )
 
 // DefaultLogDir is the log directory used while the Settings screen has not
@@ -23,6 +26,16 @@ import (
 // unwritable one).
 func DefaultLogDir(dbPath string) string {
 	return filepath.Join(filepath.Dir(dbPath), "logs")
+}
+
+// DefaultBackupDir is the daily database backup destination used while the
+// Settings screen has not configured one (issue #890): "backups" next to the
+// SQLite DB at dbPath, a separate folder on the same PC, derived from dbPath
+// like DefaultLogDir. It does not survive a disk failure; choosing an
+// external path in Settings does. Only the backup's own daily/ and weekly/
+// subfolders are ever pruned, never the DB or its WAL files.
+func DefaultBackupDir(dbPath string) string {
+	return filepath.Join(filepath.Dir(dbPath), "backups")
 }
 
 // LogDir returns the absolute directory the daily JSON logs are written to
@@ -107,4 +120,19 @@ func RunMain(name string, resolve func() (LogSetup, error), run func() error) (e
 		return 1
 	}
 	return 0
+}
+
+// OpenDatabase opens the application database at dbPath (read-only for
+// cmd/backtestverify). Before a read-write open it applies an import the
+// operator confirmed on the Settings screen's PC 移行 (issue #1075,
+// importflow.ApplyPending): the staged database replaces the file only here,
+// while nothing has it open, after a safety copy of the current one. The
+// result is logged and kept for the Settings screen; a failed import leaves
+// the current database untouched and the application starts on it.
+func OpenDatabase(dbPath string, readOnly bool) (*sql.DB, error) {
+	if readOnly {
+		return sqlitedb.OpenReadOnly(dbPath)
+	}
+	importflow.ApplyPending(context.Background(), dbPath, time.Now)
+	return sqlitedb.Open(dbPath)
 }

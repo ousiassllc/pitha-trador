@@ -42,7 +42,7 @@ type SettingsProps struct {
 func (p SettingsProps) Has(modalID string) bool { return slices.Contains(p.Dialogs, modalID) }
 
 func (p SettingsProps) hasSystem() bool {
-	return p.Has("modal-update") || p.Has("modal-error-log") || p.Has("modal-data-export")
+	return p.Has("modal-update") || p.Has("modal-error-log") || p.Has("modal-data-export") || p.Has("modal-migration")
 }
 
 // SettingsHubPage is the Settings entry (`GET /settings`, issue #805): the
@@ -200,6 +200,14 @@ templ SettingsPage(props SettingsProps) {
 								ActionLabel: "開く",
 							})
 						}
+						if props.Has("modal-migration") {
+							@molecules.SettingsCard(molecules.SettingsCardProps{
+								ID:          "migration",
+								ModalID:     "modal-migration",
+								Name:        "PC 移行",
+								ActionLabel: "開く",
+							})
+						}
 					</ul>
 				</section>
 			}
@@ -241,6 +249,12 @@ templ SettingsPage(props SettingsProps) {
 			@molecules.Modal("modal-data-export", "データエクスポート") {
 				@organisms.DataExportPanel()
 			}
+		}
+		if props.Has("modal-migration") {
+			@molecules.Modal("modal-migration", "PC 移行") {
+				@organisms.MigrationPanel()
+			}
+			<script type="module" src="/static/dist/js/migration/pitha-migration.js"></script>
 		}
 		if props.MCP && props.Has("modal-mcp") {
 			@molecules.Modal("modal-mcp", "MCP") {

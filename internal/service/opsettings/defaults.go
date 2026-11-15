@@ -27,7 +27,7 @@ import (
 func (s *Service) defaultText(ctx context.Context, key string) string {
 	switch {
 	case key == config.KeyBackupDir:
-		return ""
+		return s.defaultBackupDir
 	case key == config.KeyLogDir:
 		return s.defaultLogDir
 	case kindOf(key) == kindPrivateKey || kindOf(key) == kindBroker:

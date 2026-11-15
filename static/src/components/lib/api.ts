@@ -81,8 +81,9 @@ async function request<T>(
   };
 
   if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    init.body = JSON.stringify(body);
+    const raw = body instanceof Blob; // a file is sent as the raw body (PC 移行の取り込み), anything else as JSON
+    headers['Content-Type'] = raw ? 'application/octet-stream' : 'application/json';
+    init.body = raw ? body : JSON.stringify(body);
   }
 
   const response = await fetch(path, init);
