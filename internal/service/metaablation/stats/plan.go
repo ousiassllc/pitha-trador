@@ -120,3 +120,11 @@ func seedFor(seed int64, name string) uint64 {
 
 // normalQuantile is the inverse of the standard normal CDF for p in (0, 1).
 func normalQuantile(p float64) float64 { return math.Sqrt2 * math.Erfinv(2*p-1) }
+
+// DetectableMinimum is the smallest true difference a two-sided test at level
+// alpha detects with the given power when the estimate's standard error is se:
+// (z_{1-alpha/2} + z_power) * se. The verdict's detectable minimum difference
+// and the read-only evaluation's descriptive one are this one function.
+func DetectableMinimum(alpha, power, se float64) float64 {
+	return (normalQuantile(1-alpha/2) + normalQuantile(power)) * se
+}

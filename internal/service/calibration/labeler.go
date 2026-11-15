@@ -105,17 +105,7 @@ func (l *Labeler) loadBarriers(ctx context.Context) (barriersettings.Barriers, e
 // row and the market_snapshots bars after the Jev response, and persists the
 // triple-barrier calibration_outcomes row (FR-CAL-4). Its signature matches
 // internal/service/scheduler.Handler (JobQueueOutcomeLabeling's handler).
-//
-// The label is measured from an executable entry reference price on the
-// first bar at or after the Jev response (the decision's created_at, within
-// EntryWaitTolerance): the ask for LONG, the bid for SHORT. From that bar
-// the path runs for the job's horizon_minutes, which is the Settings timeout
-// the scheduler enqueued the job with. A take-profit is touched when the
-// gross return less the assumed cost reaches the TP width, a stop-loss when
-// it falls to the SL width; whichever is touched first decides the label,
-// and reaching neither is a timeout graded by its net return (a flat result
-// is no longer "wrong"). A direction-NONE decision has no side to price, so
-// it records the raw price path with no barrier fields.
+// The label is LabelWindow's (entry quote, path, barriers).
 //
 // If the bars do not (yet) cover the path, HandleJob never records a shortened
 // window and never fails the job (issue #710, #481): see shortWindow.
@@ -167,19 +157,35 @@ func (l *Labeler) Compute(ctx context.Context, jevDecisionID int64, horizonMinut
 	}
 	responseAt := ResponseTime(decision)
 	timeout := time.Duration(horizonMinutes) * time.Minute
-	// +1s margin: SnapshotRepository.ListByInstrumentRange's `to` bound is
-	// exclusive, so this still includes a bar landing exactly on the latest
-	// timeout boundary.
+	// +1s: ListByInstrumentRange's `to` is exclusive; a bar exactly on the
+	// latest timeout boundary must stay in.
 	window, err := l.snapshots.ListByInstrumentRange(ctx, decision.InstrumentID, responseAt, responseAt.Add(EntryWaitTolerance+timeout+time.Second))
 	if err != nil {
 		return decision, outcome, "", fmt.Errorf("calibration: load market snapshots for decision %d: %w", jevDecisionID, err)
 	}
 
+	if outcome, gap = LabelWindow(window, responseAt, direction, horizonMinutes, barriers); gap == "" {
+		outcome.JevDecisionID = decision.ID
+	}
+	return decision, outcome, gap, nil
+}
+
+// LabelWindow is the pure label of one decision from window, the bars of its
+// instrument from responseAt (ascending, as ListByInstrumentRange returns
+// them): the outcome (no decision id), or the non-empty reason the window does
+// not cover the path. The entry is the first bar within EntryWaitTolerance of
+// responseAt with an executable quote (ask for LONG, bid for SHORT); the path
+// runs horizonMinutes from it. A take-profit is touched when the gross return
+// less the cost reaches the TP width, a stop-loss when it falls to the SL
+// width; the first decides the label, neither is a timeout graded by its net
+// return. NONE has no side to price: the raw path, no barrier fields. barriers
+// must be the effective (cost-moved, valid) ones. Nothing is read or written.
+func LabelWindow(window []domain.Snapshot, responseAt time.Time, direction string, horizonMinutes int, barriers barriersettings.Barriers) (domain.CalibrationOutcome, string) {
 	entryIdx, entryRef := FindEntry(window, direction, responseAt)
 	if entryIdx < 0 {
-		return decision, outcome, "no bar with an executable entry quote within " + EntryWaitTolerance.String() + " of the Jev response", nil
+		return domain.CalibrationOutcome{}, "no bar with an executable entry quote within " + EntryWaitTolerance.String() + " of the Jev response"
 	}
-	deadline := window[entryIdx].Timestamp.Add(timeout)
+	deadline := window[entryIdx].Timestamp.Add(time.Duration(horizonMinutes) * time.Minute)
 	path := window[entryIdx+1:]
 	for len(path) > 0 && path[len(path)-1].Timestamp.After(deadline) {
 		path = path[:len(path)-1]
@@ -189,13 +195,11 @@ func (l *Labeler) Compute(ctx context.Context, jevDecisionID int64, horizonMinut
 		if len(path) > 0 {
 			reason = fmt.Sprintf("market data ends at %s, short of the timeout (lunch break, close, or data gap)", path[len(path)-1].Timestamp.Format(time.RFC3339))
 		}
-		return decision, outcome, reason, nil
+		return domain.CalibrationOutcome{}, reason
 	}
-
-	outcome = labelPath(path, entryRef, direction, barriers)
-	outcome.JevDecisionID = decision.ID
+	outcome := labelPath(path, entryRef, direction, barriers)
 	outcome.HorizonMinutes = horizonMinutes
-	return decision, outcome, "", nil
+	return outcome, ""
 }
 
 // labelPath computes the calibration_outcomes row (without its identity) for
@@ -246,14 +250,11 @@ func labelPath(path []domain.Snapshot, entryRef float64, direction string, barri
 	return outcome
 }
 
-// shortWindow handles a window that does not reach the horizon, without ever
-// failing the job (issue #710): while the data may still land (within
-// horizonDataGrace of the Jev response + EntryWaitTolerance + horizon) it
-// returns jobqueue.Defer, so the job goes back to pending and is retried; once
-// the grace has passed the gap is permanent and it records the skip marker and
-// returns jobqueue.Skip (succeeded, "skipped:" note). Either way no
-// calibration_outcomes row is written, so a shortened horizon is never recorded
-// (FR-CAL-4).
+// shortWindow handles a window that does not reach the horizon, never failing
+// the job (issue #710): within horizonDataGrace of the Jev response +
+// EntryWaitTolerance + horizon the data may still land (jobqueue.Defer, retried);
+// after it the gap is permanent: the skip marker is recorded (jobqueue.Skip).
+// No calibration_outcomes row is written either way (FR-CAL-4).
 func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, responseAt time.Time, reason string) error {
 	horizon := time.Duration(horizonMinutes) * time.Minute
 	now := l.now()
@@ -269,9 +270,8 @@ func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, 
 	return jobqueue.Skip(fmt.Sprintf("decision %d horizon %dm permanently unlabelable: %s", decision.ID, horizonMinutes, reason))
 }
 
-// percentReturn is the % price return from entry to price (1.0 == +1%,
-// the same percentage-return convention internal/service/backtest.Trade
-// already uses).
+// percentReturn is the % price return from entry to price (1.0 == +1%, as in
+// internal/service/backtest.Trade).
 func percentReturn(entry, price float64) float64 {
 	return (price - entry) / entry * 100
 }

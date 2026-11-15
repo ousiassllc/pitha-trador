@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -59,7 +60,7 @@ func (r Request) Validate() error {
 
 // Run resolves the prompt cohort of req (the live version's unless one version
 // is asked for) and summarizes [r.From, r.To).
-func Run(ctx context.Context, q query.Q, r query.Range, req Request) (any, int, error) {
+func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request) (any, int, error) {
 	a := Args{PromptVersion: req.PromptVersion}
 	if req.PromptVersion == "" {
 		foreign, err := jev.ForeignVersionsOfLive(ctx, shadowquery.SettingsStore(q))

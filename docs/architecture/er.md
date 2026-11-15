@@ -34,6 +34,7 @@ erDiagram
     jev_decisions ||--o{ jev_trial_decisions : "同じ入力を別モデルに聞いた結果がアームごとに紐付く（取引に使わない）"
     jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判断ごとに紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
+    instruments ||--o{ research_horizon_labels : "スナップショットの足ごとの研究用ラベルを持つ（FKなし・取引に使わない）"
     disclosure_skip_records ||--o{ disclosure_skip_matches : "該当した開示を持つ"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
@@ -59,6 +60,7 @@ erDiagram
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
+| `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
@@ -157,3 +159,5 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.84 | 2026-11-14 | `er/tables-market.md`の`market_snapshots`に、90日削除の前に日別gzip CSVへ退避・検証する旨（失敗時は削除しない。ベクトル索引は退避しない）を追記。スキーマ変更なし | issue #1072 |
 | 1.85 | 2026-11-14 | `er/tables-system.md`に、PC移行の移行ファイルで`secrets`と`runtime_settings`の端末固有/秘密の行を除くこと（スキーマ変更なし）を追記 | issue #1075 |
 | 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
+| 1.87 | 2026-11-14 | マイグレーション000056を追加し、`er/tables-research.md`を新設して`research_horizon_labels`（全スナップショットの 30 分・60 分・引けまでのコスト前後の bps。`snapshot_id`に外部キーなし）・`research_label_days`（記録を終えた JST の日の印）・`research_label_day_stats`（日×ホライズン×側の和）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1074 |
+| 1.88 | 2026-11-15 | `er/tables-research.md`の保持を実装に合わせて書き換え（`research_horizon_labels`の行を`research.labels.retention_days`（既定90日）より古い日から日次タスクが削除。印・日ごとの和は残す。記録は`research.labels.enabled`既定オフ）。`er/tables-system.md`の`runtime_settings`に`research.labels.enabled` / `research.labels.retention_days`と`research_labels`の最終成功日を追記（マイグレーションの変更なし） | issue #1073 / #1074（PR #1077 の直し） |
