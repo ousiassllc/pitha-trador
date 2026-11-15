@@ -120,6 +120,22 @@ var settingsConnections = []connection{
 			{config.KeyOpenRouterBaseURL, "接続先 URL（任意）"},
 		},
 	},
+	{
+		id:          "jquants",
+		name:        "J-Quants（日足・分足）",
+		description: "J-Quants から日足・分足を研究専用の表へ取り込むための API キーです（任意）。入力しなくてもアプリは通常どおり動き、キーが未設定のあいだは J-Quants へ何も送りません。取り込みの有効・無効と契約の内容は、運用設定の「J-Quants（日足・分足の取り込み）」で行います。",
+		fields: []settingsField{
+			{config.KeyJQuantsAPIKey, "API キー（任意）"},
+		},
+	},
+	{
+		id:          "edinet",
+		name:        "EDINET（開示書類の一覧）",
+		description: "EDINET API（金融庁）から書類一覧のメタデータを研究専用の表へ記録するための API キーです（任意）。入力しなくてもアプリは通常どおり動き、キーが未設定のあいだは EDINET へ何も送りません。書類の本文は取得しません。記録の有効・無効は、運用設定の「開示・ニュースの追加の情報源（EDINET・立花）」で行います。",
+		fields: []settingsField{
+			{config.KeyEdinetAPIKey, "API キー（任意）"},
+		},
+	},
 }
 
 // defaultedKeys are the override-only keys whose unset state is the normal
@@ -128,7 +144,7 @@ var settingsConnections = []connection{
 var defaultedKeys = []string{
 	config.KeyJevBaseURL, config.KeyJevModel,
 	config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
-	config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
+	config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL, config.KeyJQuantsAPIKey, config.KeyEdinetAPIKey,
 	config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 }

@@ -47,7 +47,7 @@ erDiagram
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
-| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の19個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`（モデル比較トライアル専用。任意で、Setup Guard の必須には入れない。issue #1059）, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
+| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の21個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`（モデル比較トライアル専用。任意で、Setup Guard の必須には入れない。issue #1059）, `EDINET_API_KEY`（EDINET の書類一覧の記録専用。任意。issue #1096）, `JQUANTS_API_KEY`（J-Quants の日足・分足の取り込み専用。任意で、Setup Guard の必須には入れない。未設定のあいだは J-Quants へ何も送らない。issue #1093）, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
 | encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
 

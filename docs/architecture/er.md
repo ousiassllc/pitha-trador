@@ -33,6 +33,7 @@ erDiagram
     jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     jev_decisions ||--o{ jev_trial_decisions : "同じ入力を別モデルに聞いた結果がアームごとに紐付く（取引に使わない）"
     jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判断ごとに紐付く（取引に使わない）"
+    jev_decisions ||--o{ jev_replay_results : "保存済みの入力を後からアームに聞き直した結果が run ごと・アームごとに紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
     instruments ||--o{ research_horizon_labels : "スナップショットの足ごとの研究用ラベルを持つ（FKなし・取引に使わない）"
     disclosure_skip_records ||--o{ disclosure_skip_matches : "該当した開示を持つ"
@@ -60,7 +61,10 @@ erDiagram
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
+| `docs/architecture/er/tables-jev-replay.md` | `jev_replay_runs` / `jev_replay_results`（リプレイ評価: 保存済みのライブの trader 判断の入力を、お試しのアームに後から聞き直す run と、その結果。学習カットオフの確認状態と参考扱いの印を持つ。取引に使わない。issue #1085） |
 | `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074） |
+| `docs/architecture/er/tables-disclosure-sources.md` | `research_edinet_documents` / `research_edinet_fetch_days` / `research_tachibana_news` / `research_disclosure_source_status` とビュー `research_disclosure_source_events_v`（開示・ニュースの追加の情報源: EDINET の書類一覧のメタデータと立花ニュースの見出し。`disclosure_items` と銘柄・時刻で結合できる。取引に使わない。issue #1096） |
+| `docs/architecture/er/tables-jquants.md` | `research_jquants_symbols` / `research_jquants_daily_bars` / `research_jquants_minute_bars` / `research_jquants_coverage` / `research_jquants_fetch_log`（J-Quants の日足・分足・銘柄一覧の研究用の記録。既定オフ・私的利用・`source='jquants'`）と、`research_horizon_labels.exit_source`（付け直したラベルの出口の出どころ）（マイグレーション000058） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
@@ -161,3 +165,6 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
 | 1.87 | 2026-11-14 | マイグレーション000056を追加し、`er/tables-research.md`を新設して`research_horizon_labels`（全スナップショットの 30 分・60 分・引けまでのコスト前後の bps。`snapshot_id`に外部キーなし）・`research_label_days`（記録を終えた JST の日の印）・`research_label_day_stats`（日×ホライズン×側の和）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1074 |
 | 1.88 | 2026-11-15 | `er/tables-research.md`の保持を実装に合わせて書き換え（`research_horizon_labels`の行を`research.labels.retention_days`（既定90日）より古い日から日次タスクが削除。印・日ごとの和は残す。記録は`research.labels.enabled`既定オフ）。`er/tables-system.md`の`runtime_settings`に`research.labels.enabled` / `research.labels.retention_days`と`research_labels`の最終成功日を追記（マイグレーションの変更なし） | issue #1073 / #1074（PR #1077 の直し） |
+| 1.89 | 2026-11-15 | マイグレーション000059を追加し、`er/tables-disclosure-sources.md`を新設して`research_edinet_documents`・`research_edinet_fetch_days`（EDINET の書類一覧のメタデータ。本文なし）・`research_tachibana_news`（立花ニュースの見出し・時刻・関連銘柄。本番には繋がない）・`research_disclosure_source_status`（情報源ごとの要求数・失敗数・最終取得時刻）とビュー`research_disclosure_source_events_v`を追加。`disclosure_items`と同じ銘柄・時刻の形で結合できる。既存の表には列も制約も足さない。`secrets`の許可キーに`EDINET_API_KEY`（任意）を加える。研究専用で取引に使わない | issue #1096 |
+| 1.90 | 2026-11-15 | マイグレーション000058を追加し、`er/tables-jquants.md`を新設して`research_jquants_symbols`・`research_jquants_daily_bars`・`research_jquants_minute_bars`（J-Quants の銘柄一覧・日足・分足。研究用・`source='jquants'`）・`research_jquants_coverage`（取得済みの印）・`research_jquants_fetch_log`（日ごとの要求数・失敗の固定コード。1日の要求数の上限の数え元）を追加。`research_horizon_labels`に`exit_source`（既定`snapshot`。J-Quants の分足で付け直した行は`jquants`）を追加し、`er/tables-research.md`に反映。`er/tables-system.md`の`secrets`許可キーを`EDINET_API_KEY`・`JQUANTS_API_KEY`を含む21件にした | issue #1093 |
+| 1.91 | 2026-11-15 | マイグレーション000057を追加し、`er/tables-jev-replay.md`を新設して`jev_replay_runs`（リプレイの run: 指定・状態・停止フラグ・見積もり・進み具合）と`jev_replay_results`（(run, ライブの判断, アーム)ごとの結果。`jev_trial_decisions`と同じ答え・費用・状態の列に、学習カットオフの確認状態`llm_cutoff_status`（`verified`/`unverified`）と参考扱いの印`reference_only`を足したもの。`unverified`は必ず参考扱い）を追加。既存の表には列も制約も足さない。研究専用で取引に使わない | issue #1085 |

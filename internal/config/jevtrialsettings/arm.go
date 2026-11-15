@@ -76,6 +76,11 @@ type Arm struct {
 	DataCollection string `json:"data_collection,omitempty"`
 	// ZDR restricts routing to Zero Data Retention endpoints.
 	ZDR bool `json:"zdr,omitempty"`
+	// LLMCutoff is the end of the model's training data as published by its
+	// vendor, "YYYY-MM-DD" (UTC); empty: not published / not verified. Only the
+	// replay evaluation reads it (cutoff.go); the live trial ignores it. A date
+	// must never be guessed: leave it empty until the vendor publishes it.
+	LLMCutoff string `json:"llm_cutoff,omitempty"`
 }
 
 // CapUSD is the arm's effective daily cost cap.
@@ -132,6 +137,7 @@ const (
 	ArmsErrListPrice      = "list_price_usd_per_mtok"
 	ArmsErrProviderOnly   = "provider_only"
 	ArmsErrDataCollection = "data_collection"
+	ArmsErrLLMCutoff      = "llm_cutoff"
 )
 
 // ArmsError is an invalid arms setting. Kind (an ArmsErr* constant) and ArmID
@@ -182,6 +188,9 @@ func (a Arm) Validate() error {
 	}
 	if dc := a.DataCollection; dc != "" && dc != DataCollectionDeny && dc != DataCollectionAllow {
 		return armsErr(ArmsErrDataCollection, a.ID, "arm %q: data_collection must be %q or %q", a.ID, DataCollectionDeny, DataCollectionAllow)
+	}
+	if err := a.validateCutoff(); err != nil {
+		return armsErr(ArmsErrLLMCutoff, a.ID, "arm %q: llm_cutoff: %v", a.ID, err)
 	}
 	return nil
 }

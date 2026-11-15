@@ -107,11 +107,24 @@ type Comparison struct {
 // its misses; the same metrics over the common-success subset are labelled
 // informational. Nothing is imputed: a NONE is not given a direction.
 func Compare(ctx context.Context, q query.Q, r query.Range, arms []string) (Comparison, error) {
+	return compare(ctx, q, trialSource, r, arms)
+}
+
+// CompareReplay is Compare over the rows of one replay run (issue #1085,
+// jev_replay_results): the same cohort, missing rate, label hit rates and
+// counterfactual proxy, against the same live decisions. A replay has no skip
+// records (an arm is not asked about a decision only by the cutoff rule, which is
+// shown by the replay tool), so fairness.skipped is empty.
+func CompareReplay(ctx context.Context, q query.Q, r query.Range, runID int64, arms []string) (Comparison, error) {
+	return compare(ctx, q, source{table: "jev_replay_results", runID: runID}, r, arms)
+}
+
+func compare(ctx context.Context, q query.Q, src source, r query.Range, arms []string) (Comparison, error) {
 	if err := ValidateArms(arms); err != nil {
 		return Comparison{}, err
 	}
 	from, to := r.Bounds()
-	flat, err := loadRows(ctx, q, from, to, arms)
+	flat, err := loadRows(ctx, q, src, from, to, arms)
 	if err != nil {
 		return Comparison{}, err
 	}
@@ -155,9 +168,11 @@ func Compare(ctx context.Context, q query.Q, r query.Range, arms []string) (Comp
 	}
 	out.Cohort.Rows.finish()
 	out.Fairness.CohortSize = len(cohort)
-	skips, err := loadSkips(ctx, q, from, to)
-	if err != nil {
-		return Comparison{}, err
+	var skips []skipRow
+	if src.runID == 0 {
+		if skips, err = loadSkips(ctx, q, from, to); err != nil {
+			return Comparison{}, err
+		}
 	}
 	asked := make([]int, len(arms))
 	for i := range arms {
@@ -166,12 +181,12 @@ func Compare(ctx context.Context, q query.Q, r query.Range, arms []string) (Comp
 	out.Fairness.Skipped = buildSkipped(skips, arms, chosen, decisions, cohort, asked)
 	out.Fairness.Caveats = caveats(out.Cohort.Rows, out.Fairness.Skipped)
 
-	outcomes, err := loadOutcomes(ctx, q, from, to)
+	outcomes, err := loadOutcomes(ctx, q, src, from, to)
 	if err != nil {
 		return Comparison{}, err
 	}
 	out.Outcomes = outcomeSlices(arms, cohort, common, outcomes)
-	labels, err := loadCounterfactual(ctx, q, from, to)
+	labels, err := loadCounterfactual(ctx, q, src, from, to)
 	if err != nil {
 		return Comparison{}, err
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -102,11 +103,11 @@ type Services struct {
 	wg                 sync.WaitGroup
 	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 
-	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
-	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.
+	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the defaults unless 立花 is selected); the nightly daily-bar batch reads them.
 	tachibana tachibanasource.TachibanaSourceSettings
 
 	newsEnabled bool
+	research    *researchwire.Wire // J-Quants, EDINET and replay (issues #1093, #1096, #1085)
 	candidates  *candidates.Refresher
 	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
 	// (rankingwatch_start.go); tachibanaMonitor is the 立花 counterpart, set
@@ -195,6 +196,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
+	svc.research = researchwire.New(state.DB, svc.Settings, secrets, state.Paths.DBPath)
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)

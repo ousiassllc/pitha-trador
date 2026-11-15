@@ -68,6 +68,10 @@
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | OpenRouter（モデル比較） | `/settings/integrations#modal-openrouter` | モデル比較トライアルが比較対象のモデルを呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
+| J-Quants（日足・分足） | `/settings/integrations#modal-jquants` | J-Quants の API キー（任意。未設定のあいだは J-Quants へ何も送らない）を設定します。キーは起動時に 1 回読むため、保存したら再起動します。 | 外部連携・AI |
+| J-Quants（日足・分足の取り込み） | `/settings/integrations#modal-jquants-fetch` | 日足・分足の取り込みの有効化（既定オフ）・契約している種類・1 日の要求数の上限・埋め戻す日数・解約時の削除の依頼を設定します（研究専用・私的利用。取引には使いません）。 | 外部連携・AI |
+| EDINET（開示書類の一覧） | `/settings/integrations#modal-edinet` | EDINET API の API キー（任意。未設定のあいだは EDINET へ何も送らない）を設定します。 | 外部連携・AI |
+| 開示・ニュースの追加の情報源 | `/settings/integrations#modal-disclosure-src` | EDINET の書類一覧と立花ニュースの記録（研究専用・既定オフ）の有効化・1 日の要求数の上限・さかのぼる日数・保持期間を設定します。オンにできるのはこの画面だけです。記録は取引に使われません。立花ニュースは実機計測（#725）まで何も取得しません。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
 | MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開し、許可した基本設定だけを変更できる MCP サーバーの有効化・API キーの設定と、起動・停止・再起動、MCP からの設定変更の許可（既定オン）と監査ログの確認ができます。 | 外部連携・AI |
@@ -118,3 +122,4 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
+| 1.18 | 2026-11-15 | Settings「外部連携・AI」に J-Quants（日足・分足。API キー）と J-Quants（日足・分足の取り込み。有効化・契約・1 日の要求数の上限・解約時の削除）のカードを追加 | issue #1093 |

@@ -14,3 +14,8 @@ static/wailsjs/**
 
 # ライセンス全文（法的な定型文でありソースコードではない。分割・短縮できない）
 LICENSE
+
+# DB マイグレーション（migration は追記専用で、embed（db/migrations.go の //go:embed
+# migrations/*.sql）と番号テスト（db/migration_numbers_test.go）のためディレクトリ直下に
+# 平らに置く必要があり、分割できない。悠太さん 2026-11-15 カード t318s1373 の判断）
+db/migrations/**

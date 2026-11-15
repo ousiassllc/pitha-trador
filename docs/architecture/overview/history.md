@@ -146,3 +146,6 @@
 | 1.139 | 2026-11-15 | §10.8のPC移行に、除外キーへの立花`base_url`の追加、展開サイズの上限（ZIP爆弾対策）、起動時の整理と置き換え確認の再検査を追記 | issue #1075 |
 | 1.140 | 2026-11-14 | §3 のディレクトリ構成に`repository/researchlabel`・`service/researchlabel`（研究用ホライズンラベル。日次メンテナンスタスク`research_labels`）を追加。§4 の Retention に、研究用の 3 表は保持のパージ対象外（削除の方針は未決）と追記。取引に使わない研究専用の記録 | issue #1074 |
 | 1.141 | 2026-11-15 | §4 の Retention の行を、研究用ホライズンラベルの行を日次タスク`research_labels`が Settings の保持期間（既定90日）で自分で削除する形に直し、記録は`research.labels.enabled`（既定オフ）である旨を追記。メンテナンスランナーは`ErrMore`のチャンクのあいだ mutex を放す（`maintenance.ErrMore`） | issue #1073 / #1074（PR #1077 の直し） |
+| 1.142 | 2026-11-15 | `overview/integrations-disclosure-sources.md`を新設（EDINET の書類一覧と立花ニュースの記録。既定オフ・記録だけ・`NewsFetcher`の向こう・メンテナンスタスク`disclosure_src_edinet`のみ登録・キーを URL に載せない）。取引・既存の開示見送りルールには使わない | issue #1096 |
+| 1.143 | 2026-11-15 | `overview/integrations-jev-replay.md`を新設（保存済みの trader 判断の入力を、お試しのアームに後から聞き直すリプレイ評価。既定オフ・記録だけ。見積もりの確認トークン・学習カットオフ（`llm_cutoff`。未公表は未確認・参考扱い）・お試しと合算の 1 日の費用上限・保存された入力をそのまま送る）。`integrations.md` §6 に 1 文の参照を追加 | issue #1085 |
+| 1.144 | 2026-11-15 | `overview/integrations-jquants.md`を新設（J-Quants の日足・分足の取り込み。既定オフ・キー未設定は要求 0 回・研究専用・1日の要求数の上限・研究用ラベルの付け直し・解約時の削除。メンテナンスタスク`jquants`のみ登録。Paper 実績 MCP の`jquants_status`は読み取り専用） | issue #1093 |

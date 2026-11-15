@@ -16,6 +16,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -121,6 +123,8 @@ func Keys() []string {
 	keys = append(keys, sleepguardsettings.Keys()...)
 	keys = append(keys, researchlabelsettings.Keys()...)
 	keys = append(keys, watchsettings.Keys()...)
+	keys = append(keys, jquantssettings.Keys()...)
+	keys = append(keys, disclosuresrcsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
@@ -160,7 +164,7 @@ func kindOf(key string) kind {
 		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || watchsettings.IsIntegerKey(key):
+	case key == "screener.top_n" || jquantssettings.IsKey(key) || disclosuresrcsettings.IsKey(key) || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || watchsettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
