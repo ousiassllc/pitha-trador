@@ -183,7 +183,10 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, paperentryquality.Option(runtimePolicy, s.Settings), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB).WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
-	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
+	// The backtest and the proposal evaluation replay with the Live min_entry_quality, as before
+	// (issue #874): switching them to backtestsource.ReplayPaper is a decision about
+	// the comparability of past results, not made here.
+	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions).WithMode(backtestsource.ReplayLive))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Risk: s.Risk},
 		policy.WithCalibration(s.Calibration), metalabeljob.CalibrationScope(state.DB, s.Outcomes, s.Settings), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))

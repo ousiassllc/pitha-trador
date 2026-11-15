@@ -75,6 +75,22 @@ type JevGroup struct {
 	LabelVersion int    `json:"label_version" doc:"calibration_outcomes.label_version: 1 = close only, 2 = triple barrier (correct means profitable after costs)."`
 	HitRate      Metric `json:"hit_rate"`
 	Brier        Metric `json:"brier" doc:"Mean squared error between confidence and the outcome (0 = perfect, 0.25 = coin flip at 50%)."`
+
+	// The same two metrics of this label version sliced by the decision's
+	// JST day, ISO week, direction and the horizon (minutes) it was graded at.
+	ByDay       []JevSlice `json:"by_day"`
+	ByWeek      []JevSlice `json:"by_week"`
+	ByDirection []JevSlice `json:"by_direction"`
+	ByHorizon   []JevSlice `json:"by_horizon"`
+}
+
+// JevSlice is Jev's hit rate and Brier score of one slice of a label
+// version's graded decisions. Key is "2026-10-14", "2026-W42", "LONG" or a
+// horizon in minutes such as "10".
+type JevSlice struct {
+	Key     string `json:"key"`
+	HitRate Metric `json:"hit_rate"`
+	Brier   Metric `json:"brier"`
 }
 
 // MetaComparison sets one meta-labeling model's out-of-sample metrics beside

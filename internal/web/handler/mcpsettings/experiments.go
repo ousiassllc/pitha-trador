@@ -27,8 +27,9 @@ type ExperimentGate interface {
 	CloseExperiment(ctx context.Context, id int64, status string) (experiment.Experiment, error)
 }
 
-// experimentRows is how many experiments the list shows (newest first); every
-// row costs two aggregate scans.
+// experimentRows is how many experiments the list shows (newest first). A row is
+// cheap (trade counts and the confounder checks); only an experiment that can
+// be judged has its trades aggregated, and a finished one only once.
 const experimentRows = 20
 
 // datetimeLocalLayout is what <input type="datetime-local"> submits.
@@ -52,6 +53,10 @@ func (h *Handler) CompareExperiment(c *gin.Context) {
 	cmp, err := h.gate.Compare(ctx, id)
 	if errors.Is(err, experiment.ErrNotFound) {
 		shared.RespondActionError(c, http.StatusNotFound, "その実験はありません。")
+		return
+	}
+	if errors.Is(err, query.ErrLimitExceeded) {
+		shared.RespondActionError(c, http.StatusUnprocessableEntity, "この実験は前後どちらかの期間のクローズ済み取引が多すぎて、前後比較を集計できません。")
 		return
 	}
 	if err != nil {
@@ -154,6 +159,11 @@ func (h *Handler) renderExperiments(c *gin.Context, notice string) {
 		slog.ErrorContext(ctx, "mcpsettings: list experiments", "error", err)
 		shared.RespondActionError(c, http.StatusInternalServerError, "実験の一覧を取得できませんでした。")
 		return
+	}
+	for _, r := range rows {
+		if r.Cause != nil {
+			slog.WarnContext(ctx, "mcpsettings: summarise experiment", "id", r.Experiment.ID, "error", r.Cause)
+		}
 	}
 	shared.RenderHTML(c, http.StatusOK, mcp.Experiments(experimentsProps(rows, notice)))
 }

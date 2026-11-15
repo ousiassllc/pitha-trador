@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
@@ -29,6 +30,8 @@ type fakeVerifier struct {
 	gotPeriod     backtest.Period
 	gotThresholds parity.Thresholds
 }
+
+func (f *fakeVerifier) Mode() backtestsource.ReplayMode { return backtestsource.ReplayLive }
 
 func (f *fakeVerifier) VerifyReproducibility(_ context.Context, period backtest.Period, th parity.Thresholds) (parity.Report, error) {
 	f.gotPeriod, f.gotThresholds = period, th
@@ -264,5 +267,25 @@ func TestRun_UsageAndOpenErrorsAreExitTwo(t *testing.T) {
 		if code != exitError || stdout != "" || stderr == "" {
 			t.Errorf("%s: exit %d, stdout %q, stderr %q; want exit 2 with only stderr", name, code, stdout, stderr)
 		}
+	}
+}
+
+func TestRun_ReplayModeFlag(t *testing.T) {
+	db := seedDB(t, time.Time{})
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"default is live": {[]string{"-db", db}, "再生モード: live（min_entry_quality: Live用 policy.*）"},
+		"explicit live":   {[]string{"-db", db, "-replay-mode", "live"}, "再生モード: live（min_entry_quality: Live用 policy.*）"},
+		"explicit paper":  {[]string{"-db", db, "-replay-mode", "paper"}, "再生モード: paper（min_entry_quality: Paper用 policy.paper.*）"},
+	} {
+		code, stdout, stderr := runCLI(t, tc.args...)
+		if code != exitOK || !strings.Contains(stdout, tc.want) {
+			t.Errorf("%s: exit %d, stdout:\n%s\nstderr:\n%s\nwant exit 0 and %q", name, code, stdout, stderr, tc.want)
+		}
+	}
+	if code, stdout, stderr := runCLI(t, "-db", db, "-replay-mode", "demo"); code != exitError || stdout != "" || !strings.Contains(stderr, "replay mode") {
+		t.Errorf("unknown mode: exit %d, stdout %q, stderr %q; want exit 2 naming the replay mode", code, stdout, stderr)
 	}
 }

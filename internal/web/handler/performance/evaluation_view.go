@@ -76,10 +76,46 @@ func evaluationPanel(e actuals.Evaluation) evaluation.Panel {
 			HitRate: metricCell(j.HitRate, percent), Brier: metricCell(j.Brier, plain3),
 		})
 	}
+	p.JevTables = jevTables(e.Jev)
 	for _, m := range e.Meta {
 		p.Meta = append(p.Meta, metaRow(m))
 	}
 	return p
+}
+
+// jevTables lays Jev's per-version slices out as one table per dimension, its
+// rows ordered by label version then slice key. A dimension without a row is
+// left out.
+func jevTables(groups []actuals.JevGroup) []evaluation.JevTable {
+	var out []evaluation.JevTable
+	for _, d := range []struct {
+		id, title, header string
+		slices            func(actuals.JevGroup) []actuals.JevSlice
+		name              func(string) string // the screen's name of a slice key; nil shows the key as it is
+	}{
+		{"day", "判断日別（JST）", "日", func(g actuals.JevGroup) []actuals.JevSlice { return g.ByDay }, nil},
+		{"week", "週別（月曜始まり）", "週", func(g actuals.JevGroup) []actuals.JevSlice { return g.ByWeek }, nil},
+		{"direction", "方向別", "方向", func(g actuals.JevGroup) []actuals.JevSlice { return g.ByDirection }, nil},
+		{"horizon", "評価ホライズン別", "ホライズン", func(g actuals.JevGroup) []actuals.JevSlice { return g.ByHorizon }, func(k string) string { return k + "分" }},
+	} {
+		t := evaluation.JevTable{ID: d.id, Title: d.title, KeyHeader: d.header}
+		for _, g := range groups {
+			for _, s := range d.slices(g) {
+				key := s.Key
+				if d.name != nil {
+					key = d.name(key)
+				}
+				t.Rows = append(t.Rows, evaluation.JevRow{
+					Label: labelVersionText(g.LabelVersion), Key: key, N: s.HitRate.N,
+					HitRate: metricCell(s.HitRate, percent), Brier: metricCell(s.Brier, plain3),
+				})
+			}
+		}
+		if len(t.Rows) > 0 {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func statsRow(key string, s actuals.Stats) evaluation.Row {

@@ -70,9 +70,6 @@ const dateLayout = "2006-01-02"
 // backtestTab is the `tab` query value that selects the バックテスト tab.
 const backtestTab = "backtest"
 
-// actualsRange is the whole history: the page evaluates every closed position.
-var actualsRange actuals.Range
-
 // PerformanceHandler implements `GET /performance` (docs/api/endpoints.md
 // §3), the Performance page and its backtest execution path (UC-12).
 type PerformanceHandler struct {
@@ -111,12 +108,18 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 		}
 		props.Actuals = performanceActuals(actuals)
 
-		evaluated, err := h.evaluation.Evaluate(c.Request.Context(), actualsRange)
+		period, rng, periodErr := parseEvaluationPeriod(c, h.now())
+		if periodErr != "" {
+			status = http.StatusBadRequest
+		}
+		evaluated, err := h.evaluation.Evaluate(c.Request.Context(), rng)
 		if err != nil {
 			slog.ErrorContext(c.Request.Context(), "handler: performance evaluation", "error", err)
 			status, props.EvaluationError = http.StatusInternalServerError, "実績評価の取得に失敗しました。"
 		}
 		props.Evaluation = evaluationPanel(evaluated)
+		props.Evaluation.Period = period
+		props.Evaluation.Period.Error = periodErr
 	}
 
 	if c.Query("from") != "" {
