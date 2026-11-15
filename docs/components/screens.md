@@ -63,6 +63,8 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
+| 立花 研究用の日足収集 | `/settings/broker#modal-research-tachibana-bars` | kabu のままでも立花の日足を夜間に記録し、過去分（最大 20 年）を銘柄ごとに 1 回で埋め戻す研究用の収集のオン・オフを編集します（既定はオフ。取得速度・開始時刻・市場区分・除外銘柄は「立花 夜間日足バッチ」を使う。取引・監視銘柄には使わない）。 | 証券会社・データ |
+| 立花 研究用の時価記録 | `/settings/broker#modal-research-tachibana-quotes` | kabu で見ている銘柄に手動指定または前日のスクリーニング上位を足し（合計 120 銘柄まで）、立花の日中の時価を 1 分ごとに研究用の別テーブルへ記録するスイッチと、追加銘柄・上限・EVENT 接続の予算・REST 時価の最短間隔・保持期間を編集します（既定はオフ。取引には使わない）。 | 証券会社・データ |
 | Jev | `/settings/integrations#modal-jev` | 売買判断を行う AI（Jev）の API キー・接続先・モデルを設定します。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
@@ -118,3 +120,4 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
+| 1.18 | 2026-11-15 | Settings「証券会社・データ」に「立花 研究用の日足収集」（`modal-research-tachibana-bars`。issue #1082）と「立花 研究用の時価記録」（`modal-research-tachibana-quotes`。issue #1083）の 2 カードを追加（どちらも既定オフ・研究専用で、取引・監視銘柄には使わない） | issue #1082・#1083 |

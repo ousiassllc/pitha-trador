@@ -44,3 +44,5 @@
 | 1.37 | 2026-11-13 | §5 に`jev_trial_compare`/`jev_trial_cost`を追加（分割章`paper-results-mcp-jev-trial.md`。コホート・common_success・欠測率・over_cohort/over_answered・NONE と反実仮想の proxy・費用の出所別の定義）。読み取り専用で、`jev.trial.*`は書き込みの許可リストに入れない | issue #1060 |
 | 1.38 | 2026-11-14 | §5 に`jev_evaluation`（分割章`paper-results-mcp-jev-evaluation.md`。全 LONG/SHORT 判断の同じ行のベースライン比較・ラベルの付け直し・cutoff・日クラスタの区間）と`research_horizon_summary`（分割章`paper-results-mcp-research-labels.md`。研究用ホライズンラベルの集計。アプリの日次タスク`research_labels`が記録する 3 表を読む）を追加。読み取りのツール 16→18・合計 35→37（§5 の「合計 33」の古い値も直した）。どちらも読み取り専用で書き込みの許可リストは変わらない | issue #1073・#1074 |
 | 1.39 | 2026-11-15 | §7.1 のホワイトリストに`research.labels.enabled`（研究用ホライズンラベルの記録のオン・オフ。既定オフ）を足し 21 → 22 キーにした。分割章`paper-results-mcp-research-labels.md`・`paper-results-mcp-jev-evaluation.md`を更新 | issue #1073 / #1074（PR #1077 の直し） |
+| 1.40 | 2026-11-15 | §5 に`research_daily_bars_status`（分割章`paper-results-mcp-research-bars.md`。立花の日足の研究用収集の状況。`daily_bars`の銘柄数と日付の範囲は主キー索引の飛び読み）を追加し、ツール数を 39 にした。読み取り専用接続のまま | issue #1082 |
+| 1.41 | 2026-11-15 | §5 に`research_quote_source_compare`（分割章`paper-results-mcp-research-quotes.md`。立花の時価の研究用記録の設計・保持と退避・読み取りツール）を追加。読み取り専用接続のまま | issue #1083 |

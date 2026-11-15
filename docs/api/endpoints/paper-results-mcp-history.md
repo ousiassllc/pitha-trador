@@ -42,3 +42,5 @@
 | 1.37 | 2026-11-13 | §3.32 `jev_trial_compare` / `jev_trial_cost`（意思決定モデル比較のお試しの読み取り専用ツール）を分割章`paper-results-mcp-jev-trial.md`に追加。ツール数 33→35 | issue #1060 |
 | 1.38 | 2026-11-14 | §3.33 `jev_evaluation`（Jev の全 LONG/SHORT 判断を、同じ行のベースラインと既存のコスト控除後ラベルの付け直しで比べる研究用の読み取り専用ツール。分割章`paper-results-mcp-jev-evaluation.md`）と §3.34 `research_horizon_summary`（研究用のホライズンラベル 30 分・60 分・引けの読み取り専用の集計。取引の入力ではない。分割章`paper-results-mcp-research-labels.md`）を追加。ツール数 35→37（読み取り 16→18） | issue #1073・#1074 |
 | 1.39 | 2026-11-15 | §4 の設定ツールのホワイトリストに`research.labels.enabled`を足し 21 → 22 キーにした。§3.33 に日の区切り（JST）と値（いまの設定で付け直した値）を明記 | issue #1073 / #1074（PR #1077 の直し） |
+| 1.40 | 2026-11-15 | §3.35 `research_daily_bars_status`（立花の日足の研究用収集の状況を返す、引数なしの読み取り専用ツール。分割章`paper-results-mcp-research-bars.md`）を追加し、ツール数を 39 にした（読み取りの 19 つ。`research_quote_source_compare`を含む）。書き込みは増えない | issue #1082・#1083 |
+| 1.41 | 2026-11-15 | §3.36 `research_quote_source_compare`（立花の研究用の時価の記録と kabu の`market_snapshots`の突き合わせ。分割章`paper-results-mcp-research-quotes.md`）を追加。読み取り専用で、書き込みは増えない | issue #1083 |
