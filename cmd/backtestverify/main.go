@@ -18,6 +18,12 @@
 // backtest's own window (selfimprove.ShadowBacktestPeriod: the last 30 TSE
 // business days up to now, FR-SELFIMPROVE-4); giving only one is an error.
 //
+// -replay-mode picks the min_entry_quality the replay judges by (issue #874):
+// live (default: policy.*.min_entry_quality, the Live value, as before) or paper
+// (policy.paper.*.min_entry_quality, what the Paper Policy Engine decides with,
+// so a candidate that passes under Paper's good passes in the replay). The
+// report's first line names it.
+//
 // It is read-only: the database is opened with SQLite mode=ro (no migration;
 // SQLite may still create the empty -wal/-shm side files next to a WAL
 // database, see sqlitedb.OpenReadOnly) and nothing is stored. -db defaults to
@@ -27,6 +33,7 @@
 //
 //	backtestverify -db pitha.db -from 2026-10-01 -to 2026-10-16
 //	backtestverify -db pitha.db
+//	backtestverify -db pitha.db -replay-mode paper
 package main
 
 import (
@@ -62,12 +69,13 @@ func main() {
 // verifier is backtestsource.Source's reproducibility check.
 type verifier interface {
 	VerifyReproducibility(ctx context.Context, period backtest.Period, th parity.Thresholds) (parity.Report, error)
+	Mode() backtestsource.ReplayMode
 }
 
 // run parses args, opens the database read-only and verifies; it returns the
 // process exit code.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
-	dbPath, period, err := parseArgs(args, stderr, now())
+	dbPath, period, mode, err := parseArgs(args, stderr, now())
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
 			_, _ = fmt.Fprintln(stderr, "backtestverify:", err)
@@ -80,7 +88,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, now func(
 		return exitError
 	}
 	defer func() { _ = state.Close() }()
-	return verify(ctx, backtestsource.NewForDB(state.DB, state.Strategy, state.Risk), period, stdout, stderr)
+	return verify(ctx, backtestsource.NewForDB(state.DB, state.Strategy, state.Risk, mode), period, stdout, stderr)
 }
 
 // verify runs the check over period against parity.Provisional and maps the
@@ -92,6 +100,7 @@ func verify(ctx context.Context, v verifier, period backtest.Period, stdout, std
 		_, _ = fmt.Fprintln(stderr, "backtestverify:", err)
 		return exitError
 	}
+	_, _ = fmt.Fprintf(stdout, "再生モード: %s（min_entry_quality: %s）\n", v.Mode(), modeDescription(v.Mode()))
 	_, _ = fmt.Fprintf(stdout, "期間: %s 〜 %s (JST)\n", period.Start.In(marketcalendar.JST).Format("2006-01-02 15:04"), period.End.In(marketcalendar.JST).Format("2006-01-02 15:04"))
 	_, _ = io.WriteString(stdout, report.String())
 	if err := report.Err(); err != nil {
@@ -101,22 +110,34 @@ func verify(ctx context.Context, v verifier, period backtest.Period, stdout, std
 	return exitOK
 }
 
-// parseArgs returns the -db value ("" lets bootstrap resolve it) and the
-// period to verify; now is the end of the default window.
-func parseArgs(args []string, stderr io.Writer, now time.Time) (dbPath string, period backtest.Period, err error) {
+// modeDescription names the min_entry_quality a replay mode judges by.
+func modeDescription(mode backtestsource.ReplayMode) string {
+	if mode == backtestsource.ReplayPaper {
+		return "Paper用 policy.paper.*"
+	}
+	return "Live用 policy.*"
+}
+
+// parseArgs returns the -db value ("" lets bootstrap resolve it), the period to
+// verify and the replay mode; now is the end of the default window.
+func parseArgs(args []string, stderr io.Writer, now time.Time) (dbPath string, period backtest.Period, mode backtestsource.ReplayMode, err error) {
 	fs := flag.NewFlagSet("backtestverify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	db := fs.String("db", "", "path to the pitha-trador SQLite database (opened read-only; default PITHA_DB_PATH, then the per-user pitha.db)")
 	fromText := fs.String("from", "", "first day, JST, YYYY-MM-DD (default: with -to unset, the last 30 business days)")
 	toText := fs.String("to", "", "last day (inclusive), JST, YYYY-MM-DD")
+	modeText := fs.String("replay-mode", string(backtestsource.ReplayLive), "min_entry_quality the replay judges by: live (policy.*, default) or paper (policy.paper.*)")
 	if err := fs.Parse(args); err != nil {
-		return "", backtest.Period{}, err
+		return "", backtest.Period{}, "", err
 	}
 	if fs.NArg() > 0 {
-		return "", backtest.Period{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
+		return "", backtest.Period{}, "", fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	if mode, err = backtestsource.ParseReplayMode(*modeText); err != nil {
+		return "", backtest.Period{}, "", fmt.Errorf("-replay-mode: %w", err)
 	}
 	period, err = parsePeriod(*fromText, *toText, now)
-	return *db, period, err
+	return *db, period, mode, err
 }
 
 // parsePeriod turns the inclusive JST day range into [from, to+1 day), or, with
