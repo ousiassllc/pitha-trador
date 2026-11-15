@@ -218,7 +218,7 @@ SELECT session, direction, MAX(n) AS fills, ROUND(AVG(bps), 4) AS mean_slippage_
 FROM r GROUP BY session, direction
 ORDER BY CASE session WHEN 'open' THEN 0 WHEN 'regular' THEN 1 ELSE 2 END, direction;
 
--- name: Q11 Jevの方向的中率とBrierの切り口別（label_version別×日・週・方向）。同値は除く。Q5の水平線別と合わせて画面の「Jevの切り口別」表と同じ値
+-- name: Q11 Jevの方向的中率とBrierの切り口別（label_version別×日・週・方向）。同値は除く。Q5の水平線別と合わせて画面の「Jevの切り口別」表と同じ集計。ただし週キーは strftime('%W')（月曜始まりの年内週番号・第0週あり）で、画面のISO週とは年初・年末付近で週の区切りが異なるため、週別の行は画面と一致するとは限らない（日別・方向別は一致）
 WITH params(from_ts, to_ts) AS (VALUES ('0000-01-01T00:00:00Z', '9999-12-31T00:00:00Z')),
 s AS (
   SELECT o.label_version, d.direction, o.was_direction_correct AS hit,

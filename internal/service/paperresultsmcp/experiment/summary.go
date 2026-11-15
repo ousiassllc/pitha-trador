@@ -44,7 +44,11 @@ type Summary struct {
 // Compare, and the rules that withhold the verdict without a test (aborted,
 // confounded, switch unconfirmed, too few trades; see withheld) are applied to
 // those. Only an experiment that gets past them has its trades read, for the
-// test. The verdict is always the one experiment_compare gives.
+// test. The verdict is the one experiment_compare gives, except that a
+// withheld verdict (aborted, confounded, too few trades, switch_unconfirmed)
+// is returned without reading the trades, so it is shown even when the window
+// has more than query.MaxClosedScan trades, where experiment_compare itself
+// fails with limit_exceeded.
 //
 // A failure of this one experiment is the row's Error, not the call's: the
 // returned error is only for a min_trades that is not allowed and for a

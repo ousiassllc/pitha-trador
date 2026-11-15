@@ -101,6 +101,9 @@ Jev のモデル（Settings 画面の秘密情報 `JEV_MODEL`）を切り替え�
 
 `started_at` は「変更が効き始めた時刻」で、フォームは分単位、モデルの切り替えは保存から起動までに間がある。そのため、記録との食い違いは 15 分まで許す。**15 分は仕様上の判断**（短くすると GUI の分単位の入力で `mismatch` が出やすく、長くすると前後の期間に、もう一方の値で動いた時間が混ざる）。値は `experiment.StartTolerance` の 1 か所。
 
+- **過去の実験への影響（判定が変わる）**: `audit_id` が無く、`started_at` の前後 `StartTolerance` 以内に監査の行も無い過去の実験は、この確認の導入後は `switch_unconfirmed`（`unverifiable`）として評価される。以前に出ていた判定が変わりうる。終了から `experiment.CacheSettle` 以上たってメモリ（`SummaryCache`、§6）に残った一覧の行は再集計しないので、その行は変わらない（再起動後の最初の一覧で新しい規則になる）
+- **限界（承知のうえ）**: `reset` や初回保存の行（変更前または変更後が NULL）は、NULL の側を宣言の値と照合しない。そのため宣言の `before` / `after` がその側で食い違っていても、この確認は見つけられない
+
 ### 4.5 開始直前の変更・方針の提案・同じ値の保存し直し（issue #879）
 
 前の期間は開始の直前の、後と同じ長さ（§3）。その中の変更の扱いを決めた:
@@ -185,6 +188,6 @@ $\delta$ が、前後それぞれ $n$ 件で見分けられる 1 取引あたり
 - GUI: Settings「外部連携」の MCP カードに実験の節がある（`GET /settings/mcp/experiments`）。一覧（状態・期間・変数・前後の取引件数・判定）、比較（`GET /settings/mcp/experiments/:id`。前後の指標・拒否理由・交絡）、作成（`POST /settings/mcp/experiments`。変数 1 つだけのフォーム）、終了（`POST /settings/mcp/experiments/:id/close`）。画面は人が操作するので、MCP の書き込み許可のスイッチ（`settings_write_enable` / `settings_write_disable`）には**従わない**（利用者の決定、issue #884）。スイッチが止めるのは MCP 経由の書き込みだけで、GUI は人が直接操作するものだから（注文案の受け付けスイッチと同じ考え方。Settings の他の保存とも同じ）。MCP の `experiment_create` / `experiment_close` は、スイッチがオフなら従来どおり `write_disabled`。この振る舞いを固定するテストと画面の表示は #884 で別に行う。作成者は `gui`
 - GUI の画面は設定キーを出さない（issue #904）。作成フォームの「名前」は、設定の実験なら Settings 画面での項目名（MCP から変更できる項目だけを候補に出す。`mcpsettings.settingNames`）を受け取り、保存のときにキーへ直す（`mcpsettings.settingKey`）。キーそのものも従来どおり受け付ける。一覧・比較の「変数」は項目名で示し、拒否理由の内訳はコードではなく日本語名で示す。保存する値と `experiment_compare` が返す中身は変わらない
 - 実験の一覧・比較に出る件数の下限は暫定値（§5）。一覧は新しい順に最大 20 件
-- 一覧の行は軽く作る（issue #880）。取引件数は SQL の `COUNT`（`query.CountClosed`。`paper_performance_summary` と同じ集合で、5,000 件の上限は掛からない）、交絡・切り替えの確認は `experiment_compare` と同じ検査で、判定が検定なしで決まる行（中止・交絡・切り替え未確認・件数不足。`experiment.withheld`）は取引を 1 件も読まない。取引を読んで検定するのは、これらを通った実験だけで、結果の判定は `experiment_compare` と常に同じ。以前は 1 件ごとに `Compare`（前後の `PerformanceSummary`、拒否理由、交絡）を全部呼んでいた
+- 一覧の行は軽く作る（issue #880）。取引件数は SQL の `COUNT`（`query.CountClosed`。`paper_performance_summary` と同じ集合で、5,000 件の上限は掛からない）、交絡・切り替えの確認は `experiment_compare` と同じ検査で、判定が検定なしで決まる行（中止・交絡・切り替え未確認・件数不足。`experiment.withheld`）は取引を 1 件も読まない。取引を読んで検定するのは、これらを通った実験だけで、その判定は `experiment_compare` と同じ。判定を保留する行は取引を読まずに返すので、期間の取引が 5,000 件を超えても保留の判定が出る（そのとき `experiment_compare` 自身は `limit_exceeded` で失敗する）。以前は 1 件ごとに `Compare`（前後の `PerformanceSummary`、拒否理由、交絡）を全部呼んでいた
 - **行ごとの失敗**: 1 件の集計に失敗しても一覧全体は失敗せず、その行に `error`（`limit_exceeded`＝前後どちらかの期間のクローズ済み取引が 5,000 件超で検定できない / `failed`＝その他）が付き、`verdict` は空になる（取引件数は数えられた分だけ出る）。他の行はそのまま。画面ではその行の判定欄に理由を出し、比較（`GET /settings/mcp/experiments/:id`）は 422 で理由を返す。キャンセル・タイムアウトは行の失敗にせず、呼び出し全体の失敗のまま（`min_trades` の下限違反も同じ）
 - **終了済みの実験は再集計しない**: 終了（または中止）から 1 時間（`experiment.CacheSettle`）以上たった実験の行は、メモリ（`experiment.SummaryCache`。`min_trades` ごと）に残し、次の一覧では取引を読まない。終了した実験の前後の期間は過去の区間で変わらない（ただし期間内の時刻の行が少し遅れて入りうるので、終了から 1 時間は毎回集計する）。失敗した行・実行中の実験は残さない。上限 512 件で、超えたら空にする。**DB には保存しない**: 判定の保存には `tuning_experiments` の列（マイグレーション）と書き込み文の追加が要り、書き込み面を「INSERT 1 件・UPDATE 1 件」に固定している（`settingstests.TestSettingsWritePathIsNarrow`）うえ、MCP の読み取りを読み取り専用に保つ前提とも合わない。再起動後は最初の一覧で 1 回集計し直す（`experiment_compare` は常に最新を計算する）

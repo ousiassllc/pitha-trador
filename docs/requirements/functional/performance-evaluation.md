@@ -89,7 +89,7 @@ Jevの的中率・Brierも、`label_version`ごとに、判断日（JST）・ISO
 sqlite3 -readonly -header -column pitha.db ".read tools/verify-queries.sql"
 ```
 
-期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5・Q10・Q11の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5・Q11は`jev_decisions.timestamp`、Q10は`paper_orders.filled_at`で絞る。Q11は画面の「Jevの切り口別」表と同じ値で、週は`strftime('%W')`のため画面のISO週とは番号がずれる）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
+期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5・Q10・Q11の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5・Q11は`jev_decisions.timestamp`、Q10は`paper_orders.filled_at`で絞る。Q11の日別・方向別は画面の「Jevの切り口別」表と同じ値だが、週キーは`strftime('%W')`（月曜始まりの年内週番号・第0週あり）で、画面のISO週とは年初・年末付近で区切りが異なるため、週別の行は画面と一致するとは限らない）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
 
 ## 7. 実データの実行記録
 
