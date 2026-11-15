@@ -31,8 +31,10 @@ func TestCostSourcesAreDistinguishedAndUnknownIsNeverZero(t *testing.T) {
 		t.Errorf("reported row = %v %v %v", r.CostSource, r.CostUSD, r.CountedCostUSD)
 	}
 	est := e.rowOf("estimate")
-	if want := 1200 * 0.038 / 1e6; est.CostSource != jevtrial.CostListPriceEstimate || est.CostUSD == nil || math.Abs(*est.CostUSD-want) > 1e-12 || math.Abs(est.CountedCostUSD-want) > 1e-12 {
-		t.Errorf("estimate row = %v %v %v, want %v", est.CostSource, est.CostUSD, est.CountedCostUSD, want)
+	// The arm's route is not pinned, so the stored estimate uses the list price (0.038)
+	// while the caps count the call at the worst case (a low list price cannot loosen a cap).
+	if want, counted := 1200*0.038/1e6, 1200*jevtrialsettings.WorstCaseUSDPerMtok/1e6; est.CostSource != jevtrial.CostListPriceEstimate || est.CostUSD == nil || math.Abs(*est.CostUSD-want) > 1e-12 || math.Abs(est.CountedCostUSD-counted) > 1e-12 {
+		t.Errorf("estimate row = %v %v %v, want %v counted %v", est.CostSource, est.CostUSD, est.CountedCostUSD, want, counted)
 	}
 	u := e.rowOf("unknown")
 	if want := 1200 * jevtrialsettings.WorstCaseUSDPerMtok / 1e6; u.CostSource != jevtrial.CostUnknown || u.CostUSD != nil || math.Abs(u.CountedCostUSD-want) > 1e-12 {

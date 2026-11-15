@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（研究用のホライズンラベル）
 
-`docs/architecture/er.md` から分割した章。対象: `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（マイグレーション `000055`。issue #1074）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-research-labels.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-labels.md`。実装は `internal/repository/researchlabel`（表）・`internal/service/researchlabel`（記録部品）・`internal/bootstrap/researchlabeljob`（日次タスク）。
+`docs/architecture/er.md` から分割した章。対象: `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（マイグレーション `000056`。issue #1074）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-research-labels.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-labels.md`。実装は `internal/repository/researchlabel`（表）・`internal/service/researchlabel`（記録部品）・`internal/bootstrap/researchlabeljob`（日次タスク）。
 
 ## 位置づけ
 

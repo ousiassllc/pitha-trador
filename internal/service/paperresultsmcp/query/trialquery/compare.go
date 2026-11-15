@@ -12,14 +12,16 @@ import (
 // Definitions are the fixed definitions jev_trial_compare returns, so a reader
 // need not guess what a denominator is.
 var Definitions = map[string]string{
-	"cohort":         "期間内のライブの trader 判断のうち、選んだアームすべてに聞いた判断（行の status は問わない）。失敗・拒否・一部拒否のアームの行は「答えなし」として分母に入る",
-	"common_success": "cohort のうち、選んだアームすべての status が ok の判断。参考値（informational）で、順位の元にはしない",
-	"missing_rate":   "(failed + refused + partial) / 総呼び出し数。分母に失敗・拒否・一部拒否を含む",
-	"over_cohort":    "分母 = cohort（結果の記録がある判断）。答えなし・NONE・採点できない方向を含む。順位はこちらで付く",
-	"over_answered":  "分母 = 採点できた答え（方向が LONG/SHORT で、ライブの方向と同じかライブが NONE）。答えなし・NONE を含まないので、答えた分だけが良く見える。参考値",
-	"none":           "NONE は方向の結果が無いので当たり外れに数えない（none_count）。方向を補完しない。分母（cohort）には入る",
-	"hit":            "方向で符号を付けた future_return（既存の calibration_outcomes。コスト控除前）が 0 を超えたとき。ライブの方向のラベルなので、ライブと逆の方向の答えは採点しない（excluded_disagreement）",
-	"rank":           "over_cohort の当たり率の高い順の並べ替え（同率は同順位。ラベルはライブの方向のものなので、ライブと逆向きの答えは採点されず当たり率にはライブとの一致度も含まれる。比べる基準は live_baseline）。アームが 1 つだけのときは null。結果の記録のある判断が最低 " + strconv.Itoa(MinOutcomeRecordsForRank) + " 件ないと null。昇格・採用の推奨ではない",
+	"cohort":            "期間内のライブの trader 判断のうち、選んだアームすべてに聞いた判断（行の status は問わない）。失敗・拒否・一部拒否のアームの行は「答えなし」として分母に入る。選んだアームのどれかが見送った判断（呼ばなかった判断）は入らない（fairness.skipped に理由別の件数を並べる）",
+	"common_success":    "cohort のうち、選んだアームすべての status が ok の判断。参考値（informational）で、順位の元にはしない",
+	"missing_rate":      "(failed + refused + partial) / 総呼び出し数。分母に失敗・拒否・一部拒否を含む。見送り（呼ばなかった判断）は分母にも分子にも入れない（fairness.skipped）",
+	"skipped":           SkippedDefinition,
+	"dropped_decisions": DroppedDecisionsDefinition,
+	"over_cohort":       "分母 = cohort（結果の記録がある判断）。答えなし・NONE・採点できない方向を含む。順位はこちらで付く",
+	"over_answered":     "分母 = 採点できた答え（方向が LONG/SHORT で、ライブの方向と同じかライブが NONE）。答えなし・NONE を含まないので、答えた分だけが良く見える。参考値",
+	"none":              "NONE は方向の結果が無いので当たり外れに数えない（none_count）。方向を補完しない。分母（cohort）には入る",
+	"hit":               "方向で符号を付けた future_return（既存の calibration_outcomes。コスト控除前）が 0 を超えたとき。ライブの方向のラベルなので、ライブと逆の方向の答えは採点しない（excluded_disagreement）",
+	"rank":              "over_cohort の当たり率の高い順の並べ替え（同率は同順位。ラベルはライブの方向のものなので、ライブと逆向きの答えは採点されず当たり率にはライブとの一致度も含まれる。比べる基準は live_baseline）。アームが 1 つだけのときは null。結果の記録のある判断が最低 " + strconv.Itoa(MinOutcomeRecordsForRank) + " 件ないと null。昇格・採用の推奨ではない",
 }
 
 // ArmReport is one arm of jev_trial_compare.
@@ -49,8 +51,12 @@ type Cohort struct {
 // rows themselves are counted in Cohort.Rows and ArmReport.CohortRows (never
 // excluded); Caveats names the conditions present among the cohort's rows.
 type Fairness struct {
-	CohortSize int      `json:"cohort_size"`
-	Caveats    []string `json:"caveats"`
+	CohortSize int `json:"cohort_size"`
+	// Skipped is the decisions the comparison did not cover (the trial did not ask
+	// an arm), by reason, next to the cohort premise: the cohort is only the decisions
+	// every chosen arm was asked, so skips are a selection the reader must see.
+	Skipped Skipped  `json:"skipped"`
+	Caveats []string `json:"caveats"`
 }
 
 // ArmOutcome is one arm in an outcome slice. CommonSuccess is the same metrics
@@ -109,6 +115,7 @@ func Compare(ctx context.Context, q query.Q, r query.Range, arms []string) (Comp
 	if err != nil {
 		return Comparison{}, err
 	}
+	chosen := len(arms) > 0
 	arms, decisions, err := groupDecisions(flat, slices.Clone(arms))
 	if err != nil {
 		return Comparison{}, err
@@ -148,7 +155,16 @@ func Compare(ctx context.Context, q query.Q, r query.Range, arms []string) (Comp
 	}
 	out.Cohort.Rows.finish()
 	out.Fairness.CohortSize = len(cohort)
-	out.Fairness.Caveats = caveats(out.Cohort.Rows)
+	skips, err := loadSkips(ctx, q, from, to)
+	if err != nil {
+		return Comparison{}, err
+	}
+	asked := make([]int, len(arms))
+	for i := range arms {
+		asked[i] = out.PerArm[i].PeriodRows.Total
+	}
+	out.Fairness.Skipped = buildSkipped(skips, arms, chosen, decisions, cohort, asked)
+	out.Fairness.Caveats = caveats(out.Cohort.Rows, out.Fairness.Skipped)
 
 	outcomes, err := loadOutcomes(ctx, q, from, to)
 	if err != nil {
@@ -173,7 +189,7 @@ func allOK(d *decision) bool {
 }
 
 // caveats names the fairness conditions present in rows.
-func caveats(rows RowCounts) []string {
+func caveats(rows RowCounts, skipped Skipped) []string {
 	out := []string{}
 	if rows.TruncationSuspected > 0 {
 		out = append(out, "truncation_suspected")
@@ -183,6 +199,9 @@ func caveats(rows RowCounts) []string {
 	}
 	if rows.LLMCutoffStatus[jevtrial.CutoffUnverified] > 0 {
 		out = append(out, "llm_cutoff_unverified")
+	}
+	if skipped.DroppedDecisions > 0 || len(skipped.ArmsWithoutRows) > 0 {
+		out = append(out, "skipped_decisions")
 	}
 	return out
 }

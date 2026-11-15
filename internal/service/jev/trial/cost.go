@@ -27,7 +27,11 @@ type Cost struct {
 //  2. Input tokens (the reported ones, else shadow.EstimateInputTokens of the
 //     request's size) times the arm's list price per million tokens (source
 //     list_price_estimate). Only input tokens are priced: the stage-1 models'
-//     published prices are per input token and a reported cost wins anyway.
+//     published prices are per input token and a reported cost wins anyway. The
+//     stored USD is the list-price estimate; the caps count the call at
+//     Arm.CountingUSDPerMtok, which for an arm whose route is not pinned
+//     (no provider_only) is never below jevtrialsettings.WorstCaseUSDPerMtok,
+//     so a low configured list price cannot loosen a cap.
 //  3. Neither: USD is nil and source unknown; the call is counted at
 //     jevtrialsettings.WorstCaseUSDPerMtok so an unpriced arm cannot slip under
 //     a cap as 0 USD.
@@ -41,7 +45,7 @@ func AnsweredCost(arm jevtrialsettings.Arm, resp trialwire.Response, requestByte
 	}
 	if arm.ListPriceUSDPerMtok > 0 {
 		usd := float64(tokens) * arm.ListPriceUSDPerMtok / 1e6
-		return Cost{USD: new(usd), Source: jevtrial.CostListPriceEstimate, CountedUSD: usd}
+		return Cost{USD: new(usd), Source: jevtrial.CostListPriceEstimate, CountedUSD: float64(tokens) * arm.CountingUSDPerMtok() / 1e6}
 	}
 	return Cost{Source: jevtrial.CostUnknown, CountedUSD: worstCaseUSD(tokens)}
 }

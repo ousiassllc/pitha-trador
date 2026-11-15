@@ -14,14 +14,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000055 creates research_horizon_labels, research_label_days and
+// Migration 000056 creates research_horizon_labels, research_label_days and
 // research_label_day_stats (issue #1074): one row per (snapshot, horizon) with no foreign key to
 // market_snapshots (retention purges those after 90 days), nullable per-side
 // results (a side with no executable quote has all three columns NULL), and a
-// per-JST-day completion mark. It touches no existing table. It migrates 54 ->
-// 55 over a database that already holds snapshots and decisions, and steps one
+// per-JST-day completion mark. It touches no existing table. It migrates 55 ->
+// 56 over a database that already holds snapshots and decisions, and steps one
 // back.
-func TestMigration000055_CreatesTheResearchLabelTablesWithoutTouchingOthers(t *testing.T) {
+func TestMigration000056_CreatesTheResearchLabelTablesWithoutTouchingOthers(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -60,11 +60,11 @@ func TestMigration000055_CreatesTheResearchLabelTablesWithoutTouchingOthers(t *t
 		return n == 1
 	}
 
-	if err := m.Migrate(54); err != nil {
-		t.Fatalf("migrate to 54: %v", err)
+	if err := m.Migrate(55); err != nil {
+		t.Fatalf("migrate to 55: %v", err)
 	}
 	if exists("research_horizon_labels") || exists("research_label_days") || exists("research_label_day_stats") {
-		t.Fatal("the research tables exist before migration 55")
+		t.Fatal("the research tables exist before migration 56")
 	}
 	for _, stmt := range []string{
 		`INSERT INTO instruments (id, symbol, name, market, is_active, created_at, updated_at) VALUES (1, '7203', 'x', 'TSE Prime', 1, 't', 't')`,
@@ -83,12 +83,12 @@ func TestMigration000055_CreatesTheResearchLabelTablesWithoutTouchingOthers(t *t
 		before[tbl] = count(tbl)
 	}
 
-	if err := m.Migrate(55); err != nil {
+	if err := m.Migrate(56); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	for _, name := range []string{"research_horizon_labels", "research_label_days", "research_label_day_stats", "research_horizon_labels_day_sample_idx", "research_horizon_labels_instrument_at_idx"} {
 		if !exists(name) {
-			t.Fatalf("%s missing after migration 55", name)
+			t.Fatalf("%s missing after migration 56", name)
 		}
 	}
 	for _, tbl := range existing {
@@ -157,7 +157,7 @@ func TestMigration000055_CreatesTheResearchLabelTablesWithoutTouchingOthers(t *t
 		t.Fatalf("research rows after the snapshot purge = %d, want 2", got)
 	}
 
-	if err := m.Migrate(54); err != nil {
+	if err := m.Migrate(55); err != nil {
 		t.Fatalf("migrate down: %v", err)
 	}
 	if exists("research_horizon_labels") || exists("research_label_days") || exists("research_label_day_stats") {

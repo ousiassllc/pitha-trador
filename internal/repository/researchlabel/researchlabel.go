@@ -2,7 +2,7 @@
 // (issue #1074): research_horizon_labels, one row per (market snapshot,
 // horizon: 30m / 60m / close), research_label_days, the per-JST-day mark that
 // a day is fully recorded, and research_label_day_stats, the day's sums the
-// MCP tool aggregates from (migration 000055).
+// MCP tool aggregates from (migration 000056).
 //
 // The record is for research only. Policy, Risk, order placement, the Paper
 // guard, Live, the Jev prompts, RAG, the meta-model training and

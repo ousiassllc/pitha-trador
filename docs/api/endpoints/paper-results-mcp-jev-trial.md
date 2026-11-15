@@ -22,13 +22,30 @@
 | キー | 内容 |
 |---|---|
 | `notice` | 固定の注意書き: rank は並べ替えにすぎず昇格・採用の推奨ではない／truncation_suspected・`rag_includes_live_model_answers` の行・`llm_cutoff_status` が `unverified` の行が残る間は同じ入力の公平な比較ではない／失敗・拒否・一部拒否は「答えなし」として分母に入れる／NONE は当たり外れに数えない／反実仮想は proxy |
-| `definitions` | `cohort` / `common_success` / `missing_rate` / `over_cohort` / `over_answered` / `none` / `hit` / `rank` の定義文（下記） |
+| `definitions` | `cohort` / `common_success` / `missing_rate` / `skipped` / `dropped_decisions` / `over_cohort` / `over_answered` / `none` / `hit` / `rank` の定義文（下記） |
 | `arms` | 比較したアーム id（選んだ順。省略時は id の昇順） |
 | `cohort` | `definition` / `common_success_definition`（定義文）・`size`（コホートの判断数）・`common_success_count`（共通の成功数）・`common_success_rate`（= `common_success_count / size`、`size` が 0 なら `null`）・`rows`（コホートの判断に対する全アームの行の `RowCounts`） |
 | `per_arm[]` | アームごと。`arm_id`・`period_rows`（期間内のそのアームの全行の `RowCounts`）・`cohort_rows`（コホートの判断に対する行の `RowCounts`）・`direction`・`direction_agreement`・`entry_quality` |
-| `fairness` | `cohort_size` と `caveats[]`（コホートの行に見つかった公平でない条件: `truncation_suspected` / `rag_includes_live_model_answers` / `llm_cutoff_unverified`。該当が無ければ空） |
+| `fairness` | `cohort_size`・`skipped`（コホートから落ちた判断。下記）・`caveats[]`（コホートの行に見つかった公平でない条件: `truncation_suspected` / `rag_includes_live_model_answers` / `llm_cutoff_unverified`、および見送りで落ちた判断があるときの `skipped_decisions`。該当が無ければ空） |
 | `outcomes[]` | (`horizon_minutes`, `label_version`) ごとのスライス（ラベルの版は混ぜない）。各要素は `horizon_minutes`・`label_version`・`live_baseline`（同じコホートのライブ自身の採点: `records`・`none_count`・`scorable`・`hits`・`hit_rate_over_cohort`。アームの当たり率はこれと並べて読む）・`arms[]`。`arms[]` は `arm_id`・`rank`・`cohort`（`OutcomeStats`）・`common_success`（`informational: true` と、同じ `OutcomeStats` の項目） |
 | `counterfactual_proxy` | `proxy: true`（常に）・`note`・`arms[]`（`arm_id`・`no_direction_decisions`・`none_answers`・`no_answer`・`horizons[]`）。下の「NONE と反実仮想」 |
+
+**`fairness.skipped`（見送り。issue #1062）**: コホートの前提「選んだアームすべてに聞けた判断だけ」と並べて、落ちた判断を出す。見送りは、お試しがライブの判断に対してアームを**呼ばなかった**こと（1 判断 × 1 アームで 1 件。`jev_trial_skips`）で、行（答え・費用・status）が無く、**成功・失敗・欠測の行としては数えない**。`missing_rate` の分母にも分子にも**入れない**（`counted_in_missing_rate` は常に `false`）。
+
+| キー | 内容 |
+|---|---|
+| `definition` / `dropped_decisions_definition` | 定義文 |
+| `counted_in_missing_rate` | 常に `false` |
+| `recorded_decisions` | 選んだアームのどれかに行か見送りの記録がある判断の数 = `cohort_decisions` + `dropped_decisions` + `outside_cohort_without_skip` |
+| `cohort_decisions` | コホートの判断数（`cohort.size` と同じ） |
+| `dropped_decisions` | 選んだアームのどれかが見送った判断の数（コホートの外。理由は `by_reason`） |
+| `outside_cohort_without_skip` | 一部のアームにだけ行があり、見送りの記録も無い判断の数（アームを途中で足した・停止やシャットダウンで記録が残らなかった等） |
+| `arm_decisions_skipped` | 選んだアームの見送りの件数（判断 × アーム） |
+| `by_reason` | 理由別の件数。**全理由が常に入る**（0 を含む）: `concurrency_full`（同時実行枠が満杯）・`min_interval`（最短間隔）・`daily_cap_overall` / `daily_cap_arm`（日次上限）・`key_not_set`（OpenRouter のキー無し）・`prompt_version_unregistered`（プロンプト版が未登録）・`stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other`（停止中）・`throttled`（429/529 の待機）・`check_failed`（停止記録や費用が読めない等） |
+| `per_arm[]` | アームごと。`arm_id`・`asked`（呼んだ行数。`period_rows.total`）・`skipped`・`asked_share`（`asked / (asked + skipped)`。両方 0 なら `null`。**欠測率とは別の指標**）・`by_reason` |
+| `arms_without_rows[]` | アームを選ばなかったとき、行が無く見送りだけがあるアーム（`per_arm[]` と同じ形。`asked` は 0）。比較するアームには入らないのでコホートは変わらないが、見えなくはしない |
+
+期間は、ライブの判断の時刻で決める（コホートと同じ）。お試しが無効・アーム無し・Paper 以外・設定を読めずアームが分からない判断は、行も見送りの記録も無く、どの数にも入らない。件数は選択バイアスの目安で、補正や重み付けはしない。
 
 **`RowCounts`**: `total`（分母。失敗・拒否・一部拒否を含む）・`ok` / `failed` / `refused` / `partial`・`missing_rate`（= (`failed` + `refused` + `partial`) / `total`。`total` が 0 なら `null`）・`failure_codes`（`failed` の行の `failure_code` 別件数。固定コードのみ）・`truncation_suspected`（フラグが付いた行の数）・`rag_includes_live_model_answers`（同）・`llm_cutoff_status`（状態別の件数）。**フラグの付いた行は除外せず件数で出す。**
 
@@ -69,11 +86,11 @@
 | `per_arm[]` | アームごとの `CostBlock`（`arm_id` つき） |
 | `daily[]` | JST の日ごと（古い順）。`date`・`overall`（`CostBlock`）・`arms[]`（アームごとの `CostBlock`） |
 
-**`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported` + `list_price_estimate` + `unknown.unknown_counted_usd`）。
+**`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計・`counted_usd`: 上限に数えた額。`usd` と同じ）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計・`counted_usd`: 上限に数えた額。処理先を固定していないアームは定価と最悪単価の高い方で数えるので `usd` 以上になる）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported.counted_usd` + `list_price_estimate.counted_usd` + `unknown.unknown_counted_usd`）。
 
 **`unknown`**: `calls`・`actual_usd`（常に `null`。実費は分からない。0 円ではない）・`unknown_counted_usd`（上限の判定に数えた額。最悪値側の単価で数えた**上限の見積り**で、`reported` / `list_price_estimate` の合計には混ぜない。0 に丸めない）・`counted_as_zero_calls`（課金されない前提の 4xx（413 を除く）・529 応答を 0 と数えた件数。低い `unknown_counted_usd` を「無料」と読まないために出す）・`basis`（`cap_counting_upper_bound`）。
 
-**`limits`**: `enabled`（トライアルの有効。読み取りのみ）・`today`（JST の日）・`arms_config_invalid`（保存されたアーム設定が読めない。理由の文は返さない）・`overall_daily_cap_usd`・`overall_cap_source`（`default` / `stored`）・`overall_counted_today_usd`・`halt`（全体の止まりの記録 `{date, reason, active_today}`。無ければ `null`。`reason` は `daily_cost_cap` / `payment_required` など固定コード）・`failure_cap`・`throttle_cooldown_seconds`・`min_call_interval_seconds`・`worst_case_usd_per_mtok`（unknown を数える単価）・`arms[]`（設定されたアームごと: `arm_id`・`model`・`prompt_version`・`daily_cap_usd`・`list_price_known`・`counted_today_usd`・`failures_today`・`halt`（`{date, reason, active_today}` または `null`）・`throttle`（`{date, reason, active}` または `null`。429/529 の止まり））。止まりの記録は理由と日だけで、金額・時刻・ステータス・本文は返さない。
+**`limits`**: `enabled`（トライアルの有効。読み取りのみ）・`today`（JST の日）・`arms_config_invalid`（保存されたアーム設定が読めない。理由の文は返さない）・`overall_daily_cap_usd`・`overall_cap_source`（`default` / `stored`）・`overall_counted_today_usd`・`skipped_today`（今日の見送り＝呼ばなかった比較の理由別件数。全アーム。全理由が入る。呼び出し数・費用には入らない）・`halt`（全体の止まりの記録 `{date, reason, active_today}`。無ければ `null`。`reason` は `daily_cost_cap` / `payment_required` など固定コード）・`failure_cap`・`throttle_cooldown_seconds`・`min_call_interval_seconds`・`worst_case_usd_per_mtok`（unknown を数える単価）・`arms[]`（設定されたアームごと: `arm_id`・`model`・`prompt_version`・`daily_cap_usd`・`list_price_known`・`counted_today_usd`・`skipped_today`（今日の見送りの理由別件数。全理由が入る）・`failures_today`・`halt`（`{date, reason, active_today}` または `null`）・`throttle`（`{date, reason, active}` または `null`。429/529 の止まり））。止まりの記録は理由と日だけで、金額・時刻・ステータス・本文は返さない。
 
 ## 受け入れ条件
 

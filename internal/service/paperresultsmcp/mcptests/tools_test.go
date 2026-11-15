@@ -15,8 +15,7 @@ import (
 // metalabel_training_readiness / jev_models, issues #848 / #849,
 // session_diagnostics, issue #850, entry_quality_whatif, issue #911, and
 // disclosure_skip_summary, issue #935, jev_trial_compare / jev_trial_cost, issue #1060,
-// jev_evaluation, issue #1073, research_horizon_summary, issue #1074); health_today
-// (issue #808) takes none, so it is called separately (healthToday).
+// jev_evaluation #1073, research_horizon_summary #1074); health_today (#808) takes none (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",

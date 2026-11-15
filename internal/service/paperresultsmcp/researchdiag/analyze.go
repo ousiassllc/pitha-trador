@@ -16,7 +16,7 @@ import (
 var sides = []string{domain.JevDirectionLong, domain.JevDirectionShort}
 
 // sampleBuckets is the number of research_horizon_labels.sample_bucket values
-// (migration 000055).
+// (migration 000056).
 const sampleBuckets = 100
 
 // Analyze computes the summary of [r.From, r.To) and the number of rows the

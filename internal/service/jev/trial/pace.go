@@ -14,6 +14,13 @@ func WithMinInterval(d time.Duration) Option { return func(t *Trial) { t.minInte
 // WithPaceClock replaces the clock that paces the calls (time.Now). Tests use it.
 func WithPaceClock(now func() time.Time) Option { return func(t *Trial) { t.pace = now } }
 
+// WithSecrets sets the configured credential strings (the OpenRouter key) that
+// are redacted, as exact substrings, from every stored error excerpt. They are
+// held in memory only and never logged.
+func WithSecrets(secrets ...string) Option {
+	return func(t *Trial) { t.secrets = append([]string(nil), secrets...) }
+}
+
 // allowCall reports whether arm may call its API now: at least minInterval
 // after the arm's previous call. It books the call, so concurrent comparisons
 // of one arm cannot both pass. Pacing is per arm: arms have their own keys.

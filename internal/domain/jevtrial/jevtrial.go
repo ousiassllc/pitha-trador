@@ -5,7 +5,10 @@
 // input of trading, the RAG index, Calibration or the meta-model.
 package jevtrial
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // Statuses of a trial row (jev_trial_decisions.status).
 const (
@@ -49,6 +52,56 @@ const (
 	FailureTransport       = "transport"
 	FailureInvalidResponse = "invalid_response"
 )
+
+// Skip reasons (jev_trial_skips.reason): why the trial did not ask an arm about a
+// live decision. A skipped decision has no jev_trial_decisions row: it is not a
+// success, a failure or a missing answer, only a decision the comparison never
+// covered for that arm.
+const (
+	// SkipConcurrencyFull: every one of the trial's in-flight slots was taken.
+	SkipConcurrencyFull = "concurrency_full"
+	// SkipMinInterval: the arm was called less than the minimum interval ago.
+	SkipMinInterval = "min_interval"
+	// SkipDailyCapOverall: the overall daily cost cap is reached (or, with the
+	// calls in flight reserved, leaves no room for this call).
+	SkipDailyCapOverall = "daily_cap_overall"
+	// SkipDailyCapArm: the same for the arm's own daily cost cap.
+	SkipDailyCapArm = "daily_cap_arm"
+	// SkipKeyNotSet: no OpenRouter key is configured.
+	SkipKeyNotSet = "key_not_set"
+	// SkipPromptUnregistered: the arm's prompt version is not a registered trader version.
+	SkipPromptUnregistered = "prompt_version_unregistered"
+	// SkipStoppedPaymentRequired: the whole trial is stopped for the day by an HTTP 402.
+	SkipStoppedPaymentRequired = "stopped_payment_required"
+	// SkipStoppedForbidden: the arm is stopped for the day by an HTTP 403.
+	SkipStoppedForbidden = "stopped_forbidden"
+	// SkipStoppedFailureCap: the arm is stopped for the day by its failed-call cap.
+	SkipStoppedFailureCap = "stopped_failure_cap"
+	// SkipStoppedOther: a stop record of a reason this build does not know.
+	SkipStoppedOther = "stopped_other"
+	// SkipThrottled: the arm is cooling down after an HTTP 429/529.
+	SkipThrottled = "throttled"
+	// SkipCheckFailed: the stop records or the cost could not be read, or the
+	// request could not be sized, so the arm was not called.
+	SkipCheckFailed = "check_failed"
+)
+
+// SkipReasons lists every skip reason in a fixed order (the order reports use).
+var SkipReasons = []string{
+	SkipConcurrencyFull, SkipMinInterval, SkipDailyCapOverall, SkipDailyCapArm, SkipKeyNotSet, SkipPromptUnregistered,
+	SkipStoppedPaymentRequired, SkipStoppedForbidden, SkipStoppedFailureCap, SkipStoppedOther, SkipThrottled, SkipCheckFailed,
+}
+
+// ValidSkipReason reports whether reason is one of SkipReasons.
+func ValidSkipReason(reason string) bool { return slices.Contains(SkipReasons, reason) }
+
+// Skip is one jev_trial_skips row: the arm was not asked about the live decision.
+type Skip struct {
+	JevDecisionID int64
+	ArmID         string
+	Reason        string
+	CreatedAt     time.Time
+}
 
 // MaxErrorExcerptBytes bounds Decision.ErrorExcerpt: a trial row never holds an
 // error body in full.
