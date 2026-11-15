@@ -110,7 +110,7 @@
     "model_id": "model-1", "question_version": "trader-v3", "decisions": 8, "evaluated": 7,
     "all": {"bucket": "all", "n": 7, "days": 3, "mean_net_bps": -7.14, "low_sample": true, "low_sample_reasons": ["rows_below_min", "days_below_min"], "holm_adjusted_p": null},
     "families": [{
-      "family": "preregistered", "family_size": 7, "buckets": 16,
+      "family": "preregistered", "family_size": 15, "buckets": 16,
       "dimensions": [{
         "dimension": "direction", "rows": 7,
         "buckets": [
@@ -123,7 +123,7 @@
 }
 ```
 
-（`ci` / `p_value` などは省略。`family_size` の数字は例で、件数が 1 以上のバケットの数。）
+（`ci` / `p_value` などは省略。この固定データの `family_size` は preregistered が 15（16 バケット中。件数 0 の 1 つを除く。2 日未満で p が出ないバケットも p = 1 として数える）、exploratory が 16（21 バケット中）。）
 
 ## 受け入れ条件
 
