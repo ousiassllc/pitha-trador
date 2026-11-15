@@ -222,3 +222,50 @@ func TestCostWarning_IgnoresFeeAndSlippageChanges(t *testing.T) {
 		t.Errorf("raising the fee and slippage on the default base cost warns: %v", warnings)
 	}
 }
+
+// CostWarnings (the Settings screen's panel) and Correspondence (the
+// Calibration screen's table) report the same cost warnings, with the shipped
+// defaults (none) and with a stray base cost / a SHORT 貸株料.
+func TestCostWarnings_MatchCorrespondence(t *testing.T) {
+	strayBase := barriersettings.Default()
+	strayBase.CostBps = 40
+	borrow := costsettings.Default()
+	borrow.ShortBorrowBps = 8
+	cases := []struct {
+		name  string
+		b     barriersettings.Barriers
+		costs costsettings.Settings
+		want  []string
+	}{
+		{"defaults", barriersettings.Default(), costsettings.Default(), nil},
+		{"stray base cost", strayBase, costsettings.Default(), []string{exitalign.WarnCost}},
+		{"short borrow", barriersettings.Default(), borrow, []string{exitalign.WarnCostSides}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := exitalign.CostWarnings(tc.b, tc.costs)
+			var gotCodes []string
+			for _, w := range got {
+				gotCodes = append(gotCodes, w.Code)
+			}
+			if strings.Join(gotCodes, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("CostWarnings codes = %v, want %v", gotCodes, tc.want)
+			}
+			_, table := exitalign.Correspondence(tc.b, shippedExit(), tc.costs)
+			var fromTable []exitalign.AlignmentWarning
+			for _, w := range table {
+				if w.Code == exitalign.WarnCost || w.Code == exitalign.WarnCostSides {
+					fromTable = append(fromTable, w)
+				}
+			}
+			if len(fromTable) != len(got) {
+				t.Fatalf("Correspondence cost warnings = %v, CostWarnings = %v", fromTable, got)
+			}
+			for i := range got {
+				if got[i] != fromTable[i] {
+					t.Errorf("warning %d differs: %v vs %v", i, got[i], fromTable[i])
+				}
+			}
+		})
+	}
+}

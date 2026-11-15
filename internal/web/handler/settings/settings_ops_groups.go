@@ -43,6 +43,10 @@ type opsGroup struct {
 	fields      []opsField
 }
 
+// tripleBarrierGroupID is the id of the triple-barrier label group, which
+// shares the cost consistency panel with costGroup.
+const tripleBarrierGroupID = "triple_barrier"
+
 const (
 	thresholdNote = "設定ファイルの既定値より、ここで保存した値が優先されます。"
 	hotApplyNote  = "保存した値は再起動不要で、次の評価（次の候補更新）から反映されます。"
@@ -150,7 +154,7 @@ var opsGroups = slices.Concat([]opsGroup{
 		},
 	},
 	{
-		id:          "triple_barrier",
+		id:          tripleBarrierGroupID,
 		name:        "キャリブレーションのラベル（トリプルバリア）",
 		description: "Jev の判断に正解・不正解のラベルを付けるときの利確（TP）・損切り（SL）の幅、時間切れ（timeout）、売買コストの想定です。先に触れたバリアでラベルを決め、コスト控除後のリターンで評価します。",
 		note: "TP・SL はコストを差し引いた後のリターン（bps、1 bps = 0.01%）の幅です。TP は価格が有利に TP+コスト、SL は不利に SL−コスト動いたときに触れます。" +

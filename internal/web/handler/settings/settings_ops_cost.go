@@ -1,6 +1,13 @@
 package settings
 
-import "github.com/ousiassllc/pitha-trador/internal/config/costsettings"
+import (
+	"context"
+	"log/slog"
+
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/costpanel"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
 
 // costGroup holds the trading cost assumption (issue #779): the one set Paper
 // fills, the backtest and the triple-barrier label cost (hence the
@@ -11,7 +18,8 @@ var costGroup = opsGroup{
 	description: "手数料・スリッページ・SHORT の貸株料の想定です。Paper の約定価格と手数料、バックテストの損益、メタラベリングのラベル（EV）が、すべてこの同じ値を参照します。",
 	note: "既定は手数料 0、スリッページ ザラ場 2 bps／寄り・引け 5 bps、貸株料 0 です。保存した値は再起動不要で、次の約定・次のバックテスト・以降に付くラベルから反映されます（付与済みのラベルは変わりません）。" +
 		"ラベルのコストは「トリプルバリアのコスト想定」に、ここでの既定値からの往復コストの差を足した値になります。" +
-		"スプレッドは板から別に反映されるため、ここには含みません。実際の手数料体系・貸株料はご自身で確認してください。環境変数では設定できません。",
+		"スプレッドは板から別に反映されるため、ここには含みません。実際の手数料体系・貸株料はご自身で確認してください。環境変数では設定できません。" +
+		"下の「ラベルと約定モデルのコスト整合」は、ラベルのコストと約定モデルの往復コストの差が許容を外れたときに警告を出します（保存は止めません）。",
 	fields: []opsField{
 		{key: costsettings.KeyFeeBps, label: "手数料（約定代金に対する bps、片道）", hint: "0 以上 1000 以下です。国内株式現物の手数料無料を前提に既定は 0 です。"},
 		{key: costsettings.KeyFeeFixedJPY, label: "手数料の定額（円、1 約定あたり）", hint: "0 以上 100000 以下です。既定は 0 円です。"},
@@ -24,4 +32,19 @@ var costGroup = opsGroup{
 		{key: costsettings.KeyShortBorrowBps, label: "SHORT 貸株料（建玉の約定代金に対する bps、1 建玉あたり）", hint: "信用売りの貸株料の想定です。日跨ぎをしないため逆日歩・金利は扱いません。既定は 0 bps です。"},
 		{key: costsettings.KeyReferenceNotionalJPY, label: "基準の約定代金（円）", hint: "定額手数料を bps に換算するときの 1 約定の大きさです（バックテスト・ラベル用）。1 以上です。既定は 1000000 円です。"},
 	},
+}
+
+// costDerived is the cost consistency panel shared by the cost and
+// triple-barrier groups (costpanel.Load). A read failure is logged and shown as
+// such instead of failing the screen.
+func (h *SettingsHandler) costDerived(ctx context.Context) []molecules.SettingDerivedItem {
+	items, err := costpanel.Load(func(key string) (string, error) {
+		v, err := h.ops.Get(ctx, key)
+		return v.Current, err
+	})
+	if err != nil {
+		slog.Error("settings: read the cost settings for the consistency panel; showing it as unreadable", "error", err)
+		return []molecules.SettingDerivedItem{{Key: "error", Label: "コスト整合を読み取れませんでした", Off: true}}
+	}
+	return items
 }

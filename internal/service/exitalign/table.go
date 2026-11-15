@@ -112,11 +112,30 @@ func Correspondence(b barriersettings.Barriers, exit ExitConfig, costs costsetti
 		bps(slLabel), disabledOr(exit.StopLossPct > 0, "-"+bps(slExit)+" bps"), ToleranceBps)
 	add(horizonOK, WarnHorizon, "ラベルのタイムアウト（%d 分）と実出口の最大保有時間（%s）が一致しません（許容 %g 分）。",
 		b.TimeoutMinutes(), disabledOr(exit.MaxHoldingMinutes > 0, minutesText(exit.MaxHoldingMinutes)), ToleranceMinutes)
-	add(costOK, WarnCost, "barrier の基底コスト（calibration.barrier_cost_bps）が既定から外れています。ラベルのコスト（LONG %s / SHORT %s bps）と約定モデルの往復コスト（LONG %s / SHORT %s bps、スプレッド除く）の差は 0〜%g bps の範囲であるべきです。手数料・スリッページを変えてもラベルのコストが同じだけ動くため、この警告は変わりません。",
-		bps(labelCost), bps(labelCostShort), bps(fillCost), bps(fillCostShort), MaxCostAllowanceBps)
-	add(math.Abs(labelCostShort-labelCost) <= ToleranceBps, WarnCostSides, "ラベルのコストが LONG（%s bps）と SHORT（%s bps）で %g bps を超えて異なります。上の表は LONG の値です。",
-		bps(labelCost), bps(labelCostShort), ToleranceBps)
+	warnings = append(warnings, CostWarnings(b, costs)...)
 	return rows, warnings
+}
+
+// CostWarnings are the cost-related mismatch warnings of the label basis b
+// against the fill model's cost (WarnCost, WarnCostSides): the part of
+// Correspondence the Settings screen shows next to the cost settings. It is a
+// function of the cost settings and the barrier base cost alone, so it needs no
+// exit configuration.
+func CostWarnings(b barriersettings.Barriers, costs costsettings.Settings) []AlignmentWarning {
+	long, short := domain.JevDirectionLong, domain.JevDirectionShort
+	labelCost, labelCostShort := costs.LabelCostBps(b.CostBps, long), costs.LabelCostBps(b.CostBps, short)
+	fillCost, fillCostShort := costs.RoundTripBps(long), costs.RoundTripBps(short)
+
+	var warnings []AlignmentWarning
+	if !(allowanceOK(labelCost, fillCost) && allowanceOK(labelCostShort, fillCostShort)) {
+		warnings = append(warnings, AlignmentWarning{Code: WarnCost, Message: fmt.Sprintf("barrier の基底コスト（calibration.barrier_cost_bps）が既定から外れています。ラベルのコスト（LONG %s / SHORT %s bps）と約定モデルの往復コスト（LONG %s / SHORT %s bps、スプレッド除く）の差は 0〜%g bps の範囲であるべきです。手数料・スリッページを変えてもラベルのコストが同じだけ動くため、この警告は変わりません。",
+			bps(labelCost), bps(labelCostShort), bps(fillCost), bps(fillCostShort), MaxCostAllowanceBps)})
+	}
+	if math.Abs(labelCostShort-labelCost) > ToleranceBps {
+		warnings = append(warnings, AlignmentWarning{Code: WarnCostSides, Message: fmt.Sprintf("ラベルのコストが LONG（%s bps）と SHORT（%s bps）で %g bps を超えて異なります。Calibration 画面の整合表の「コスト（往復）」は LONG の値です。",
+			bps(labelCost), bps(labelCostShort), ToleranceBps)})
+	}
+	return warnings
 }
 
 func within(a, b, tolerance float64) bool { return math.Abs(a-b) <= tolerance }
