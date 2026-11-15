@@ -72,7 +72,7 @@ func Decide(plan Plan, name string, reference bool, est Estimate, counts Counts)
 		return r
 	}
 	if plan.Power != nil && est.CI != nil {
-		mde := (normalQuantile(1-r.AlphaAdjusted/2) + normalQuantile(*plan.Power)) * est.SE
+		mde := DetectableMinimum(r.AlphaAdjusted, *plan.Power, est.SE)
 		r.MDE = &mde
 	}
 	for _, f := range plan.UnsetFields() {

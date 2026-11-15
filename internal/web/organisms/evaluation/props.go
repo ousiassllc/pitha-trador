@@ -43,9 +43,35 @@ type Pair struct{ ID, Label, Value, Help string }
 
 // JevRow is Jev's hit rate and Brier score of one calibration label version.
 type JevRow struct {
-	Label          string
+	Label string
+	// Key is the slice's key in a JevTable ("" in the per-version rows).
+	Key            string
 	N              int
 	HitRate, Brier Cell
+}
+
+// JevTable is Jev's hit rate and Brier score sliced by one dimension (day,
+// week, direction, grading horizon); each row is one label version's slice.
+type JevTable struct {
+	ID, Title, KeyHeader string
+	Rows                 []JevRow
+}
+
+// PeriodLink is a quick choice of the evaluation period; Current marks the
+// one in effect.
+type PeriodLink struct {
+	Label, Href string
+	Current     bool
+}
+
+// Period is the evaluation period selector (the closed-at range the whole
+// section is computed over): From/To are the YYYY-MM-DD values echoed into
+// the form (both empty: all history), Error the message of an invalid input
+// (empty when valid) and Links the preset ranges.
+type Period struct {
+	From, To string
+	Error    string
+	Links    []PeriodLink
 }
 
 // MetaRow sets one meta model's OOS metrics beside its realized Paper EV.
@@ -75,5 +101,7 @@ type Panel struct {
 	Costs       []Pair
 	Tables      []Table
 	Jev         []JevRow
+	JevTables   []JevTable
+	Period      Period
 	Meta        []MetaRow
 }

@@ -75,6 +75,15 @@ type Report struct {
 	// ActualMetrics/ReplayMetrics are FR-BT-1's metrics over each side's
 	// closed trades, for the side-by-side comparison.
 	ActualMetrics, ReplayMetrics backtest.Metrics
+
+	// MissedEntries classifies the Paper entries the replay did not reproduce,
+	// and ExtraEntries the replayed entries Paper did not make, by why they
+	// differ (Mismatch); each sums to its side's count minus MatchedEntries.
+	MissedEntries, ExtraEntries map[Mismatch]int
+	// ExitReasonPairs counts, for each matched closed pair, the replay's
+	// exit_reason under the Paper position's: ExitReasonPairs[paper][replay].
+	// Its diagonal is ExitReasonMatched.
+	ExitReasonPairs map[string]map[string]int
 }
 
 // TradesFromPositions converts Paper positions to the replay's trade shape so
@@ -109,13 +118,18 @@ func Compare(actual, replay []backtest.Trade, th Thresholds) Report {
 		ActualExitReasons: exitReasons(actual), ReplayExitReasons: exitReasons(replay),
 		ActualMetrics: backtest.Aggregate(closedOnly(actual)), ReplayMetrics: backtest.Aggregate(closedOnly(replay)),
 	}
-	for _, pair := range match(actual, replay, th.Tolerance) {
+	pairs, actualUsed, replayUsed := match(actual, replay, th.Tolerance)
+	r.MissedEntries = classifyUnmatched(actual, replay, actualUsed, th.Tolerance)
+	r.ExtraEntries = classifyUnmatched(replay, actual, replayUsed, th.Tolerance)
+	r.ExitReasonPairs = map[string]map[string]int{}
+	for _, pair := range pairs {
 		r.MatchedEntries++
 		if pair.actual.Direction == pair.replay.Direction {
 			r.DirectionMatched++
 		}
 		if pair.actual.ExitReason != "" {
 			r.ExitReasonCompared++
+			r.countExitReasonPair(pair)
 			if pair.actual.ExitReason == pair.replay.ExitReason {
 				r.ExitReasonMatched++
 			}
@@ -156,6 +170,12 @@ func (r Report) String() string {
 	fmt.Fprintf(&b, "  エントリー: Paper %d件 / 再生 %d件 / 一致 %d件（方向も一致 %d件）\n", r.ActualEntries, r.ReplayEntries, r.MatchedEntries, r.DirectionMatched)
 	fmt.Fprintf(&b, "  エントリー一致率 %.1f%%（下限 %.1f%%）、再現率 %.1f%%、適合率 %.1f%%\n", r.EntryMatchRate*100, r.Thresholds.MinEntryMatchRate*100, r.Recall*100, r.Precision*100)
 	fmt.Fprintf(&b, "  exit_reason一致率 %.1f%%（%d/%d件、下限 %.1f%%）\n", r.ExitReasonMatchRate*100, r.ExitReasonMatched, r.ExitReasonCompared, r.Thresholds.MinExitReasonMatchRate*100)
+	fmt.Fprintf(&b, "  Paperにあって再生に無いエントリー %d件: %s\n", r.ActualEntries-r.MatchedEntries, formatMismatches(r.MissedEntries))
+	fmt.Fprintf(&b, "  再生にあってPaperに無いエントリー %d件: %s\n", r.ReplayEntries-r.MatchedEntries, formatMismatches(r.ExtraEntries))
+	if len(r.ExitReasonPairs) > 0 {
+		b.WriteString("  exit_reason別（対応した決済済みポジション）:\n")
+		b.WriteString(formatExitReasonPairs(r.ExitReasonPairs))
+	}
 	fmt.Fprintf(&b, "  exit_reason分布 Paper: %s / 再生: %s\n", formatCounts(r.ActualExitReasons), formatCounts(r.ReplayExitReasons))
 	fmt.Fprintf(&b, "  Paper: 件数 %d 勝率 %.1f%% Expectancy %.3f%% MaxDD %.3f%%\n", r.ActualMetrics.TradeCount, r.ActualMetrics.WinRate*100, r.ActualMetrics.Expectancy, r.ActualMetrics.MaxDrawdownPct)
 	fmt.Fprintf(&b, "  再生:  件数 %d 勝率 %.1f%% Expectancy %.3f%% MaxDD %.3f%%\n", r.ReplayMetrics.TradeCount, r.ReplayMetrics.WinRate*100, r.ReplayMetrics.Expectancy, r.ReplayMetrics.MaxDrawdownPct)
@@ -165,8 +185,9 @@ func (r Report) String() string {
 type pair struct{ actual, replay backtest.Trade }
 
 // match pairs trades of the same symbol whose entry times are within tol,
-// the closest pairs first so one replayed entry is never claimed twice.
-func match(actual, replay []backtest.Trade, tol time.Duration) []pair {
+// the closest pairs first so one replayed entry is never claimed twice. It also
+// reports which actual and replayed trades were paired.
+func match(actual, replay []backtest.Trade, tol time.Duration) (pairs []pair, usedA, usedR []bool) {
 	type cand struct {
 		a, r int
 		gap  time.Duration
@@ -183,8 +204,7 @@ func match(actual, replay []backtest.Trade, tol time.Duration) []pair {
 		}
 	}
 	sort.SliceStable(cands, func(x, y int) bool { return cands[x].gap < cands[y].gap })
-	usedA, usedR := map[int]bool{}, map[int]bool{}
-	var pairs []pair
+	usedA, usedR = make([]bool, len(actual)), make([]bool, len(replay))
 	for _, c := range cands {
 		if usedA[c.a] || usedR[c.r] {
 			continue
@@ -192,7 +212,7 @@ func match(actual, replay []backtest.Trade, tol time.Duration) []pair {
 		usedA[c.a], usedR[c.r] = true, true
 		pairs = append(pairs, pair{actual: actual[c.a], replay: replay[c.r]})
 	}
-	return pairs
+	return pairs, usedA, usedR
 }
 
 func closedOnly(trades []backtest.Trade) []backtest.Trade {

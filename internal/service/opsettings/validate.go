@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -228,6 +229,18 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		return s.validatePaperBootstrap(encoded)
 	case sleepguardsettings.IsKey(key):
 		if _, err := sleepguardsettings.Apply(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case researchlabelsettings.IsKey(key):
+		// Each value stands alone: only its own value is checked.
+		var err error
+		if key == researchlabelsettings.KeyEnabled {
+			_, err = researchlabelsettings.ParseEnabled(encoded)
+		} else {
+			_, err = researchlabelsettings.ParseRetentionDays(encoded)
+		}
+		if err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

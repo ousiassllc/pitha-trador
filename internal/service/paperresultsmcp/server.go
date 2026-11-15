@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
@@ -89,7 +90,8 @@ type Server struct {
 	now  func() time.Time
 	// slots holds one token per running tool call; its capacity is
 	// MaxConcurrent.
-	slots chan struct{}
+	slots       chan struct{}
+	experiments *experiment.SummaryCache // experiments_list's rows of finished experiments (issue #880)
 
 	mu sync.Mutex
 	db *sql.DB // opened on the first authenticated tool call
@@ -101,7 +103,7 @@ type Server struct {
 // New returns a Server. It performs no I/O: nothing is bound and no database
 // is opened until Listen / the first authenticated tool call.
 func New(opts Options) *Server {
-	s := &Server{opts: opts, slots: make(chan struct{}, MaxConcurrent)}
+	s := &Server{opts: opts, slots: make(chan struct{}, MaxConcurrent), experiments: experiment.NewSummaryCache()}
 	if s.log = opts.Logger; s.log == nil {
 		s.log = slog.Default()
 	}

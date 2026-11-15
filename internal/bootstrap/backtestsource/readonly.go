@@ -18,8 +18,9 @@ import (
 // same thresholds, Paper risk limits, exit/fill config with the TSE calendar,
 // and runtime Settings), but over the repositories alone, so it works on a
 // database opened read-only. cmd/backtestverify runs
-// Source.VerifyReproducibility with it (FR-BT-4).
-func NewForDB(db *sql.DB, strategy *config.StrategyConfig, risk *config.RiskConfig) *Source {
+// Source.VerifyReproducibility with it (FR-BT-4), replaying in mode (issue
+// #874: ReplayPaper reproduces what the Paper Policy Engine decides with).
+func NewForDB(db *sql.DB, strategy *config.StrategyConfig, risk *config.RiskConfig, mode ReplayMode) *Source {
 	settings := system.NewRuntimeSettingsRepository(db)
 	runtimePolicy := selfimprove.NewRuntimePolicy(settings, judgement.NewProposalRepository(db), strategy.Policy)
 	executionConfig := execution.ConfigFromRiskLimits(risk.Paper).WithCostSettings(settings)
@@ -27,6 +28,6 @@ func NewForDB(db *sql.DB, strategy *config.StrategyConfig, risk *config.RiskConf
 	return New(
 		market.NewInstrumentRepository(db), market.NewSnapshotRepository(db), judgement.NewDecisionRepository(db),
 		policy.ThresholdsFromStrategy(*strategy), runtimePolicy, executionConfig,
-		NewReplay(db, settings, risk.Paper, trading.NewPositionRepository(db)),
+		NewReplay(db, settings, risk.Paper, trading.NewPositionRepository(db)).WithMode(mode),
 	)
 }

@@ -28,7 +28,7 @@
 
 実験の一覧（新しい順。読み取り専用）。引数: `status`（`running` / `closed` / `aborted`。省略は全部）、`limit`（1〜50、既定 20。超過は `limit_exceeded`）、`min_trades`（64〜10000。**下限 64（暫定値。本番の 1 取引あたり損益の標準偏差 σ は未確認で、測って見直す。あいりの承認も未）は上げるのは可、下げるのは不可**。64 未満・10000 超は `invalid_value`（422。理由に指定値と下限を書く）で、黙って 64 に直さない。省略は 64）。
 
-`data.experiments[]` の各要素: `experiment`（3.25 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値（σ 未確認。あいりの承認も未） / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`。1 行ごとに前後の集計 2 回を行う（`limit_exceeded`＝期間内の取引が 5,000 件を超える実験があるとき、一覧全体が失敗する）。
+`data.experiments[]` の各要素: `experiment`（3.25 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値（σ 未確認。あいりの承認も未） / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`、`error`（その行を集計できなかったときだけ）。行は軽く作る: 取引件数は SQL の件数、交絡・切り替えの確認は `experiment_compare` と同じ検査で、判定が検定なしで決まる行（`aborted` / `confounded` / `switch_unconfirmed` / `insufficient_trades`）は取引を読まない。`error` は `limit_exceeded`（前後どちらかの期間の取引が 5,000 件を超え、検定できない）または `failed`（その他）で、そのとき `verdict` は空、他の行は影響を受けない（以前は 1 件の `limit_exceeded` で一覧全体が失敗した）。終了（中止）から 1 時間以上たった実験の行は、メモリに残した結果を返し、再集計しない（再起動までの間。保存はしない）。
 
 ### 3.28 `experiment_compare`
 
@@ -43,8 +43,9 @@
 | `before` / `after` | `{from, to, performance, risk_rejections}`。`performance` は `paper_performance_summary` の `data` と同じフィールド（`closed_trade_count`・`win_count`・`loss_count`・`win_rate`・`total_pnl_jpy`・`avg_win_jpy`・`avg_loss_jpy`・`max_drawdown_jpy`・`profit_factor` ほか。`by_origin[]` を含む）。`risk_rejections` は `risk_rejections` の `data` と同じフィールド（`risk_passed_count`・`buckets[]`・`other_reject_count`・`other_reject_breakdown[]` ほか） |
 | `diff` | 後 − 前: `total_pnl_jpy`・`max_drawdown_jpy`（参考。`max_drawdown_jpy` は判定に使う） |
 | `per_trade_pnl` | 判定の基礎になる検定（Welch の t 検定）。`before` / `after`: `{n, mean_jpy, sd_jpy}`（1 取引あたりの純損益（コスト控除後）の件数・平均・標本標準偏差。`paper_performance_summary` の `closed_trade_count` / `expectancy_jpy` と一致）、`diff`（平均の差、後 − 前）、`ci_low` / `ci_high`（差の信頼区間）、`ci_level`（0.95）、`t`（t 値）、`df`（Welch–Satterthwaite の自由度）。計算できない値（n<2、または前後とも全取引が同じ損益）は `null`。`n` が 0 のとき `mean_jpy` も `null` |
-| `confounded` / `confounders[]` | 交絡の有無と一覧。要素: `kind`（`setting` / `model` / `prompt`）、`period`（見つけた期間。`before`＝前、`after`＝後、`boundary`＝前と後を合わせて初めて見つかる、対象以外のモデル・プロンプトの切り替え（前は A だけ、後は B だけ）で `values[]` は両方の期間の値。前→後の順に並び、`boundary` は最後）、`name`（設定キー、判断種別 `scout` / `trader`、または Settings 画面での Jev のモデルの切り替えの記録なら `JEV_MODEL`）、`audit_id`・`at`（設定の変更・モデルの切り替えのとき。`at` は切り替えを保存した時刻）、`values[]`（その期間に記録されたモデル ID / プロンプトの版。`name=JEV_MODEL` のときは `[前のモデル, 後のモデル]`、未設定は「未設定（既定のモデル）」。モデル名は秘密情報ではない） |
-| `verdict` / `judged` | `aborted`（中止）/ `confounded`（交絡）/ `insufficient_trades`（前後どちらかが `min_trades` 未満）/ `not_computable`（件数は足りるが全取引が同じ損益で区間が出ない）→ 判定保留（`judged:false`）。`improved`（区間の下限 > 0 かつ最大ドローダウンが前以下。唯一の勝ち）/ `mixed`（下限 > 0 だがドローダウン悪化。勝ちと言わない）/ `worsened`（区間の上限 < 0）/ `inconclusive`（区間が 0 をまたぐ）→ `judged:true` |
+| `confounded` / `confounders[]` | 交絡の有無と一覧。要素: `kind`（`setting` / `model` / `prompt` / `policy`。`policy` は Self-Improvement の方針の提案の適用・取り消しで、`name` は提案の版、`values[]` は `applied` または `rolled_back`、`at` はその時刻）、`period`（見つけた期間。`before`＝前、`after`＝後、`boundary`＝前と後を合わせて初めて見つかる、対象以外のモデル・プロンプトの切り替え（前は A だけ、後は B だけ）で `values[]` は両方の期間の値。前→後の順に並び、`boundary` は最後）、`name`（設定キー、判断種別 `scout` / `trader`、または Settings 画面での Jev のモデルの切り替えの記録なら `JEV_MODEL`）、`audit_id`・`at`（設定の変更・モデルの切り替えのとき。`at` は切り替えを保存した時刻）、`values[]`（その期間に記録されたモデル ID / プロンプトの版。`name=JEV_MODEL` のときは `[前のモデル, 後のモデル]`、未設定は「未設定（既定のモデル）」。モデル名は秘密情報ではない） |
+| `switch_check` | 対象の変数が、宣言した `before` → `after` のとおり切り替わったかの確認。`status`: `confirmed`（記録が宣言の切り替えを開始時刻の前後 15 分以内に示す）/ `mismatch`（記録はあるが宣言と違う。値が違う・時刻が離れている）/ `not_switched`（値が変わっていない。同じ値の保存し直し、前後で同じモデル・版）/ `unverifiable`（確認できる記録が無い）。`detail` は理由の固定文（値は引用しない）。`confirmed` 以外は `verdict=switch_unconfirmed`（`confounded` は false のまま） |
+| `verdict` / `judged` | `aborted`（中止）/ `confounded`（交絡）/ `insufficient_trades`（前後どちらかが `min_trades` 未満）/ `switch_unconfirmed`（切り替えを確認できない。`switch_check`）/ `not_computable`（件数は足りるが全取引が同じ損益で区間が出ない）→ 判定保留（`judged:false`）。`improved`（区間の下限 > 0 かつ最大ドローダウンが前以下。唯一の勝ち）/ `mixed`（下限 > 0 だがドローダウン悪化。勝ちと言わない）/ `worsened`（区間の上限 < 0）/ `inconclusive`（区間が 0 をまたぐ）→ `judged:true` |
 
 判定の順と式・前提は `docs/architecture/paper-results-mcp-experiments.md` §4。**判定の基準は 1 取引あたりの純損益（コスト控除後）の平均の前後差の 95% 信頼区間と、最大ドローダウン**で、合計の損益の大小・勝率は使わない。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別の期間なので因果の証明にはならない。`min_trades` に届かない・交絡あり・中止のときも数値はそのまま返す（判定だけ出さない）。
 
@@ -55,6 +56,9 @@
 - `experiment_compare` の前後の数値が、同じ期間の `paper_performance_summary` / `risk_rejections` と一致する
 - 前後どちらかの取引件数が `min_trades`（下限 64）に届かない実験（63 件を含む）は判定を出さない（`insufficient_trades`、`judged:false`）。下限未満の `min_trades` は `invalid_value`
 - 区間が 0 をまたぐ実験を `improved` と言わない。区間が 0 より上でも最大ドローダウンが悪化していれば `improved` ではなく `mixed`
+- 申告と違う切り替え（値が違う・保存や使用の時刻が `started_at` から 15 分より離れている）、切り替え無し（値が変わっていない）、確認できる記録が無いものは、数値が良くても判定を出さない（`switch_unconfirmed`、`judged:false`。`audit_id` を省いても同じ）。同じ値での保存し直しは、対象でも対象以外でも変更として数えない
+- 前の期間か後の期間に方針の提案（`policy_proposals`）の適用・取り消しがあると `confounded`（`kind=policy`）。開始の直前の変更の扱いは `docs/architecture/paper-results-mcp-experiments.md` §4.5
+- `experiments_list` は 1 行が集計できなくても返り、その行に `error` が付く。終了済みの実験は毎回再集計しない
 - 前の期間か後の期間に対象以外の設定・モデル・プロンプトの版が変わると `confounded`（`confounders[].period` が `before` / `after` / `boundary`）。実験の変数自身の変更（`audit_id` の行、同じ値への保存、モデル・プロンプトの自身の切り替え）は数えない
 - Settings 画面での Jev のモデル（`JEV_MODEL`）の切り替えの記録が前の期間か後の期間にあれば、判断が 1 件も走っていなくても `confounded`（`confounders[]` に `kind=model`・`name=JEV_MODEL`・`period`（保存した時刻が前の期間なら `before`、後の期間なら `after`。時刻があるので `boundary` にはならない）・`at`・`values=[前, 後]`）。モデルの実験では、`after` のモデルへの切り替えは数えない
 - `kind=model` の実験の `started_at` で、記録から求めた「その時刻に使われていたモデル」が `after` でも未知でもなく、`after` のモデルへの切り替えがその後に保存されていれば `invalid_argument` で作れない（時刻は JST で理由に出す）

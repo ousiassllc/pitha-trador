@@ -47,6 +47,23 @@ const (
 // notification).
 var ErrSkipped = errors.New("maintenance: task skipped")
 
+// ErrMore is what a Task's Run returns after doing one bounded chunk of a job
+// that is not finished (e.g. the research labels' backlog, one JST day at a
+// time). The chunk counts as progress, not as a failure; it is not yet the
+// day's success either, so the runner records no last-success date. The runner
+// then lets go of its lock for ChunkPause - the other tasks (database backup,
+// retention purge) and the fixed-time triggers take it in that gap - and calls
+// Run again until it returns nil (success), ErrSkipped or another error. A task
+// that returns ErrMore must make progress with every call.
+var ErrMore = errors.New("maintenance: task has more work")
+
+// DefaultChunkPause is how long the runner leaves its lock free between two
+// chunks of a task that returned ErrMore. A sync.Mutex that is unlocked and
+// locked again at once is usually re-taken by the same goroutine, so the pause
+// is what lets a waiting task in; 200 ms is the batch pause of the retention
+// purge (a waiter gets the lock within it).
+const DefaultChunkPause = 200 * time.Millisecond
+
 // State persists each task's last successful run date.
 // *system.RuntimeSettingsRepository implements it.
 type State interface {
@@ -74,10 +91,17 @@ type Runner struct {
 	retryDelay time.Duration
 	now        func() time.Time
 
+	// chunkPause is what the runner waits, lock released, between two chunks of
+	// a task that returned ErrMore; tests replace it with a hook.
+	chunkPause func(ctx context.Context)
+
 	mu       sync.Mutex // serializes runs and guards the maps below
 	tasks    []Task
 	failures map[string]int
 	retryAt  map[string]time.Time
+	// chunking holds the tasks between their chunks (lock released), so a second
+	// CatchUp does not start the same task over.
+	chunking map[string]bool
 }
 
 // Option configures a Runner.
@@ -92,6 +116,23 @@ func WithNotifier(n Notifier) Option { return func(r *Runner) { r.notifier = n }
 // WithClock overrides time.Now (tests).
 func WithClock(now func() time.Time) Option { return func(r *Runner) { r.now = now } }
 
+// WithChunkPause overrides DefaultChunkPause, the time the lock is free between
+// two chunks of a task that returned ErrMore.
+func WithChunkPause(d time.Duration) Option {
+	return WithChunkWait(func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+		case <-time.After(d):
+		}
+	})
+}
+
+// WithChunkWait replaces the wait between two chunks (tests: a hook that runs
+// while the lock is free).
+func WithChunkWait(wait func(ctx context.Context)) Option {
+	return func(r *Runner) { r.chunkPause = wait }
+}
+
 // NewRunner returns a Runner persisting last-success dates in state, or
 // only in memory when state is nil.
 func NewRunner(state State, opts ...Option) *Runner {
@@ -101,7 +142,9 @@ func NewRunner(state State, opts ...Option) *Runner {
 		now:        time.Now,
 		failures:   make(map[string]int),
 		retryAt:    make(map[string]time.Time),
+		chunking:   make(map[string]bool),
 	}
+	WithChunkPause(DefaultChunkPause)(r)
 	if r.state == nil {
 		r.state = newMemoryState()
 	}
@@ -140,7 +183,7 @@ func (r *Runner) CatchUp(ctx context.Context) {
 		if ok {
 			r.warnIfOverdue(task, last, now)
 		}
-		r.run(ctx, task, now)
+		r.runChunks(ctx, task, now)
 	}
 }
 
@@ -151,27 +194,55 @@ func (r *Runner) RunNow(ctx context.Context, name string) {
 	defer r.mu.Unlock()
 	for _, task := range r.tasks {
 		if task.Name == name {
-			r.run(ctx, task, r.now())
+			r.runChunks(ctx, task, r.now())
 			return
 		}
 	}
 }
 
-// run executes task and records the outcome. r.mu must be held.
-func (r *Runner) run(ctx context.Context, task Task, now time.Time) {
+// runChunks runs task, and again after each ErrMore with r.mu released for the
+// chunk pause in between (so one long job never keeps the other tasks and the
+// fixed-time triggers waiting for more than one chunk). r.mu must be held; it is
+// held again when runChunks returns.
+func (r *Runner) runChunks(ctx context.Context, task Task, now time.Time) {
+	if r.chunking[task.Name] {
+		return // another CatchUp is between this task's chunks
+	}
+	for r.run(ctx, task, now) {
+		r.chunking[task.Name] = true
+		r.mu.Unlock()
+		r.chunkPause(ctx)
+		r.mu.Lock()
+		delete(r.chunking, task.Name)
+		if ctx.Err() != nil {
+			return
+		}
+		now = r.now()
+	}
+}
+
+// run executes task once and records the outcome. It reports whether the task
+// returned ErrMore and wants to be called again. r.mu must be held.
+func (r *Runner) run(ctx context.Context, task Task, now time.Time) (more bool) {
 	err := task.Run(ctx)
+	if errors.Is(err, ErrMore) {
+		// Progress: the failure streak is over, but the day is not done.
+		delete(r.failures, task.Name)
+		delete(r.retryAt, task.Name)
+		return ctx.Err() == nil
+	}
 	if errors.Is(err, ErrSkipped) {
 		slog.Debug("scheduler: maintenance task skipped", "task", task.Name)
-		return
+		return false
 	}
 	if err == nil {
 		delete(r.failures, task.Name)
 		delete(r.retryAt, task.Name)
 		r.recordSuccess(ctx, task.Name, now)
-		return
+		return false
 	}
 	if ctx.Err() != nil {
-		return // shutting down: neither a task failure nor worth a retry delay
+		return false // shutting down: neither a task failure nor worth a retry delay
 	}
 	r.failures[task.Name]++
 	n := r.failures[task.Name]
@@ -182,6 +253,7 @@ func (r *Runner) run(ctx context.Context, task Task, now time.Time) {
 			slog.Error("scheduler: maintenance failure notification failed", "task", task.Name, "error", nerr)
 		}
 	}
+	return false
 }
 
 func (r *Runner) lastSuccess(ctx context.Context, name string) (string, bool) {
