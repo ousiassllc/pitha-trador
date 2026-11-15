@@ -123,12 +123,18 @@ func series(n int, mean, spread float64) []float64 {
 // the given maximum drawdowns, at the floor minimum.
 func comparison(status string, confounded bool, before, after []float64, ddBefore, ddAfter float64) Comparison {
 	c := Comparison{
-		Experiment: Experiment{Status: status}, MinTrades: MinTradesFloor, Confounded: confounded,
+		Experiment: Experiment{Status: status}, MinTrades: MinTradesFloor, Confounded: confounded, Switch: confirmed(),
 		Before:      Period{Performance: perf(len(before), 0, ddBefore)},
 		After:       Period{Performance: perf(len(after), 0, ddAfter)},
 		PerTradePnl: Welch(before, after),
 	}
 	c.Diff = Diff{MaxDrawdownJPY: ddAfter - ddBefore}
+	return c
+}
+
+// withSwitch is c with the switch check at status (anything but confirmed).
+func withSwitch(c Comparison, status string) Comparison {
+	c.Switch = SwitchCheck{Status: status}
 	return c
 }
 
@@ -144,10 +150,15 @@ func TestVerdict(t *testing.T) {
 		c    Comparison
 		want string
 	}{
-		// 判定の順: 中止 → 交絡 → 件数不足 → 勝ち負け.
+		// 判定の順: 中止 → 交絡 → 件数不足 → 切り替え未確認 → 勝ち負け.
 		{"aborted beats everything", comparison(StatusAborted, true, series(10, 0, 1), series(10, 9999, 1), 100, 0), VerdictAborted},
 		{"confounded beats thin periods", comparison(StatusClosed, true, series(10, 0, 1), series(10, 9999, 1), 100, 0), VerdictConfounded},
 		{"confounded beats a clear win", comparison(StatusClosed, true, base, series(n, 700, 500), 100, 0), VerdictConfounded},
+		{"thin periods beat an unconfirmed switch", withSwitch(comparison(StatusClosed, false, series(10, 0, 1), series(10, 9999, 1), 100, 0), SwitchNotSwitched), VerdictInsufficientTrades},
+		{"switch not confirmed beats a clear win", withSwitch(comparison(StatusClosed, false, base, series(n, 700, 500), 50, 20), SwitchUnverifiable), VerdictSwitchUnconfirmed},
+		{"a mismatched switch beats a clear win", withSwitch(comparison(StatusClosed, false, base, series(n, 700, 500), 50, 20), SwitchMismatch), VerdictSwitchUnconfirmed},
+		{"confounded beats an unconfirmed switch", withSwitch(comparison(StatusClosed, true, base, series(n, 700, 500), 50, 20), SwitchMismatch), VerdictConfounded},
+		{"aborted beats an unconfirmed switch", withSwitch(comparison(StatusAborted, false, base, series(n, 700, 500), 50, 20), SwitchMismatch), VerdictAborted},
 		{"after below the minimum (63)", comparison(StatusClosed, false, base, series(n-1, 9999, 1), 100, 0), VerdictInsufficientTrades},
 		{"before below the minimum (63)", comparison(StatusClosed, false, series(n-1, 0, 1), series(n, 9999, 1), 100, 0), VerdictInsufficientTrades},
 		{"no trades at all", comparison(StatusRunning, false, nil, nil, 0, 0), VerdictInsufficientTrades},

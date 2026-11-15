@@ -14,14 +14,23 @@ import (
 // notice are made by the application (the Settings screen, a model switch)
 // and by the settings tools, all of which end up as these rows.
 
-var nextAudit, nextDecision = 0, 100
+var nextDecision = 100
 
+// auditRow plants an mcp_settings_audit row and returns its id (the next
+// free one, so rows the tools write themselves, such as the write switch's,
+// never collide with it).
 func auditRow(t *testing.T, w *sql.DB, at, action, key, before, after string) int64 {
 	t.Helper()
-	nextAudit++
-	testkit.MustExec(t, w, `INSERT INTO mcp_settings_audit (id, at, actor, client, action, setting_key, before_value, after_value)
-		VALUES (?, ?, 'gui', '', ?, ?, ?, ?)`, 1000+nextAudit, testkit.Stored(t, at), action, key, before, after)
-	return int64(1000 + nextAudit)
+	res, err := w.ExecContext(t.Context(), `INSERT INTO mcp_settings_audit (at, actor, client, action, setting_key, before_value, after_value)
+		VALUES (?, 'gui', '', ?, ?, ?, ?)`, testkit.Stored(t, at), action, key, before, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func decisionRow(t *testing.T, w *sql.DB, at, decisionType, model, prompt string) {

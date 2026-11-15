@@ -17,7 +17,10 @@ import (
 // not final. The production standard deviation sigma of the net pnl per trade
 // is NOT measured yet, so the value is to be reviewed once sigma is measured
 // (あいり's approval is still outstanding; nothing treats 64 as approved). It
-// is kept in this one place.
+// is kept in this one place. How to measure sigma on a copy of the production
+// database, and the formula from sigma to the detectable difference in yen and
+// the required count (with the autocorrelation caveat), are in
+// docs/architecture/paper-results-mcp-experiments.md §5.1 and §5.2 (issue #887).
 //
 // Basis (docs/architecture/paper-results-mcp-experiments.md §5): the two-sample
 // comparison of the mean net pnl per trade, two-sided alpha 0.05, power 0.8,
@@ -64,7 +67,7 @@ func CheckMinTrades(minTrades int) error {
 // Verdicts. The test is Welch's t test of the mean net pnl per trade (after
 // costs) of the two periods, and the interval is the 95% confidence interval
 // of after minus before (welch.go). The order of the rules is aborted ->
-// confounded -> insufficient_trades -> not_computable -> the call. Only
+// confounded -> insufficient_trades -> switch_unconfirmed -> not_computable -> the call. Only
 // improved is a win, and it is deliberately hard to get; every other outcome
 // errs on the side of not claiming one. The win rate and the rest are shown
 // for reference and never decide.
@@ -75,6 +78,11 @@ const (
 	// before or the after period, or across the two (Confounders lists it),
 	// so the comparison says nothing.
 	VerdictConfounded = "confounded"
+	// VerdictSwitchUnconfirmed: the variable is not on record as having gone
+	// from the declared before to the declared after at the declared start
+	// (Comparison.Switch says which way: a different switch, no switch, or
+	// nothing on record). Judgement withheld (issue #879).
+	VerdictSwitchUnconfirmed = "switch_unconfirmed"
 	// VerdictInsufficientTrades: a period has fewer than min_trades closed
 	// trades (min_trades is never below MinTradesFloor). Judgement withheld.
 	VerdictInsufficientTrades = "insufficient_trades"
@@ -97,20 +105,17 @@ const (
 	VerdictInconclusive = "inconclusive"
 )
 
-// verdict applies the rules in order. Aborted and confounded experiments, thin
-// periods and a test that cannot be computed are not judged. Otherwise the
-// 95% interval of the difference of the mean net pnl per trade decides, and
-// only an interval wholly above 0 with a maximum drawdown no larger than
-// before is a win.
+// verdict applies the rules in order. Aborted and confounded experiments, a
+// variable that did not switch as declared, thin periods and a test that cannot
+// be computed are not judged. Otherwise the 95% interval of the difference of
+// the mean net pnl per trade decides, and only an interval wholly above 0 with
+// a maximum drawdown no larger than before is a win.
 func verdict(c Comparison) string {
+	if v := withheld(c); v != "" {
+		return v
+	}
 	t := c.PerTradePnl
 	switch {
-	case c.Experiment.Status == StatusAborted:
-		return VerdictAborted
-	case c.Confounded:
-		return VerdictConfounded
-	case c.Before.Performance.ClosedTradeCount < c.MinTrades || c.After.Performance.ClosedTradeCount < c.MinTrades:
-		return VerdictInsufficientTrades
 	case !t.Computable():
 		return VerdictNotComputable
 	case *t.CILow > 0 && c.Diff.MaxDrawdownJPY <= 0:
@@ -121,4 +126,32 @@ func verdict(c Comparison) string {
 		return VerdictWorsened
 	}
 	return VerdictInconclusive
+}
+
+// withheld is the first four rules of verdict: the verdict that needs no
+// per-trade test ("" when the experiment gets past them). It reads only the
+// status, the confounders, the switch check and the two trade counts, so a
+// listing can apply it without reading a single trade.
+func withheld(c Comparison) string {
+	switch {
+	case c.Experiment.Status == StatusAborted:
+		return VerdictAborted
+	case c.Confounded:
+		return VerdictConfounded
+	case c.Before.Performance.ClosedTradeCount < c.MinTrades || c.After.Performance.ClosedTradeCount < c.MinTrades:
+		return VerdictInsufficientTrades
+	case !c.Switch.Confirmed():
+		return VerdictSwitchUnconfirmed
+	}
+	return ""
+}
+
+// judgedVerdict reports whether v is an answer of the test (improved, mixed,
+// worsened, inconclusive) rather than a withheld judgement.
+func judgedVerdict(v string) bool {
+	switch v {
+	case VerdictImproved, VerdictWorsened, VerdictMixed, VerdictInconclusive:
+		return true
+	}
+	return false
 }

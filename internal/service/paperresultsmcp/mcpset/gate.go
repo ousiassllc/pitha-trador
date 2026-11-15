@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 )
 
 // Gate is the application's side of the same state the Writer changes: it
@@ -20,11 +21,13 @@ type Gate struct {
 	db       *sql.DB
 	settings *system.RuntimeSettingsRepository
 	now      func() time.Time
+	// summaries keeps the list rows of finished experiments (issue #880).
+	summaries *experiment.SummaryCache
 }
 
 // NewGate returns a Gate over the application's database.
 func NewGate(db *sql.DB) *Gate {
-	return &Gate{db: db, settings: system.NewRuntimeSettingsRepository(db), now: time.Now}
+	return &Gate{db: db, settings: system.NewRuntimeSettingsRepository(db), now: time.Now, summaries: experiment.NewSummaryCache()}
 }
 
 // Enabled reports the write switch (on while nothing is stored).
