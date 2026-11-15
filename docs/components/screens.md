@@ -63,11 +63,12 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
-| Jev | `/settings/integrations#modal-jev` | 売買判断を行う AI（Jev）の API キー・接続先・モデルを設定します。 | 外部連携・AI |
+| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
+| 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
-| OpenRouter（モデル比較） | `/settings/integrations#modal-openrouter` | モデル比較トライアルが比較対象のモデルを呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
+| OpenRouter | `/settings/integrations#modal-openrouter` | 「役割ごとのモデル」で OpenRouter を選んだ役割とモデル比較トライアルのアームが呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
 | MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開し、許可した基本設定だけを変更できる MCP サーバーの有効化・API キーの設定と、起動・停止・再起動、MCP からの設定変更の許可（既定オン）と監査ログの確認ができます。 | 外部連携・AI |
@@ -118,3 +119,4 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
+| 1.18 | 2026-11-15 | Settings「外部連携・AI」に「役割ごとのプロバイダーとモデル」のカードを追加し、並びを「AI のプロバイダー（独自 API・OpenRouter）→ 役割ごとのモデル → そのほかの接続先」にした。Jev の接続カードを「独自 API（Jev）」、OpenRouter のカードを「OpenRouter」に改めた | issue #1080 |

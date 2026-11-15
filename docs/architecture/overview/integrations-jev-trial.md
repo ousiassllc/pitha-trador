@@ -97,7 +97,7 @@
 | フィールド | 意味 |
 |------------|------|
 | `id` | アーム名（`jev_trial_decisions.arm_id`。英小文字・数字・`.`・`_`・`-`、48 文字まで） |
-| `provider` | 第 1 段階は `openrouter` のみ |
+| `provider` | `openrouter`（既定の使い方。OpenRouter のキーとアームの `model` で呼ぶ）か `custom`（独自 API の URL とキー。`provider_only`・`data_collection`・`zdr` は付けられない。issue #1080、`overview/integrations-ai-providers.md`） |
 | `model` | 送るモデル id |
 | `prompt_version` | 登録済みの Trader プロンプト版（例 `trader-v3`） |
 | `daily_cost_cap_usd` | このアームの 1 日の上限（省略・0 は 0.05 USD） |
@@ -156,3 +156,4 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。トライアルのフロー・費用の数え方・上限・設定・隔離のテストを `integrations.md` §6 から分割して記述 | issue #1059 |
 | 1.1 | 2026-11-14 | 隔離の保証の表に、ライブ側からトライアル側への import を許可リスト方式で禁じるテストと、トライアル側が発注に触れないことのテストを追加 | issue #1069 |
+| 1.2 | 2026-11-15 | アームの`provider`に`custom`（独自 API）を追加。ライブ側からの import の許可リストに`internal/bootstrap/airolewire`（アームの接続の組み立て）を追加 | issue #1080 |

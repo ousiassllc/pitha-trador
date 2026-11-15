@@ -42,3 +42,4 @@
 | 1.37 | 2026-11-13 | §3.32 `jev_trial_compare` / `jev_trial_cost`（意思決定モデル比較のお試しの読み取り専用ツール）を分割章`paper-results-mcp-jev-trial.md`に追加。ツール数 33→35 | issue #1060 |
 | 1.38 | 2026-11-14 | §3.33 `jev_evaluation`（Jev の全 LONG/SHORT 判断を、同じ行のベースラインと既存のコスト控除後ラベルの付け直しで比べる研究用の読み取り専用ツール。分割章`paper-results-mcp-jev-evaluation.md`）と §3.34 `research_horizon_summary`（研究用のホライズンラベル 30 分・60 分・引けの読み取り専用の集計。取引の入力ではない。分割章`paper-results-mcp-research-labels.md`）を追加。ツール数 35→37（読み取り 16→18） | issue #1073・#1074 |
 | 1.39 | 2026-11-15 | §4 の設定ツールのホワイトリストに`research.labels.enabled`を足し 21 → 22 キーにした。§3.33 に日の区切り（JST）と値（いまの設定で付け直した値）を明記 | issue #1073 / #1074（PR #1077 の直し） |
+| 1.40 | 2026-11-15 | §3.35 `ai_roles`（AI の役割ごとのプロバイダー・モデルの設定と履歴を読む読み取り専用ツール。秘密は返さず、役割の設定を変えるツールは無い。分割章`paper-results-mcp-ai-roles.md`）を追加。ツール数 37→38 | issue #1080 |

@@ -182,6 +182,7 @@ var dialogs = []Dialog{
 	{PageBroker, "modal-tachibana-screen", nil},
 
 	// 外部連携・AI
+	{PageIntegrations, "modal-ai-roles", nil},
 	{PageIntegrations, "modal-jev", nil},
 	{PageIntegrations, "modal-luna", nil},
 	{PageIntegrations, "modal-sol", nil},

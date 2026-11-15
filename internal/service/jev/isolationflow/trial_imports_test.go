@@ -30,6 +30,7 @@ var trialImportTargets = []string{"internal/service/jevtrial", "internal/service
 // added here on purpose; an entry that no longer imports one fails too.
 var allowedTrialImporters = map[string]string{
 	"internal/bootstrap":            "wires the runner and the Settings service into the app",
+	"internal/bootstrap/airolewire": "builds the trial arms' provider connections (trial.Keys) from the AI provider layer (issue #1080)",
 	"internal/web/handler/jevtrial": "the Settings screen's trial section (service/jevtrial)",
 	"internal/web/handler/settings": "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
 	"internal/service/jev/trial":    "the runner builds its arms from trialwire",

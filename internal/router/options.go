@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
@@ -53,6 +54,7 @@ type options struct {
 	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
 	jevPrompt           jevprompt.Service            // nil until WithJevPromptSettings: no Jev prompt card
 	jevTrial            jevtrial.Service             // nil until WithJevTrialSettings: no model-comparison trial card
+	aiRoles             airoles.Service              // nil until WithAIRoleSettings: no 役割ごとのモデル card
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -204,11 +206,10 @@ func WithOperationalSettings(ops settings.OperationalSettings) Option {
 	return func(o *options) { o.operationalSettings = ops }
 }
 
-// WithMCPSettings enables the Settings screen's MCP card (`modal-mcp`) and
-// the `GET /settings/mcp-panel`, `POST /settings/mcp` and `POST
-// /settings/mcp/key` routes, backed by admin (issue #792); without it the card
-// is hidden and the routes answer 404. cmd/desktop and cmd/server pass
-// internal/bootstrap's *admin.Service over the MCP's settings file.
+// WithMCPSettings enables the Settings screen's MCP card (`modal-mcp`) and the `GET /settings/mcp-panel`,
+// `POST /settings/mcp` and `POST /settings/mcp/key` routes, backed by admin (issue #792); without it the
+// card is hidden and the routes answer 404. cmd/desktop and cmd/server pass internal/bootstrap's
+// *admin.Service over the MCP's settings file.
 func WithMCPSettings(admin mcpsettings.Admin) Option {
 	return func(o *options) { o.mcpSettings = admin }
 }
@@ -220,11 +221,10 @@ func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
 	return func(o *options) { o.mcpWriteGate = gate }
 }
 
-// WithJevPromptSettings enables the Settings screen's Jev prompt card
-// (`modal-jev-prompt`: live version, shadow switch, candidate, daily cost cap,
-// cost, promotion; issue #872) and its `GET /settings/jev-prompt-panel`, `POST
-// /settings/jev-prompt/shadow` and `POST /settings/jev-prompt/promote` routes;
-// without it the card is hidden and the routes answer 404.
+// WithJevPromptSettings enables the Settings screen's Jev prompt card (`modal-jev-prompt`: live version, shadow
+// switch, candidate, daily cost cap, cost, promotion; issue #872) and its `GET /settings/jev-prompt-panel`,
+// `POST /settings/jev-prompt/shadow` and `POST /settings/jev-prompt/promote` routes; without it the card is
+// hidden and the routes answer 404.
 func WithJevPromptSettings(svc jevprompt.Service) Option {
 	return func(o *options) { o.jevPrompt = svc }
 }
