@@ -41,10 +41,12 @@ type Result struct {
 	// FirstUnmet is the name of the first item that is not pass (null when all pass).
 	FirstUnmet *string `json:"first_unmet"`
 	// EligibleAsEvidence: every item passed. Evidence for a person's proposal, not an instruction.
-	EligibleAsEvidence bool              `json:"eligible_as_evidence"`
-	Applied            bool              `json:"applied"`
-	KeyNumbers         KeyNumbers        `json:"key_numbers"`
-	Definitions        map[string]string `json:"definitions"`
+	EligibleAsEvidence bool `json:"eligible_as_evidence"`
+	// HorizonNote is set (and EligibleAsEvidence false) when a research model is compared at a horizon it was not trained for.
+	HorizonNote string            `json:"horizon_note,omitempty"`
+	Applied     bool              `json:"applied"`
+	KeyNumbers  KeyNumbers        `json:"key_numbers"`
+	Definitions map[string]string `json:"definitions"`
 }
 
 // Criteria are the numeric criteria in force with their documented floors and where each value comes from.

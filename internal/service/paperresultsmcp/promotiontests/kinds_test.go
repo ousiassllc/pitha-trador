@@ -1,6 +1,7 @@
 package promotiontests
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -65,5 +66,28 @@ func TestRejectsBadArguments(t *testing.T) {
 		if r := srv.post(t, tool, withPeriod(args)); r.status != http.StatusUnprocessableEntity {
 			t.Errorf("%s: status %d, body %s; want 422", name, r.status, r.body)
 		}
+	}
+}
+
+// A research model trained on one label horizon is not evidence when it is graded on another: the checklist says
+// so and is not eligible, whatever the items say. The same model at its own horizon carries no such note.
+func TestResearchModelAtAnotherHorizonIsNotEvidence(t *testing.T) {
+	t.Parallel()
+	srv, w := newServer(t, "")
+	decs := seed(t, w)
+	testkitExec(t, w, `INSERT INTO research_model_runs (version, algorithm, label_horizon, features_json, hyperparams_json, coefficients_json,
+		train_from, train_to, predict_day, n_train, n_predicted, train_digest) VALUES ('rv1', 'ridge', '30m', '{}', '{}', '{}', '2026-09-01', '2026-09-30', '2026-10-05', 10, 8, 'd')`)
+	for _, d := range decs {
+		testkitExec(t, w, `INSERT INTO research_model_predictions (run_id, jev_decision_id, instrument_id, snapshot_at, day, pred_long_net_bps, pred_short_net_bps, direction)
+			VALUES ((SELECT id FROM research_model_runs WHERE version = 'rv1'), ?, 1, ?, ?, 1, -1, ?)`, d.id, stamp(t, d.at()), fmt.Sprintf("2026-10-%02d", d.day), follow(d))
+	}
+	cand := map[string]any{"kind": "research_model", "id": "ridge:30m"}
+	res := srv.post(t, tool, withPeriod(map[string]any{"candidate": cand})).result(t) // default horizon 10m
+	if res.HorizonNote == "" || res.EligibleAsEvidence {
+		t.Errorf("10m horizon: note %q eligible %v, want a note and not eligible", res.HorizonNote, res.EligibleAsEvidence)
+	}
+	res = srv.post(t, tool, withPeriod(map[string]any{"candidate": cand, "horizon": "30m"})).result(t)
+	if res.HorizonNote != "" {
+		t.Errorf("30m horizon: unexpected note %q", res.HorizonNote)
 	}
 }

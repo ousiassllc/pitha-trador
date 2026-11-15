@@ -31,7 +31,8 @@
 | `criteria` | `effective`（有効な 5 つの値）・`floor`（フロア）・`source`（キーごとに `floor` / `setting` / `call`）・`min_coverage`（0.8）・`note` |
 | `items[]` | 固定の順の 11 項目 `{name, status, actual, required, comparator, detail}`。`status` は `pass` / `fail` / `unknown`（下表） |
 | `first_unmet` | `pass` でない最初の項目名。全て `pass` なら null |
-| `eligible_as_evidence` | 全項目が `pass`。**指示ではない** |
+| `eligible_as_evidence` | 全項目が `pass`。**指示ではない**。候補が研究用モデルで、その学習ホライズン（id 末尾）と `horizon` が違うときは常に `false` |
+| `horizon_note` | 上の不一致のときだけ付く説明（学習していない時間軸のラベルで採点した数字なので根拠にしない。`horizon` を合わせて呼び直す） |
 | `applied` | 常に `false` |
 | `key_numbers` | `reference_rows`・`n_common`・`coverage`・`days`・`candidate_mean_net_bps`・`current_mean_net_bps`・`diff_mean_bps`・`diff_ci`・`p_value`・`holm_adjusted_p`・`family_size`・`family_size_extra`・`positive_day_pct` |
 | `definitions` | 各項目の定義文 |

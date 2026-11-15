@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -49,6 +50,12 @@ func publish(base, id string, files []encoded, manifest Manifest) (outcome, Mani
 	final := filepath.Join(base, id)
 	if err := os.MkdirAll(base, DirMode); err != nil {
 		return 0, Manifest{}, fmt.Errorf("datasetexport: create exports folder: %w", err)
+	}
+	// MkdirAll leaves an existing folder as it is: refuse a symlink (the files would land elsewhere)
+	// and a folder others can read or write (the dataset is private to the operator).
+	// (Windows reports no meaningful permission bits, so only the symlink check applies there.)
+	if info, err := os.Lstat(base); err != nil || !info.IsDir() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
+		return 0, Manifest{}, errors.New("datasetexport: the exports folder is not a private directory (a symlink, or readable or writable by others)")
 	}
 	if _, err := os.Lstat(final); err == nil {
 		return verifyExisting(final, files, manifest)

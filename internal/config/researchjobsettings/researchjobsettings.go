@@ -5,8 +5,8 @@
 // and the switch of the training-dataset export tool.
 //
 // The keys live in runtime_settings (docs/architecture/er.md §runtime_settings); there is
-// no yaml or environment source and they are not on the Paper results MCP's settings_set
-// whitelist. Both jobs write only their own research tables and never a trading input,
+// no yaml or environment source. Only the three switches are on the Paper results MCP's
+// settings_set whitelist; the retentions are not. Both jobs write only their own research tables and never a trading input,
 // but they are writes the trading process makes, so all three are OFF by default: while
 // nothing is stored (or the stored value is damaged) the jobs write nothing.
 package researchjobsettings

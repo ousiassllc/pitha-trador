@@ -30,7 +30,7 @@
 
 - バケットごとの要約は `evaldiag.Summarize`（日クラスタのブートストラップ・シード 1073・2000 回・95% 百分位区間・検出できる最小の差・勝率・両側 p 値）。2 日未満は区間・p なし
 - `low_sample`: `n < 30`（`MinBucketRows`）または `days < 5`（`MinBucketDays`）。理由を `low_sample_reasons` に出す。バケットは除外せず、family に入れたまま印だけ付ける（印の付いたバケットを黙って落とすと補正が甘くなる）
-- 多重比較: `stats.Holm` を、コホートごと・family（`preregistered` / `exploratory`）ごとに、その family の**全切り口の全バケット**のうち p 値のあるものに適用する。`dimensions` で出力を絞っても family 全体で計算する（見る切り口を絞って補正を甘くできないように）。`family_size` が Holm の m。`all` は family に入れない。補正後の p は元の p 以上
+- 多重比較（p が定義できない 2 日未満のバケットも p = 1 として族に数える）: `stats.Holm` を、コホートごと・family（`preregistered` / `exploratory`）ごとに、その family の**全切り口の全バケット**のうち p 値のあるものに適用する。`dimensions` で出力を絞っても family 全体で計算する（見る切り口を絞って補正を甘くできないように）。`family_size` が Holm の m。`all` は family に入れない。補正後の p は元の p 以上
 - 並べ替えない・最良を示さない・しきい値を当てない・推奨を返さない。補正後の p も記述であり、合否ではない
 - 計算量: 1 コホートで最大 60 前後のブートストラップ（2000 回 × 日数）。判断数の上限（`evaldiag.LimitFor`）で日数も縛られ、コンテキストのキャンセルをバケットごとに見る
 

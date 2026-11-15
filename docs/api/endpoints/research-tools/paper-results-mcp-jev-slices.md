@@ -66,7 +66,7 @@
 
 **`cohorts[]` の要素**: `model_id`・`question_version`・`decisions`（読んだ全判断）・`evaluated`（比較に使えた行）・`all`（そのコホート全体のバケット形式の要約。基準で、family に入らず `holm_adjusted_p` は `null`）・`families[]`。
 
-**`families[]` の要素**: `family`（`preregistered` / `exploratory`。`dimensions` で片方の切り口を全部外すとその family は出ない）・`family_size`・`buckets`・`dimensions[]`。**`family_size`** は Holm の m = その family の**全切り口の全バケット**（`dimensions` で絞っても同じ）のうち `p_value` があるものの数。`buckets` は `p_value` のないものも含む数。
+**`families[]` の要素**: `family`（`preregistered` / `exploratory`。`dimensions` で片方の切り口を全部外すとその family は出ない）・`family_size`・`buckets`・`dimensions[]`。**`family_size`** は Holm の m = その family の**全切り口の全バケット**（`dimensions` で絞っても同じ）のうち、件数が 1 以上のバケットの数（`p_value` が定義できない（2 日未満の）バケットも **p = 1 として数える**。数えないと他の補正が甘くなる）。`buckets` は件数 0 のバケットも含む数。
 
 **`dimensions[]` の要素**: `dimension`・`rows`（= コホートの `evaluated`）・`edges`（三分位の切り口のみ）・`buckets[]`。
 
@@ -123,7 +123,7 @@
 }
 ```
 
-（`ci` / `p_value` などは省略。この固定データでは、p 値のあるバケットが少ない（多くが 1 日分か 2 日未満）ので、`family_size` は preregistered が 7（16 バケット中）、exploratory が 6（21 バケット中）。）
+（`ci` / `p_value` などは省略。`family_size` の数字は例で、件数が 1 以上のバケットの数。）
 
 ## 受け入れ条件
 

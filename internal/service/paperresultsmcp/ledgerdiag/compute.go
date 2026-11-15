@@ -264,13 +264,17 @@ func cohortEntry(req Request, e Entry, s *source) Entry {
 func applyHolm(l *Ledger, extra int) {
 	var idx []int
 	var ps []float64
+	untested := 0 // a comparison whose p is undefined (fewer than two days) still counts, as p = 1
 	for i, e := range l.Candidates {
-		if e.DiffVsLive != nil && e.DiffVsLive.PValue != nil {
+		switch {
+		case e.DiffVsLive != nil && e.DiffVsLive.PValue != nil:
 			idx, ps = append(idx, i), append(ps, *e.DiffVsLive.PValue)
+		case e.DiffVsLive != nil:
+			untested++
 		}
 	}
-	family := len(ps) + extra
-	adjusted := stats.Holm(append(slices.Clone(ps), slices.Repeat([]float64{1}, extra)...))
+	family := len(ps) + untested + extra
+	adjusted := stats.Holm(append(slices.Clone(ps), slices.Repeat([]float64{1}, untested+extra)...))
 	for k, i := range idx {
 		a := adjusted[k]
 		l.Candidates[i].DiffVsLive.HolmAdjustedP = &a

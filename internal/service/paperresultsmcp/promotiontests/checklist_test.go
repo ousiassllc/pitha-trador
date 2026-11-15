@@ -198,9 +198,13 @@ func TestAdjustedPIsTheLedgersAndWidensWithTheFamily(t *testing.T) {
 	ids := map[string]int{}
 	for _, c := range ledger["candidates"].([]any) {
 		m := c.(map[string]any)
-		if d, ok := m["diff_vs_live"].(map[string]any); ok && d["p_value"] != nil {
+		if d, ok := m["diff_vs_live"].(map[string]any); ok {
 			ids[m["id"].(string)] = len(ps)
-			ps = append(ps, d["p_value"].(float64))
+			if d["p_value"] != nil {
+				ps = append(ps, d["p_value"].(float64))
+			} else {
+				ps = append(ps, 1) // an undefined p still counts in the family, as p = 1
+			}
 		}
 	}
 	if len(ps) < 3 {

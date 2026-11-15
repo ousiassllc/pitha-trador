@@ -68,26 +68,31 @@ func TestHolmWithinEachFamily(t *testing.T) {
 	for _, fam := range c.Families {
 		var raw []float64
 		var buckets []slicediag.Bucket
-		total := 0
+		total, untested := 0, 0
 		for _, dim := range fam.Dimensions {
 			for _, b := range dim.Buckets {
 				total++
 				if b.PValue != nil {
 					raw = append(raw, *b.PValue)
 					buckets = append(buckets, b)
-				} else if b.HolmAdjustedP != nil {
-					t.Errorf("%s/%s: a Holm value without a p-value", dim.Dimension, b.Bucket)
+				} else {
+					if b.N > 0 {
+						untested++ // counted in the family as p = 1
+					}
+					if b.HolmAdjustedP != nil {
+						t.Errorf("%s/%s: a Holm value without a p-value", dim.Dimension, b.Bucket)
+					}
 				}
 			}
 		}
 		if len(raw) < 5 {
 			t.Fatalf("%s: only %d buckets with a p-value, the test is vacuous", fam.Family, len(raw))
 		}
-		if fam.FamilySize != len(raw) || fam.Buckets != total {
-			t.Errorf("%s: family_size %d buckets %d, want %d/%d", fam.Family, fam.FamilySize, fam.Buckets, len(raw), total)
+		if fam.FamilySize != len(raw)+untested || fam.Buckets != total {
+			t.Errorf("%s: family_size %d buckets %d, want %d/%d", fam.Family, fam.FamilySize, fam.Buckets, len(raw)+untested, total)
 		}
 		sizes[fam.Family] = fam.FamilySize
-		for i, adj := range stats.Holm(raw) {
+		for i, adj := range stats.Holm(append(slices.Clone(raw), slices.Repeat([]float64{1}, untested)...))[:len(raw)] {
 			b := buckets[i]
 			if b.HolmAdjustedP == nil || math.Abs(*b.HolmAdjustedP-adj) > eps || *b.HolmAdjustedP < raw[i]-eps || *b.HolmAdjustedP > 1 {
 				t.Errorf("%s/%s: holm %v, want %v (raw %v)", fam.Family, b.Bucket, deref(b.HolmAdjustedP), adj, raw[i])

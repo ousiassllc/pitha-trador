@@ -59,10 +59,14 @@ func cutCohort(ctx context.Context, rows []evaldiag.Row, want []string) (Cohort,
 			f.Buckets += len(dim.Buckets)
 			f.Dimensions = append(f.Dimensions, dim)
 		}
+		untested := 0 // non-empty buckets without a p-value (fewer than two days) still count, as p = 1
 		for i := range f.Dimensions {
 			for j := range f.Dimensions[i].Buckets {
-				if b := &f.Dimensions[i].Buckets[j]; b.PValue != nil {
+				switch b := &f.Dimensions[i].Buckets[j]; {
+				case b.PValue != nil:
 					tested = append(tested, b)
+				case b.N > 0:
+					untested++
 				}
 			}
 		}
@@ -70,10 +74,11 @@ func cutCohort(ctx context.Context, rows []evaldiag.Row, want []string) (Cohort,
 		for i, b := range tested {
 			raw[i] = *b.PValue
 		}
-		for i, adj := range stats.Holm(raw) {
-			tested[i].HolmAdjustedP = &adj
+		adjusted := stats.Holm(append(raw, slices.Repeat([]float64{1}, untested)...))
+		for i := range tested {
+			tested[i].HolmAdjustedP = &adjusted[i]
 		}
-		f.FamilySize = len(tested)
+		f.FamilySize = len(tested) + untested
 		f.Dimensions = slices.DeleteFunc(f.Dimensions, func(d Dimension) bool { return !slices.Contains(want, d.Dimension) })
 		if len(f.Dimensions) > 0 {
 			c.Families = append(c.Families, f)

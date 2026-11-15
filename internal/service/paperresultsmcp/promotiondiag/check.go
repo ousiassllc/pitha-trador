@@ -2,6 +2,7 @@ package promotiondiag
 
 import (
 	"context"
+	"strings"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/ledgerdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -50,6 +51,11 @@ func Check(ctx context.Context, q query.Q, r query.Range, req Request) (*Result,
 				out.FirstUnmet = &name
 			}
 		}
+	}
+	if req.Candidate.Kind == ledgerdiag.KindResearchModel && !strings.HasSuffix(req.Candidate.ID, ":"+horizon) {
+		// A direction learned on one label horizon is not evidence at another: graded on the wrong labels.
+		out.EligibleAsEvidence = false
+		out.HorizonNote = "研究用モデルの学習ホライズン（id の末尾）と、この比較のホライズン（horizon）が違う。モデルが学習していない時間軸のラベルで採点した数字なので、提案の根拠にしない。horizon を学習ホライズンに合わせて呼び直す"
 	}
 	return out, nil
 }
