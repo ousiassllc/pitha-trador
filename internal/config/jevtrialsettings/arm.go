@@ -200,20 +200,31 @@ func ParseArms(jsonValue string) ([]Arm, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return nil, armsErr(ArmsErrJSON, "", "%s must hold exactly one JSON array", KeyArms)
 	}
+	if err := ValidateArms(arms); err != nil {
+		return nil, err
+	}
+	return arms, nil
+}
+
+// ValidateArms checks a list of arms: at most MaxArms, each one valid (Arm.Validate)
+// and the ids distinct. It is the one rule set behind ParseArms (the stored JSON)
+// and the Settings form (rows built from the posted fields). The error is an
+// *ArmsError.
+func ValidateArms(arms []Arm) error {
 	if len(arms) > MaxArms {
-		return nil, armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
+		return armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
 	}
 	seen := map[string]bool{}
 	for _, a := range arms {
 		if err := a.Validate(); err != nil {
-			return nil, err
+			return err
 		}
 		if seen[a.ID] {
-			return nil, armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
+			return armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
 		}
 		seen[a.ID] = true
 	}
-	return arms, nil
+	return nil
 }
 
 // EncodeArms validates arms and renders them as the stored JSON array ("[]" for
@@ -222,12 +233,12 @@ func EncodeArms(arms []Arm) (string, error) {
 	if arms == nil {
 		arms = []Arm{}
 	}
+	if err := ValidateArms(arms); err != nil {
+		return "", err
+	}
 	b, err := json.Marshal(arms)
 	if err != nil {
 		return "", fmt.Errorf("jevtrialsettings: encode %s: %w", KeyArms, err)
-	}
-	if _, err := ParseArms(string(b)); err != nil {
-		return "", err
 	}
 	return string(b), nil
 }

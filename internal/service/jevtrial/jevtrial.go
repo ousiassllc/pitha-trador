@@ -13,11 +13,9 @@ package jevtrial
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -69,9 +67,8 @@ type State struct {
 	TrialRuns bool
 	Enabled   bool
 	Arms      []ArmStatus
-	// ArmsJSON is the stored arms as the JSON the form edits ("[]" for none).
-	ArmsJSON string
-	// ArmsError says why the stored arms are ignored ("" when they parse).
+	// ArmsError says why the stored arms are ignored ("" when they parse); the
+	// form then starts with no arm and a save replaces the damaged setting.
 	ArmsError string
 	// CapUSD is the overall daily cap; CapIsDefault says it is the default, not a
 	// value a person stored on the Settings screen.
@@ -123,18 +120,6 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		CapUSD:       cfg.CapUSD,
 		CapIsDefault: cfg.CapIsDefault,
 		TodayDate:    jevshadowsettings.Day(now),
-		ArmsJSON:     "[]",
-	}
-	if len(cfg.Arms) > 0 {
-		if b, err := json.MarshalIndent(cfg.Arms, "", "  "); err == nil {
-			st.ArmsJSON = string(b)
-		}
-	} else if cfg.ArmsError != "" {
-		// Damaged: show the stored text so it can be fixed, not an empty list that
-		// would silently replace it on the next save.
-		if raw, ok, err := s.settings.Get(ctx, jevtrialsettings.KeyArms); err == nil && ok {
-			st.ArmsJSON = raw
-		}
 	}
 	from, to := jevshadowsettings.DayBounds(now)
 	var err error
@@ -185,16 +170,16 @@ func (s *Service) SetEnabled(ctx context.Context, on bool) error {
 	return s.settings.Set(ctx, jevtrialsettings.KeyEnabled, jevtrialsettings.Switch(on), s.now())
 }
 
-// ValidateArms checks the arms JSON the operator typed ("" is no arm): it must
-// parse as jevtrialsettings arms and every arm's prompt version must be
-// registered in this build. It returns the value to store.
-func ValidateArms(armsJSON string) (string, error) {
-	armsJSON = strings.TrimSpace(armsJSON)
-	if armsJSON == "" {
-		armsJSON = "[]"
-	}
-	arms, err := jevtrialsettings.ParseArms(armsJSON)
-	if err != nil {
+// PromptVersions are the Trader prompt versions registered in this build: the
+// choices of an arm's prompt version.
+func PromptVersions() []string { return jev.TraderVersions() }
+
+// ValidateArms checks the arms the form built (none is valid): the same rules as
+// the stored JSON (jevtrialsettings.ValidateArms: at most MaxArms, every field,
+// distinct ids) and every arm's prompt version must be registered in this
+// build. It returns the value to store.
+func ValidateArms(arms []jevtrialsettings.Arm) (string, error) {
+	if err := jevtrialsettings.ValidateArms(arms); err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, armsMessage(err))
 	}
 	for _, a := range arms {
@@ -205,9 +190,9 @@ func ValidateArms(armsJSON string) (string, error) {
 	return jevtrialsettings.EncodeArms(arms)
 }
 
-// SetArms saves the arms (a JSON array; "" or "[]" for none).
-func (s *Service) SetArms(ctx context.Context, armsJSON string) error {
-	value, err := ValidateArms(armsJSON)
+// SetArms saves the arms (nil or empty for none).
+func (s *Service) SetArms(ctx context.Context, arms []jevtrialsettings.Arm) error {
+	value, err := ValidateArms(arms)
 	if err != nil {
 		return err
 	}
@@ -239,15 +224,15 @@ func (s *Service) ResetCap(ctx context.Context) error {
 // Form is what the Settings form submits. Cap is nil for a blank field (the
 // default applies).
 type Form struct {
-	Enabled  bool
-	ArmsJSON string
-	Cap      *float64
+	Enabled bool
+	Arms    []jevtrialsettings.Arm
+	Cap     *float64
 }
 
 // Save validates the whole form first and only then writes it, so a rejected
 // form changes nothing.
 func (s *Service) Save(ctx context.Context, f Form) error {
-	if _, err := ValidateArms(f.ArmsJSON); err != nil {
+	if _, err := ValidateArms(f.Arms); err != nil {
 		return err
 	}
 	if f.Cap != nil {
@@ -262,7 +247,7 @@ func (s *Service) Save(ctx context.Context, f Form) error {
 			return err
 		}
 	}
-	if err := s.SetArms(ctx, f.ArmsJSON); err != nil {
+	if err := s.SetArms(ctx, f.Arms); err != nil {
 		return err
 	}
 	var err error

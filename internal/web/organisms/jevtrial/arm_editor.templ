@@ -1,0 +1,148 @@
+package jevtrial
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// ArmField is one row of the arm form: every field as the person typed it
+// (text), so a row that fails validation comes back as typed.
+type ArmField struct {
+	ID            string
+	Provider      string
+	Model         string
+	PromptVersion string
+	// DailyCap and ListPrice are numbers in USD ("" = not set).
+	DailyCap  string
+	ListPrice string
+	// ProviderOnly is the provider names, comma separated.
+	ProviderOnly string
+	// DataCollection is "deny" or "allow".
+	DataCollection string
+	ZDR            bool
+}
+
+// ArmEditorProps is ArmEditor's input.
+type ArmEditorProps struct {
+	Fields []ArmField
+	// PromptVersions are the Trader prompt versions registered in this build.
+	PromptVersions []string
+	// MaxArms is the most arms the form can hold: the add button is off at that
+	// number.
+	MaxArms int
+}
+
+// ArmEditor renders the arm form: one card per arm and the add button. It is
+// both part of Panel and the fragment `POST /settings/jev-trial/arms/add` and
+// `.../remove` answer with (each swaps `#jev-trial-arm-editor` and sends the
+// rows as they stand in the form, so the rows already typed are kept). The
+// rows are the fields `arm-<n>-<field>`; the surrounding form's save reads
+// them, so removing a card here changes nothing until the form is saved.
+templ ArmEditor(props ArmEditorProps) {
+	<div id="jev-trial-arm-editor" class="flex flex-col gap-3" data-testid="jev-trial-arms">
+		if len(props.Fields) == 0 {
+			<p class="text-sm text-mute" data-testid="jev-trial-arm-fields-empty">アームはありません。</p>
+		}
+		for i, f := range props.Fields {
+			@armCard(i, f, props.PromptVersions)
+		}
+		<div>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: addArmAttrs(len(props.Fields) >= props.MaxArms)}) {
+				アームを追加
+			}
+		</div>
+	</div>
+}
+
+templ armCard(i int, f ArmField, versions []string) {
+	<fieldset class="flex flex-col gap-3 rounded-md border border-border p-3" data-testid="jev-trial-arm-field-row">
+		<legend class="px-1 text-sm text-mute">アーム { strconv.Itoa(i + 1) }</legend>
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+			@armLabel(i, "id", "アーム名") {
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "id"), Name: armName(i, "id"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.ID, "required": true, "maxlength": "48", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-id"}})
+			}
+			@armLabel(i, "provider", "提供元") {
+				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "provider"), Name: armName(i, "provider"), Class: "w-full", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-provider"}}) {
+					<option value="openrouter" selected?={ f.Provider == "" || f.Provider == "openrouter" }>openrouter</option>
+					if f.Provider != "" && f.Provider != "openrouter" {
+						<option value={ f.Provider } selected>{ f.Provider }</option>
+					}
+				}
+			}
+			@armLabel(i, "model", "モデル") {
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "model"), Name: armName(i, "model"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.Model, "required": true, "maxlength": "100", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-model"}})
+			}
+			@armLabel(i, "prompt_version", "プロンプトの版") {
+				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "prompt_version"), Name: armName(i, "prompt_version"), Class: "w-full", Attrs: templ.Attributes{"required": true, "data-testid": "jev-trial-arm-prompt-version"}}) {
+					<option value="" selected?={ f.PromptVersion == "" }>選んでください</option>
+					for _, v := range versionChoices(versions, f.PromptVersion) {
+						<option value={ v } selected?={ v == f.PromptVersion }>{ v }</option>
+					}
+				}
+			}
+			@armLabel(i, "daily_cost_cap_usd", "1 日の上限（USD）") {
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "daily_cost_cap_usd"), Name: armName(i, "daily_cost_cap_usd"), Class: "w-full", Attrs: templ.Attributes{"value": f.DailyCap, "inputmode": "decimal", "placeholder": "0.05（既定値）", "autocomplete": "off", "data-testid": "jev-trial-arm-cap"}})
+			}
+			@armLabel(i, "list_price_usd_per_mtok", "定価（USD / 100 万入力トークン）") {
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "list_price_usd_per_mtok"), Name: armName(i, "list_price_usd_per_mtok"), Class: "w-full", Attrs: templ.Attributes{"value": f.ListPrice, "inputmode": "decimal", "placeholder": "不明", "autocomplete": "off", "data-testid": "jev-trial-arm-list-price"}})
+			}
+			@armLabel(i, "provider_only", "送り先の提供元（カンマ区切り）") {
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "provider_only"), Name: armName(i, "provider_only"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.ProviderOnly, "placeholder": "指定しない", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-provider-only"}})
+			}
+			@armLabel(i, "data_collection", "データの扱い") {
+				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "data_collection"), Name: armName(i, "data_collection"), Class: "w-full", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-data-collection"}}) {
+					<option value="deny" selected?={ f.DataCollection != "allow" }>学習に使わない提供元だけ</option>
+					<option value="allow" selected?={ f.DataCollection == "allow" }>制限しない</option>
+				}
+			}
+		</div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<label class="inline-flex cursor-pointer items-center gap-2">
+				@atoms.Checkbox(atoms.CheckboxProps{Name: armName(i, "zdr"), Value: "1", Attrs: zdrAttrs(f.ZDR)})
+				<span>データを保持しない提供元だけ（ZDR）</span>
+			</label>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: removeArmAttrs(i)}) {
+				削除
+			}
+		</div>
+	</fieldset>
+}
+
+templ armLabel(i int, field, text string) {
+	<div class="flex flex-col gap-1">
+		<label for={ armDOMID(i, field) } class="text-sm text-ink">{ text }</label>
+		{ children... }
+	</div>
+}
+
+// The add and remove buttons post the whole form (the rows as typed) and swap
+// the editor with the answer.
+func addArmAttrs(full bool) templ.Attributes {
+	attrs := editorAttrs("/settings/jev-trial/arms/add", "jev-trial-arm-add")
+	if full {
+		attrs["disabled"] = true
+	}
+	return attrs
+}
+
+func removeArmAttrs(i int) templ.Attributes {
+	attrs := editorAttrs("/settings/jev-trial/arms/remove?index="+strconv.Itoa(i), "jev-trial-arm-remove")
+	attrs["aria-label"] = "アーム " + strconv.Itoa(i+1) + " を削除"
+	return attrs
+}
+
+func editorAttrs(post, testID string) templ.Attributes {
+	return templ.Attributes{
+		"hx-post": post, "hx-include": "closest form", "hx-target": "#jev-trial-arm-editor",
+		"hx-swap": "outerHTML", "hx-disabled-elt": "this", "data-testid": testID,
+	}
+}
+
+func zdrAttrs(on bool) templ.Attributes {
+	attrs := templ.Attributes{"data-testid": "jev-trial-arm-zdr"}
+	if on {
+		attrs["checked"] = true
+	}
+	return attrs
+}

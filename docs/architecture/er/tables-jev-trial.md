@@ -103,7 +103,7 @@ erDiagram
 | キー | 値 | 意味 |
 |------|----|------|
 | `jev.trial.enabled` | 整数 `1` / `0` | トライアルの有効。**行が無い・壊れている値は無効（既定）** |
-| `jev.trial.arms` | JSON 配列（`Arm`） | 比較するアーム（`id` / `provider` / `model` / `prompt_version` / 任意の `daily_cost_cap_usd` / `list_price_usd_per_mtok` / `provider_only` / `data_collection` / `zdr`）。**既定は空**（アームが無ければ何も呼ばない）。最大 8 アーム、`id` は重複不可 |
+| `jev.trial.arms` | JSON 配列（`Arm`） | 比較するアーム（`id` / `provider` / `model` / `prompt_version` / 任意の `daily_cost_cap_usd` / `list_price_usd_per_mtok` / `provider_only` / `data_collection` / `zdr`）。**既定は空**（アームが無ければ何も呼ばない）。最大 8 アーム、`id` は重複不可。保存は Settings 画面のアームのフォーム（1 アーム 1 カード）から行い、保存前の検証は保存済み値を読むときと同じ`jevtrialsettings.ValidateArms`（1 つでも不正なら何も保存しない） |
 | `jev.trial.daily_cost_cap_usd` | JSON 数値 | 全アーム合計の 1 日（JST）あたりの費用の上限。無ければ `jevtrialsettings.DefaultDailyCostCapUSD`（0.10 USD）。0 以下・100 USD 超は保存できない |
 | `jev.trial.halt` | JSON オブジェクト | トライアル全体をその日（JST）止めた記録（`{"date","reason","spent_usd","cap_usd","status","at"}`。`reason` は `daily_cost_cap` / `payment_required`＝HTTP 402）。翌日（JST）に再開する |
 | `jev.trial.halt.<arm>` | JSON オブジェクト | そのアームをその日（JST）止めた記録（`reason` は `arm_cost_cap` / `daily_failure_cap` / `forbidden`＝HTTP 403）。翌日（JST）に再開する |
