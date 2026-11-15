@@ -38,7 +38,7 @@
 // Output（抜粋）
 {
   "initial_capital": 30000000,
-  "criteria": { "min_sample": 30, "min_clusters": 5, "min_days": 20, "min_trades": 100, "min_ev_lower_bps": 0, "max_drawdown_pct": 5 },
+  "criteria": { "min_sample": 30, "min_clusters": 5, "min_days": 30, "min_trades": 100, "min_ev_lower_bps": 0, "max_drawdown_pct": 5 },
   "overall": {
     "n": 6, "days": 3, "wins": 3, "net_pnl_jpy": -1000, "fees_jpy": 100,
     "win_rate": { "n": 6, "value": 0.5, "lo": 0.1, "hi": 0.9, "has_ci": true, "defined": true, "reliable": false },

@@ -34,9 +34,9 @@ type Criteria struct {
 //   - MinSample 30 / MinClusters 5: the usual floor for a normal-theory
 //     interval of a mean (30 observations) and a t interval with at least 4
 //     degrees of freedom over the daily clusters.
-//   - MinDays 20 ≈ one month of trading days; MinTrades 100: a per-trade EV
-//     of a few bps cannot be told from zero with fewer, given the per-trade
-//     standard deviation of tens of bps.
+//   - MinDays 30 = 30 trading days, the same floor as the shadow backtest
+//     (assist.MinBacktestDays, issue #780); MinTrades 100: a per-trade EV of a few bps cannot be told from zero with
+//     fewer, given the per-trade standard deviation of tens of bps.
 //   - MinEVLowerBps 0: the interval must exclude "no edge after costs".
 //   - MaxDrawdownPct 5: five times Paper's max_daily_loss_pct (1%), i.e. the
 //     account may not lose more than five worst-allowed days in a row.
@@ -44,7 +44,7 @@ func DefaultCriteria() Criteria {
 	return Criteria{
 		MinSample:      30,
 		MinClusters:    5,
-		MinDays:        20,
+		MinDays:        30,
 		MinTrades:      100,
 		MinEVLowerBps:  0,
 		MaxDrawdownPct: 5,
