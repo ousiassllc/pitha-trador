@@ -106,7 +106,7 @@ func List(ctx context.Context, q query.Q, f Filter, limit int) ([]Row, error) {
 	var args []any
 	if f.Query != "" {
 		pattern := "%" + escapeLike(f.Query) + "%"
-		where = append(where, `(question LIKE ? ESCAPE '\' OR hypothesis LIKE ? ESCAPE '\' OR actions LIKE ? ESCAPE '\' OR result_summary LIKE ? ESCAPE '\' OR tags LIKE ? ESCAPE '\')`)
+		where = append(where, `(question LIKE ? ESCAPE '\' OR hypothesis LIKE ? ESCAPE '\' OR actions LIKE ? ESCAPE '\' OR result_summary LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM json_each(research_notes.tags) WHERE value LIKE ? ESCAPE '\'))`)
 		args = append(args, pattern, pattern, pattern, pattern, pattern)
 	}
 	if f.Tag != "" {

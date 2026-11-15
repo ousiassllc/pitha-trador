@@ -20,7 +20,7 @@
 | `evidence_links` | | 根拠へのリンクの配列（最大 20 件）。要素は `{kind, ref}`、`kind` は `experiment_id` / `backtest_result_id` / `comparison_ledger` / `url` / `other`、`ref` は 1〜300 文字（実験 ID・バックテストの結果 ID・比較台帳の条件・URL など） |
 | `tags` | | タグの配列（最大 10 件、各 1〜40 文字）。小文字にして重複を除いて保存する |
 
-未知の引数・要素の未知のキーは `invalid_argument`（422。理由は `error.data.detail` に載るが、送った値は引用しない）。**キーの形の文字列**（API キー・トークン・パスワード・Bearer・JWT・`api_key=…` など）は保存の前に `[masked]` に置き換える（文字数の上限は伏せたあとにも守る）。
+未知の引数・要素の未知のキーは `invalid_argument`（422。理由は `error.data.detail` に載るが、送った値は引用しない）。**キーの形の文字列**（API キー・トークン・パスワード・Bearer・JWT・`api_key=…`・`Authorization:` の行・`パスワード: …` など。引用符で始まる値は閉じ引用符まで、そうでなければ次の空白・引用符・`,` まで）は保存の前に `[masked]` に置き換える（文字数の上限は伏せたあとにも守る）。GitHub の URL・ファイルのパス・snake_case の識別子・UUID・ホスト名・`max_tokens: 4096` のような普通のキー名と値は変えない。伏せる前に Unicode の書式文字（ゼロ幅スペースなど）を取り除く。正確な規則は `docs/architecture/paper-results-mcp-research-notes.md` §3。
 
 応答の `data`: 作ったノート `{id, question, hypothesis, actions, result_summary, conclusion, evidence_links[], tags[], current_version(1), created_at, updated_at}`（伏せたあとの本文）。実行文は `research_notes` と `research_note_versions` への `INSERT` 各 1 件だけ（同じトランザクション）。`mcp_settings_audit` には書かない（書いた人と接続元は版の行の `actor` / `client`）。
 
@@ -44,7 +44,7 @@
 
 | 引数 | 内容 |
 |------|------|
-| `query` | 探す文字列（〜200 文字）。問い・仮説・やったこと・結果の要約・タグを、英字の大文字小文字を区別せず部分一致で探す（`LIKE`。`%` `_` `\` はそのままの文字として探す。日本語は完全一致の部分文字列） |
+| `query` | 探す文字列（〜200 文字）。問い・仮説・やったこと・結果の要約・タグ（1 つ 1 つの値）を、英字の大文字小文字を区別せず部分一致で探す（`LIKE`。`%` `_` `\` はそのままの文字として探す。日本語は完全一致の部分文字列） |
 | `tag` | タグ 1 つ（小文字にして完全一致） |
 | `conclusion` | `supported` / `unsupported` / `pending` |
 | `from` / `to` | 更新時刻の JST の日付 `[from, to)`（`YYYY-MM-DD`）。他の期間つきツールと同じ規則（両方指定するか両方省略。期間は最大 366 日。片方だけ・不正は `invalid_period`）で、**省略は期間で絞らない** |
@@ -63,3 +63,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規（`research_note_create` / `research_note_update` / `research_notes_list` / `research_note_get`） | issue #1095 |
+| 1.1 | 2026-11-15 | 伏せ字の説明に値の範囲（引用符・空白・`Authorization:` の行）と変えないもの・見えない文字の除去を足し、`query` のタグはタグ 1 つ 1 つの値に対して探す（JSON の記号には当たらない）ことを明記 | issue #1095 レビュー修正 |

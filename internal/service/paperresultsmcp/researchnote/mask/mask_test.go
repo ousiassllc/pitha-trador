@@ -36,7 +36,7 @@ func TestTextMasksCredentialAssignmentsAndAuthorization(t *testing.T) {
 	for in, want := range map[string]string{
 		"api_key=abc123":                           "api_key=[masked]",
 		"API-KEY: hunter2 next":                    "API-KEY: [masked] next",
-		`{"password": "p@ss w0rd"}`:                `{"password": "[masked] w0rd"}`,
+		`{"password": "p@ss w0rd"}`:                `{"password": "[masked]"}`,
 		"password=short&x=1":                       "password=[masked]&x=1",
 		"Authorization: Bearer abcDEF123._-xyz":    "Authorization: [masked]",
 		"curl -H 'Bearer tok_12345'":               "curl -H 'Bearer [masked]'",

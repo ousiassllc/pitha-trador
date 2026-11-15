@@ -32,14 +32,14 @@ AI が調べたこと（問い・仮説・やったこと・結果の要約・�
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
 | id | integer | PK（AUTOINCREMENT） | |
-| note_id | integer | NOT NULL, FK → `research_notes.id` | ノート。ノートを削除する経路は無い（版が残る） |
+| note_id | integer | NOT NULL, FK → `research_notes.id` | ノート。ノートを削除する経路は無い（アプリの接続では外部キーが版のあるノートの削除を拒む） |
 | version | integer | NOT NULL, CHECK (`>= 1`), UNIQUE (`note_id`, `version`) | 版の番号。1 から連続する |
 | question … tags | | `research_notes` と同じ列・同じ制約 | その版の内容 |
 | actor | text | NOT NULL, CHECK (`mcp`) | 書いた人。MCP（Bearer 認証を通ったクライアント）だけ |
 | client | text | NOT NULL DEFAULT `''` | 接続元ホストの IP。ヘッダの値・API キーは入れない |
 | created_at | text | NOT NULL | その版を書いた時刻 |
 
-トリガ `research_note_versions_no_update` / `research_note_versions_no_delete` が、版の行の `UPDATE` / `DELETE` を `ABORT` で拒否する（コードにも無い）。外部キーは `research_notes.id` を指し、版のあるノートは `DELETE` できない。
+追記専用は**トリガで**守る（コードにも書き換える文は無い）。`research_note_versions_no_update` / `research_note_versions_no_delete` が版の行の `UPDATE` / `DELETE` を、`research_note_versions_no_replace`（`BEFORE INSERT`）が同じ `(note_id, version)` または同じ `id` の行がすでにある `INSERT`（`INSERT OR REPLACE` / `REPLACE INTO` を含む）を `ABORT` で拒否する。外部キーは `research_notes.id` を指し、外部キーを有効にした接続（アプリの接続）では版のあるノートは `DELETE` できない。外部キーの強制は接続の設定によるので、書き込み専用の接続が有効にしているかには頼らない。
 
 ## 保持と量
 
@@ -50,3 +50,4 @@ AI が調べたこと（問い・仮説・やったこと・結果の要約・�
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | マイグレーション 000057 で新規（`research_notes` / `research_note_versions`） | issue #1095 |
+| 1.1 | 2026-11-15 | 版の表に`research_note_versions_no_replace`（`BEFORE INSERT`。同じ `(note_id, version)` / `id` の `INSERT`・`REPLACE` を拒否）を足し、追記専用はトリガで守ること、ノートを削除できないのは外部キーを有効にしたアプリの接続での話であることを明記 | issue #1095 レビュー修正 |

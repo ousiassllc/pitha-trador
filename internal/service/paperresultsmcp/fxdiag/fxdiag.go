@@ -21,11 +21,6 @@ const (
 	MaxSymbolLen = 7
 )
 
-// LookbackDays is how many completed trading days the recorder looks back over
-// (internal/service/researchfx.DefaultLookbackDays): a day older than that which
-// was never fetched stays missing. Reported in recording.lookback_days.
-const LookbackDays = 7
-
 // Notice is returned with every answer.
 const Notice = "研究専用の記録の集計であり、取引の入力ではない。Feature Engine・Policy・Risk・発注・Paper ガード・Live・Jev のプロンプト・メタモデルの学習はこの値を読まない。" +
 	"GMOコインの公開 API の値で、研究用にのみ使い、再配布しない"

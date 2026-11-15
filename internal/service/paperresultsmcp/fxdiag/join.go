@@ -46,11 +46,11 @@ func AtOrBefore(ctx context.Context, q query.Q, symbol string, times []time.Time
 		staleness = DefaultStaleness
 	}
 	out := make([]*Quote, len(times))
-	byMinute := map[time.Time]*Quote{} // decisions of one minute share the answer
+	bySecond := map[time.Time]*Quote{} // decisions of the same second share the answer
 	for i, t := range times {
 		t = t.UTC()
 		key := t.Truncate(time.Second)
-		if cached, ok := byMinute[key]; ok {
+		if cached, ok := bySecond[key]; ok {
 			out[i] = cached
 			continue
 		}
@@ -62,7 +62,7 @@ func AtOrBefore(ctx context.Context, q query.Q, symbol string, times []time.Time
 			Scan(&open, &bidOpen, &bidClose, &askOpen, &askClose)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			byMinute[key] = nil
+			bySecond[key] = nil
 			continue
 		case err != nil:
 			return nil, fmt.Errorf("fxdiag: candle of %s at or before %s: %w", symbol, sqlutil.FormatTime(t), err)
@@ -72,7 +72,7 @@ func AtOrBefore(ctx context.Context, q query.Q, symbol string, times []time.Time
 			return nil, err
 		}
 		qt := &Quote{OpenTime: ot, BidOpen: bidOpen, BidClose: bidClose, AskOpen: askOpen, AskClose: askClose}
-		byMinute[key], out[i] = qt, qt
+		bySecond[key], out[i] = qt, qt
 	}
 	return out, nil
 }

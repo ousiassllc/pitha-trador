@@ -16,8 +16,9 @@ import (
 )
 
 // Migration 000057 creates research_notes (the head of each note) and
-// research_note_versions (append-only: one row per version, UPDATE and DELETE
-// refused by trigger). It touches no existing table. It migrates 56 -> 57 over
+// research_note_versions (append-only: one row per version, UPDATE, DELETE and
+// a REPLACE of an existing (note, version) or id refused by trigger). It
+// touches no existing table. It migrates 56 -> 57 over
 // a database that already holds a tuning experiment, keeps the text, count and
 // enum limits as CHECKs, and steps one back.
 func TestMigration000057_CreatesTheResearchNoteTablesWithoutTouchingOthers(t *testing.T) {
@@ -78,7 +79,7 @@ func TestMigration000057_CreatesTheResearchNoteTablesWithoutTouchingOthers(t *te
 	if err := m.Migrate(57); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
-	for _, name := range []string{"research_notes", "research_note_versions", "research_notes_updated_idx", "research_note_versions_no_update", "research_note_versions_no_delete"} {
+	for _, name := range []string{"research_notes", "research_note_versions", "research_notes_updated_idx", "research_note_versions_no_update", "research_note_versions_no_delete", "research_note_versions_no_replace"} {
 		if !exists(name) {
 			t.Fatalf("%s missing after migration 57", name)
 		}
@@ -154,6 +155,19 @@ func TestMigration000057_CreatesTheResearchNoteTablesWithoutTouchingOthers(t *te
 	}
 	if err := exec(`DELETE FROM research_note_versions WHERE note_id = 1`); err == nil || !strings.Contains(err.Error(), "append-only") {
 		t.Errorf("DELETE of a version row: %v, want the append-only refusal", err)
+	}
+	// INSERT OR REPLACE / REPLACE INTO cannot rewrite history either: same (note, version) or same id.
+	for name, stmt := range map[string]string{
+		"INSERT OR REPLACE of the same (note, version)": `INSERT OR REPLACE INTO research_note_versions ` + versionCols + ` VALUES (1, 2, 'rewritten', 'pending', 'mcp', '', 't')`,
+		"REPLACE INTO of the same id":                   `REPLACE INTO research_note_versions (id, note_id, version, question, conclusion, actor, created_at) VALUES (1, 1, 9, 'rewritten', 'pending', 'mcp', 't')`,
+	} {
+		if err := exec(stmt); err == nil || !strings.Contains(err.Error(), "append-only") {
+			t.Errorf("%s: %v, want the append-only refusal", name, err)
+		}
+	}
+	var question string
+	if err := conn.QueryRow(`SELECT question FROM research_note_versions WHERE note_id = 1 AND version = 2`).Scan(&question); err != nil || question != "q" {
+		t.Errorf("version 2 question = %q (%v), want it untouched", question, err)
 	}
 	// A note with versions cannot be deleted either (foreign key).
 	if err := exec(`DELETE FROM research_notes WHERE id = 1`); err == nil {

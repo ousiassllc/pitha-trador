@@ -57,6 +57,7 @@ type options struct {
 	baseURL string
 	gmo     []gmo.Option
 	pace    *time.Duration
+	timeout time.Duration
 	clock   func() time.Time
 }
 
@@ -68,6 +69,9 @@ func WithGMOOptions(opts ...gmo.Option) Option { return func(o *options) { o.gmo
 
 // WithClock overrides time.Now (tests).
 func WithClock(now func() time.Time) Option { return func(o *options) { o.clock = now } }
+
+// WithChunkTimeout overrides the per-Run fetch deadline (tests).
+func WithChunkTimeout(d time.Duration) Option { return func(o *options) { o.timeout = d } }
 
 // WithoutPace removes the recorder's pause between Runs (tests; the adapter's
 // own call limit stays).
@@ -107,6 +111,7 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository, opts ...Option)
 	if o.pace != nil {
 		rec.WithPace(*o.pace, nil)
 	}
+	rec.WithChunkTimeout(o.timeout)
 	j.record = rec.Run
 	return j
 }
@@ -119,9 +124,12 @@ func (j *Job) Task() maintenance.Task {
 // Run does one chunk once the JST time of day has reached RunFrom and the switch
 // is on; before that, or while the switch is off, it returns
 // maintenance.ErrSkipped (neither a success nor a failure, tried again at the next
-// catch-up; nothing is requested or written). A chunk that leaves days behind
+// catch-up; nothing is requested or written). A switch that cannot be read counts
+// as off: it is skipped with a warning, never switched on and never reported as a
+// failure. A chunk that leaves days behind
 // returns maintenance.ErrMore, which makes the runner call again with its lock
-// released in between. The record is by-product research data, so a panic in it
+// released in between; one chunk's fetch is bounded by servicefx.ChunkTimeout, so
+// a stuck day cannot hold that lock for minutes. The record is by-product research data, so a panic in it
 // is returned as an error instead of crashing the process that also trades; a
 // failure (no marker is written) is returned to the maintenance runner, which
 // isolates it from the other tasks and retries after its delay.
@@ -137,7 +145,10 @@ func (j *Job) Run(ctx context.Context) (err error) {
 	}()
 	s, err := researchfxsettings.Load(ctx, j.settings)
 	if err != nil {
-		return fmt.Errorf("researchfxjob: %w", err)
+		// An unreadable switch is not "on": nothing is requested or written, and
+		// since the feature may well be off it is no failure to notify about.
+		slog.WarnContext(ctx, "researchfxjob: cannot read the FX record settings; skipping this run", "error", err)
+		return maintenance.ErrSkipped
 	}
 	if !s.Enabled {
 		return maintenance.ErrSkipped

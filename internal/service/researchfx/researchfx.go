@@ -29,6 +29,13 @@ import (
 // A day older than the window that was never fetched stays a gap.
 const DefaultLookbackDays = 7
 
+// ChunkTimeout bounds the fetch of one Run (both klines requests, retries and
+// backoff included): the adapter alone can take minutes on a stuck day (five
+// attempts per request, backoff up to 30s, 10s per HTTP call), and the
+// maintenance runner holds its lock for the whole Run. A Run that exceeds it
+// returns an error, writes no marker and is retried by the next run.
+const ChunkTimeout = 90 * time.Second
+
 // Fetcher is the part of the GMO adapter the Recorder uses (*gmo.Client).
 type Fetcher interface {
 	Klines(ctx context.Context, req gmo.KlinesRequest) ([]gmo.Candle, error)
@@ -73,6 +80,8 @@ type Recorder struct {
 	symbols  SymbolSource
 	now      func() time.Time
 	lookback int
+	// chunkTimeout is the deadline of one Run's fetch (ChunkTimeout).
+	chunkTimeout time.Duration
 	// pace is the least time between the end of one Run's requests and the start
 	// of the next Run's. wait sleeps it (tests replace it); last is when the
 	// previous Run's requests ended.
@@ -87,7 +96,7 @@ type Recorder struct {
 // NewRecorder returns a Recorder over store, with the pairs read at the start of
 // every Run.
 func NewRecorder(store Store, fetchers FetcherSource, symbols SymbolSource) *Recorder {
-	return &Recorder{store: store, fetchers: fetchers, symbols: symbols, now: time.Now, lookback: DefaultLookbackDays, pace: gmo.MinCallInterval, wait: sleep, failed: map[unit]bool{}}
+	return &Recorder{store: store, fetchers: fetchers, symbols: symbols, now: time.Now, lookback: DefaultLookbackDays, chunkTimeout: ChunkTimeout, pace: gmo.MinCallInterval, wait: sleep, failed: map[unit]bool{}}
 }
 
 // WithClock overrides time.Now (tests).
@@ -99,6 +108,14 @@ func (r *Recorder) WithClock(now func() time.Time) *Recorder {
 // WithLookbackDays overrides DefaultLookbackDays (tests).
 func (r *Recorder) WithLookbackDays(n int) *Recorder {
 	r.lookback = n
+	return r
+}
+
+// WithChunkTimeout overrides ChunkTimeout (tests); a non-positive d is ignored.
+func (r *Recorder) WithChunkTimeout(d time.Duration) *Recorder {
+	if d > 0 {
+		r.chunkTimeout = d
+	}
 	return r
 }
 
@@ -208,7 +225,9 @@ func (r *Recorder) Run(ctx context.Context) (Result, error) {
 }
 
 // fetchDay fetches the BID and the ASK 1-minute candles of u and merges them.
-// Whatever the outcome, the end of the requests is remembered for the pace.
+// Both requests share the chunk deadline (ChunkTimeout), so a stuck day fails
+// instead of holding the maintenance lock. Whatever the outcome, the end of the
+// requests is remembered for the pace.
 func (r *Recorder) fetchDay(ctx context.Context, u unit) ([]rfx.Candle, error) {
 	if !r.last.IsZero() && r.pace > 0 {
 		if d := r.pace - time.Since(r.last); d > 0 {
@@ -227,6 +246,8 @@ func (r *Recorder) fetchDay(ctx context.Context, u unit) ([]rfx.Candle, error) {
 		return nil, err
 	}
 	at := start.Add(6 * time.Hour) // any instant of the trading day picks it (gmo.KlinesRequest.At)
+	ctx, cancel := context.WithTimeout(ctx, r.chunkTimeout)
+	defer cancel()
 	var sides [2][]gmo.Candle
 	for i, pt := range []gmo.PriceType{gmo.PriceBid, gmo.PriceAsk} {
 		sides[i], err = f.Klines(ctx, gmo.KlinesRequest{Symbol: u.symbol, PriceType: pt, Interval: gmo.Interval1Min, At: at})

@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/service/researchfx"
 )
 
 // settingsReader is a read-only runtime_settings view limited to the two
@@ -31,10 +32,13 @@ func (s settingsReader) Get(ctx context.Context, key string) (string, bool, erro
 	return value, true, nil
 }
 
+// loadRecording reports the recorder's lookback (researchfx.DefaultLookbackDays,
+// the recorder's own constant): a day older than that which was never fetched
+// stays missing. It is recording.lookback_days.
 func loadRecording(ctx context.Context, q query.Q) (Recording, error) {
 	s, err := researchfxsettings.Load(ctx, settingsReader{q})
 	if err != nil {
 		return Recording{}, fmt.Errorf("fxdiag: %w", err)
 	}
-	return Recording{Enabled: s.Enabled, Symbols: s.Symbols, LookbackDays: LookbackDays}, nil
+	return Recording{Enabled: s.Enabled, Symbols: s.Symbols, LookbackDays: researchfx.DefaultLookbackDays}, nil
 }
