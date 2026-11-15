@@ -104,8 +104,8 @@ type Config struct {
 	DownloadTimeout time.Duration
 	// PublicKey is the raw ed25519 key checksums.txt.sig must verify under
 	// (issue #376). It defaults to internal/version.ReleasePublicKey, the
-	// key embedded at build time; when neither is set, signature
-	// verification is skipped.
+	// key embedded at build time; when neither is set, updates are refused
+	// (issue #891), never installed unverified.
 	PublicKey ed25519.PublicKey
 }
 
@@ -121,8 +121,8 @@ type Checker struct {
 	metadataTimeout   time.Duration
 	downloadTimeout   time.Duration
 
-	// publicKey verifies checksums.txt.sig (issue #376); nil disables the
-	// check. publicKeyErr records a configured but malformed key, which must
+	// publicKey verifies checksums.txt.sig (issue #376); nil means no key is
+	// available, so every update is refused (issue #891). publicKeyErr records a configured but malformed key, which must
 	// fail every download closed rather than silently disable the check.
 	publicKey    ed25519.PublicKey
 	publicKeyErr error

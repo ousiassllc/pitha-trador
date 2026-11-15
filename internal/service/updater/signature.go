@@ -24,8 +24,8 @@ const maxSignatureBytes = 4 << 10
 
 // resolvePublicKey picks the key checksums.txt.sig must verify under: the
 // configured one, else internal/version.ReleasePublicKey. Both unset returns
-// (nil, nil), which skips verification; a malformed key returns an error so
-// downloads fail closed.
+// (nil, nil): no key, so the caller refuses to update (issue #891); a
+// malformed key returns an error so downloads fail closed.
 func resolvePublicKey(configured ed25519.PublicKey) (ed25519.PublicKey, error) {
 	switch {
 	case len(configured) > 0:

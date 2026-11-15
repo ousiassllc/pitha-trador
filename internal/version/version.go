@@ -19,8 +19,9 @@ var Version = "dev"
 // that internal/service/updater verifies checksums.txt.sig against before
 // trusting a release's installer (issue #376). ci.yml embeds it with
 // `-ldflags "-X .../internal/version.ReleasePublicKey=<repository variable
-// RELEASE_SIGNING_PUBLIC_KEY>"`; it stays empty - signature verification
-// off - for builds made without a signing key (see docs/environment/setup.md).
+// RELEASE_SIGNING_PUBLIC_KEY>"`; it stays empty for builds made without a signing key (see
+// docs/environment/ci.md), and such a build refuses to auto-update because
+// it cannot verify the signature (issue #891).
 var ReleasePublicKey = ""
 
 // GitHubOwner and GitHubRepo identify the GitHub repository whose releases
