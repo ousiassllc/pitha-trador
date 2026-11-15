@@ -1,5 +1,5 @@
 // Package watchlistruntime persists watch_list_runtime_days (migration
-// 000056, issue #920): the daily size of the runtime (kabu ranking-driven)
+// 000057, issue #920): the daily size of the runtime (kabu ranking-driven)
 // watch list. It lives apart from internal/repository/market, whose
 // watch_lists tables hold the 立花 saved lists with their symbols.
 package watchlistruntime
@@ -23,7 +23,7 @@ func New(db *sql.DB) *Repository { return &Repository{db: db} }
 
 // RecordRuntimeSize notes one in-session observation of the runtime watch list
 // (the kabu ranking-driven list, issue #920): size symbols for the JST date and
-// source in watch_list_runtime_days (migration 000056). It creates the day's
+// source in watch_list_runtime_days (migration 000057). It creates the day's
 // row or updates it in place (latest size, running peak, one more sample).
 // Counts only, never a symbol; watch_lists (the 立花 saved lists) is not touched.
 func (r *Repository) RecordRuntimeSize(ctx context.Context, date, source string, size int, now time.Time) error {

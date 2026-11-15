@@ -33,7 +33,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
-	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
@@ -50,6 +49,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/watchlistsize"
 )
 
 // Services holds every internal/service/* instance the composition root
@@ -73,8 +73,7 @@ type Services struct {
 	DailyBars    *market.DailyBarRepository
 	DailyBarRuns *market.DailyBarRunRepository
 	// WatchLists stores the 立花 監視リスト decided each night (issue #730).
-	WatchLists     *market.WatchListRepository
-	watchListSizes *watchlistruntime.Repository // kabu runtime watch list size per day (issue #920)
+	WatchLists *market.WatchListRepository
 
 	RAG           *rag.Service
 	Broker        broker.Broker      // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
@@ -110,13 +109,13 @@ type Services struct {
 
 	newsEnabled bool
 	candidates  *candidates.Refresher
-	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
-	// (rankingwatch_start.go); tachibanaMonitor is the 立花 counterpart, set
-	// whenever the 立花 adapter is selected (watchlist_start.go).
+	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true (rankingwatch_start.go);
+	// tachibanaMonitor is the 立花 counterpart, set whenever 立花 is selected (watchlist_start.go).
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
-	proposalExec     proposalexec.Processor // the Paper results MCP's order proposals (issue #828)
+	watchListSizes   *watchlistsize.Recorder // kabu runtime watch list size per day (issue #920)
+	proposalExec     proposalexec.Processor  // the Paper results MCP's order proposals (issue #828)
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -195,9 +194,8 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	}
 	alertChannels := alerts.New(secrets)
 
-	svc := &Services{strategy: state.Strategy}
+	svc := &Services{strategy: state.Strategy, watchListSizes: watchlistsize.NewRanking(state.DB)}
 	svc.buildRepositories(state.DB)
-	svc.watchListSizes = watchlistruntime.New(state.DB)
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)

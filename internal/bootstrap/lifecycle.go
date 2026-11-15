@@ -11,7 +11,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jobfailurelog"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
-	"github.com/ousiassllc/pitha-trador/internal/service/watchlistsize"
 )
 
 // Start launches every background goroutine this build's composition root owns: the broker session
@@ -63,7 +62,7 @@ func (s *Services) Start(ctx context.Context) error {
 
 	s.proposalExec.Launch(ctx, &s.wg) // order proposals of the Paper results MCP (issue #828)
 	s.startRankingWatch(ctx)
-	watchlistsize.Start(ctx, &s.wg, s.watchListSizes, s.rankingWatcher != nil, s.watchlist.Len) // kabu only; read-only (issue #920)
+	s.watchListSizes.Start(ctx, &s.wg, s.rankingWatcher != nil, s.watchlist.Len) // kabu only; read-only (issue #920)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
 	s.wg.Add(1)

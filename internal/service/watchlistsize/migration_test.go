@@ -13,11 +13,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000056 (issue #920) creates watch_list_runtime_days: one row per
+// Migration 000057 (issue #920) creates watch_list_runtime_days: one row per
 // (trading day, source) holding counts only, with no symbol column, and one
-// down step drops only it. It goes 55 -> 56 and steps one back, so it does not
+// down step drops only it. It goes 56 -> 57 and steps one back, so it does not
 // depend on what the migrations after it add.
-func TestMigration000056_CreatesTheRuntimeWatchListDays(t *testing.T) {
+func TestMigration000057_CreatesTheRuntimeWatchListDays(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -44,17 +44,17 @@ func TestMigration000056_CreatesTheRuntimeWatchListDays(t *testing.T) {
 		return n == 1
 	}
 
-	if err := m.Migrate(55); err != nil {
-		t.Fatalf("migrate to 55: %v", err)
+	if err := m.Migrate(56); err != nil {
+		t.Fatalf("migrate to 56: %v", err)
 	}
 	if exists("watch_list_runtime_days") {
-		t.Fatal("watch_list_runtime_days exists before migration 56")
+		t.Fatal("watch_list_runtime_days exists before migration 57")
 	}
-	if err := m.Migrate(56); err != nil {
+	if err := m.Migrate(57); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	if !exists("watch_list_runtime_days") {
-		t.Fatal("watch_list_runtime_days missing after migration 56")
+		t.Fatal("watch_list_runtime_days missing after migration 57")
 	}
 
 	rows, err := conn.Query(`SELECT name FROM pragma_table_info('watch_list_runtime_days')`)

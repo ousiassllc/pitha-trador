@@ -21,6 +21,10 @@ type ExperimentRow struct {
 	Verdict      string // the verdict code (the data attribute)
 	VerdictLabel string
 	Running      bool
+	// Error is why this one row could not be summarised ("" when it could):
+	// shown in place of the verdict, so a failing experiment does not take the
+	// rest of the list with it (issue #880).
+	Error string
 }
 
 // ExperimentsProps is Experiments' input. MinTradesNote says which minimum
@@ -115,8 +119,20 @@ templ Experiments(props ExperimentsProps) {
 							<td class="px-2 py-1.5">{ row.StatusLabel }</td>
 							<td class="px-2 py-1.5">{ row.Period }</td>
 							<td class="px-2 py-1.5"><code>{ row.Variable }</code> { row.Change }<span class="block text-mute">{ row.By }</span></td>
-							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ strconv.Itoa(row.BeforeTrades) } / { strconv.Itoa(row.AfterTrades) }</td>
-							<td class="px-2 py-1.5" data-testid="mcp-experiment-verdict">{ row.VerdictLabel }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">
+								if row.Error != "" && row.BeforeTrades == 0 && row.AfterTrades == 0 {
+									—
+								} else {
+									{ strconv.Itoa(row.BeforeTrades) } / { strconv.Itoa(row.AfterTrades) }
+								}
+							</td>
+							<td class="px-2 py-1.5" data-testid="mcp-experiment-verdict">
+								if row.Error != "" {
+									<span class="text-danger" role="alert" data-testid="mcp-experiment-row-error">{ row.Error }</span>
+								} else {
+									{ row.VerdictLabel }
+								}
+							</td>
 							<td class="px-2 py-1.5 flex flex-wrap gap-1">
 								@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
 									"hx-get": "/settings/mcp/experiments/" + strconv.FormatInt(row.ID, 10), "hx-target": "#mcp-experiment-detail", "hx-swap": "innerHTML",

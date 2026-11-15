@@ -2,7 +2,7 @@
 // (issue #920): while the market is open it reads how many symbols the
 // in-memory watch list holds (rankingwatch.Watchlist.Len, a read-only count)
 // once a minute and stores that count with its source in
-// watch_list_runtime_days (migration 000056). It never stores a symbol and
+// watch_list_runtime_days (migration 000057). It never stores a symbol and
 // takes no part in the ranking fetch, the Scout input, the broker selection or
 // the watch list generation: it only observes, and a failed write is logged and
 // retried at the next tick, never a reason to stop trading.
@@ -10,9 +10,11 @@ package watchlistsize
 
 import (
 	"context"
+	"database/sql"
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
@@ -64,16 +66,22 @@ func (r *Recorder) Check(ctx context.Context) error {
 	return r.cfg.Store.RecordRuntimeSize(ctx, date, r.cfg.Source, r.cfg.Size(), now)
 }
 
-// Start runs a Recorder of size in the background (wg tracks it) when enabled;
-// size is a count, read once per pass. The caller passes enabled=false for a
-// build without the kabu runtime watch list, which is then left alone.
-func Start(ctx context.Context, wg *sync.WaitGroup, store Store, enabled bool, size func() int) {
+// NewRanking returns the Recorder of the kabu ranking-driven watch list, which
+// writes to watch_list_runtime_days in db. It runs nothing until Start.
+func NewRanking(db *sql.DB) *Recorder {
+	return NewRecorder(Config{Store: watchlistruntime.New(db), Source: SourceRanking})
+}
+
+// Start runs r in the background (wg tracks it) when enabled; size is a count,
+// read once per pass. The caller passes enabled=false for a build without the
+// kabu runtime watch list, which is then left alone.
+func (r *Recorder) Start(ctx context.Context, wg *sync.WaitGroup, enabled bool, size func() int) {
 	if !enabled {
 		return
 	}
-	rec := NewRecorder(Config{Store: store, Source: SourceRanking, Size: size})
+	r.cfg.Size = size
 	wg.Add(1)
-	go func() { defer wg.Done(); rec.Run(ctx) }()
+	go func() { defer wg.Done(); r.Run(ctx) }()
 }
 
 // Run observes every CheckInterval until ctx is done. A panic or error in a

@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
 // Kinds of the one variable an experiment changes.
@@ -224,4 +225,11 @@ func (e Experiment) window(now time.Time) (start, end time.Time) {
 		end = start
 	}
 	return start, end
+}
+
+// windows are the two periods of the comparison: before is the same length of
+// time just before the start as after, which is window.
+func (e Experiment) windows(now time.Time) (before, after query.Range) {
+	start, end := e.window(now)
+	return query.Range{From: start.Add(-end.Sub(start)), To: start}, query.Range{From: start, To: end}
 }

@@ -135,3 +135,38 @@ func TestBootstrapMetric_UndefinedStatIsUnreliable(t *testing.T) {
 		t.Errorf("PF without losses = %+v, want undefined / 判定不能", m)
 	}
 }
+
+// The same boundary holds for the day-block bootstrap metrics (Profit Factor,
+// max drawdown): reliable from exactly MinSample observations over at least
+// MinClusters days.
+func TestBootstrapMetric_MinSampleBoundary(t *testing.T) {
+	c := Criteria{MinSample: 30, MinClusters: 5}
+	// A loss every third trade keeps the profit factor defined.
+	trades := func(i int) float64 {
+		if i%3 == 0 {
+			return -80
+		}
+		return 50
+	}
+	dd := func(p []float64) (float64, bool) { return maxDrawdown(p), true }
+	for _, tc := range []struct {
+		name         string
+		n, clusters  int
+		wantReliable bool
+	}{
+		{"29 observations", 29, 29, false},
+		{"30 observations", 30, 30, true},
+		{"30 observations over 4 days", 30, 4, false},
+		{"30 observations over 5 days", 30, 5, true},
+	} {
+		pnl, days := seq(tc.n, trades)
+		for i := range days {
+			days[i] = int64(i * tc.clusters / tc.n) // contiguous day blocks, tc.clusters of them
+		}
+		for name, stat := range map[string]func([]float64) (float64, bool){"PF": profitFactor, "DD": dd} {
+			if m := bootstrapMetric(pnl, days, stat, c); m.Reliable != tc.wantReliable || m.N != tc.n || !m.Defined {
+				t.Errorf("%s %s: reliable = %v defined = %v (n=%d), want reliable %v", tc.name, name, m.Reliable, m.Defined, m.N, tc.wantReliable)
+			}
+		}
+	}
+}

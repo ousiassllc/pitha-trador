@@ -10,6 +10,7 @@ package experimenttests
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -35,6 +36,7 @@ func TestMain(m *testing.M) {
 type testServer struct {
 	*paperresultsmcp.Server
 	http *httptest.Server
+	w    *sql.DB // the handle newServer returned, for planting the evidence of a switch
 }
 
 type response struct {
@@ -66,7 +68,7 @@ func newServerOn(t *testing.T, driverName string) (*testServer, *sql.DB) {
 		hs.Close()
 		_ = srv.Close()
 	})
-	return &testServer{Server: srv, http: hs}, w
+	return &testServer{Server: srv, http: hs, w: w}, w
 }
 
 func (s *testServer) call(t *testing.T, name string, args any) response {
@@ -163,8 +165,22 @@ func createArgs(name string, extra map[string]any) map[string]any {
 	return args
 }
 
-// create makes an experiment through the tool and returns it.
+// create makes an experiment through the tool and returns it. For a setting
+// experiment it first plants what a real change leaves behind: the audit row of
+// the switch from before to after, saved at the declared start (issue #879: an
+// experiment whose switch is not on record is never judged). createUnrecorded
+// is the same without it.
 func create(t *testing.T, srv *testServer, args map[string]any) experiment.Experiment {
+	t.Helper()
+	if changes, ok := args["changes"].([]map[string]any); ok && len(changes) == 1 && changes[0]["kind"] == experiment.KindSetting && args["audit_id"] == nil {
+		c := changes[0]
+		auditRow(t, srv.w, args["started_at"].(string), "set", c["name"].(string), fmt.Sprint(c["before"]), fmt.Sprint(c["after"]))
+	}
+	return createUnrecorded(t, srv, args)
+}
+
+// createUnrecorded makes an experiment through the tool and returns it.
+func createUnrecorded(t *testing.T, srv *testServer, args map[string]any) experiment.Experiment {
 	t.Helper()
 	var e experiment.Experiment
 	srv.call(t, "experiment_create", args).data(t, "experiment_create", &e)

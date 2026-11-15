@@ -144,3 +144,5 @@
 | 1.137 | 2026-11-14 | §3ディレクトリ構成に`internal/service/snapshotarchive/`（`market_snapshots`の削除前退避）を、§Retentionの行に削除前の退避・検証と失敗時は削除しない旨を追記 | issue #1072 |
 | 1.138 | 2026-11-14 | §3ディレクトリ構成に`internal/service/migratebundle/`（PC移行の移行ファイル。`importflow/`・`bundletest/`）、§コンポーネント表にPC Migration、§10.8（PC移行: 書き出し＝一貫スナップショット＋scrub、取り込み＝確認→予約→起動時の適用。除外する設定・スキーマ版の扱い・置き場所）を追加。起動時のDB open を`startup.OpenDatabase`へ | issue #1075 |
 | 1.139 | 2026-11-15 | §10.8のPC移行に、除外キーへの立花`base_url`の追加、展開サイズの上限（ZIP爆弾対策）、起動時の整理と置き換え確認の再検査を追記 | issue #1075 |
+| 1.140 | 2026-11-14 | §3 のディレクトリ構成に`repository/researchlabel`・`service/researchlabel`（研究用ホライズンラベル。日次メンテナンスタスク`research_labels`）を追加。§4 の Retention に、研究用の 3 表は保持のパージ対象外（削除の方針は未決）と追記。取引に使わない研究専用の記録 | issue #1074 |
+| 1.141 | 2026-11-15 | §4 の Retention の行を、研究用ホライズンラベルの行を日次タスク`research_labels`が Settings の保持期間（既定90日）で自分で削除する形に直し、記録は`research.labels.enabled`（既定オフ）である旨を追記。メンテナンスランナーは`ErrMore`のチャンクのあいだ mutex を放す（`maintenance.ErrMore`） | issue #1073 / #1074（PR #1077 の直し） |

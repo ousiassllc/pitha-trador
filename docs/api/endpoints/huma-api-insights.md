@@ -34,6 +34,8 @@
 
 `overall`と、`by_day`/`by_week`/`by_direction`/`by_exit_reason`/`by_meta_model`/`by_ab_arm`の各要素（`key`+同じ指標）は、`n`・`days`・`wins`、円の`net_pnl_jpy`・`fees_jpy`・`slippage_jpy`（約定価格に含まれる分。`slippage_recorded_fills`は記録のある約定数）・`gross_before_fees_jpy`・`gross_before_costs_jpy`、および指標`win_rate`/`ev_jpy`/`ev_bps`/`profit_factor`/`max_drawdown_jpy`/`max_drawdown_pct`（資金比%）を持つ。各指標は`{n, value, lo, hi, has_ci, defined, reliable}`で、`reliable: false`は「判定不能」（サンプルまたは取引日数が基準未満、定義不能、区間なし。`value`は参考値）。`initial_capital`は`risk.yaml`の値（Paperでは仮置き。0以下は未設定で資金比は判定不能）、`criteria`は適用した基準値。`jev[]`は`label_version`別の`hit_rate`・`brier`、`meta[]`はメタモデルごとにOOS（`oos_auc`・`oos_expected_bps`・`oos_samples`・`oos_reliable`）と、採用取引の`linked`・`predicted_ev_bps`・`ev_gap_bps`（実現−予測）、OOS期間内の全取引`in_oos_window`を並べる。`verdict`は`{status: pass|fail|undetermined, checks[]}`で、`checks[].key`は`period_days`/`trades`/`ev_lower_bound`/`max_drawdown`（`required`・`actual`・`status`）。Live前チェックの材料であり、判定がLive切替・取引・設定に接続されることはない。
 
+`jev[]`の各要素は、同じ`label_version`の`hit_rate`・`brier`を判断日（JST、`by_day`、キー`2026-10-14`）・ISO週（`by_week`、`2026-W42`）・方向（`by_direction`、`LONG`/`SHORT`）・評価ホライズン（`by_horizon`、キーは分の整数文字列`"10"`。数値順）で切り分けた`[{key, hit_rate, brier}]`も持つ（指標は上と同じ`{n, value, lo, hi, has_ci, defined, reliable}`）。サンプルのない要素は空配列`[]`。`from`/`to`は判断日にも掛かる。
+
 ```json
 // Output（抜粋）
 {

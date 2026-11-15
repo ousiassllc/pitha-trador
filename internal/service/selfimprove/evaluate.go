@@ -46,6 +46,9 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 	if err != nil {
 		return false, err
 	}
+	if candidate, err = g.replayCandidate(ctx, candidate); err != nil {
+		return false, err
+	}
 
 	now := g.now()
 	period := ShadowBacktestPeriod(now)

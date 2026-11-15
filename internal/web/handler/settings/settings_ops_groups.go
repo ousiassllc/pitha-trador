@@ -66,6 +66,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	regimeGroup,
 	paperBootstrapGroup,
 	sleepGuardGroup,
+	researchLabelGroup,
 	watchGroup,
 	{
 		id:          "backup",

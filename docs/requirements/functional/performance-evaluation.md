@@ -30,6 +30,8 @@
 
 全期間に加えて、日別（JST）・週別（月曜始まりのISO週、例`2026-W42`）・方向別（`LONG`/`SHORT`）・`exit_reason`別・メタモデル版別（`metalabel_models.version`。予測の無い取引は「(なし)」）・A/Bアーム別（`jev_decisions.ab_arm`。無い取引は「(なし)」）。
 
+Jevの的中率・Brierも、`label_version`ごとに、判断日（JST）・ISO週・方向（`LONG`/`SHORT`）・評価ホライズン（`calibration_outcomes.horizon_minutes`、分）で切り分けて出す（`jev[].by_day`/`by_week`/`by_direction`/`by_horizon`）。1判断が複数ホライズンで採点されるときは、ホライズンごとに1件として数える（同じ日に属するので、信頼区間は日単位のクラスターが過信を防ぐ）。スライスが基準未満なら全体と同じく「判定不能」。
+
 ### コスト内訳（FR-EVAL-2）
 
 グロスとネットを分けて出す。`ネット = 実現損益`、`グロス（手数料前）= ネット + 手数料`、`グロス（コスト前）= グロス（手数料前）+ スリッページ`。手数料は`paper_orders.fees`（両約定の合計）。スリッページは約定価格に既に含まれており、`paper_orders.slippage_bps`（基準価格より何bp不利だったか。負は有利）から、約定価格と数量で円換算する（買い約定は`価格 = 基準×(1+b)`、売り約定は`価格 = 基準×(1−b)`。LONGは買いで入り売りで出る、SHORTは逆）。`slippage_bps`が記録されていない約定は0円として数え、記録のある約定数を併記する。
@@ -68,12 +70,12 @@
 
 ## 5. 画面とAPI
 
-- Performance画面（`GET /performance`）の「実績（Paper）」節の下に「実績評価（勝てているか）」節を表示する: 合格ラインの判定と各項目の実績／基準、`initial_capital`（仮置きの注記つき）、コスト内訳、全期間と各切り口の表（n・損益・勝率・EV円・EVbps・PF・最大DD円・最大DD資金比。各指標は`値 [95%区間]`または「判定不能」）、Jevの的中率・Brier（ラベル版別）、メタモデルのOOSと実績EVの並列表。取得失敗時は節内に固定文言を出して500（原因は表示しない）。
+- Performance画面（`GET /performance`）の「実績（Paper）」節の下に「実績評価（勝てているか）」節を表示する: 評価期間の選択（`eval_from`/`eval_to`の2つの日付（JST、`eval_to`の日を含む。どちらか片方だけでもよい）と「全期間」「直近7日」「直近30日」「直近90日」のリンク。直近N日は今日（JST）を含むN日。クローズ日（`closed_at`）で絞り、以下の節全体（合格ラインを含む）がその期間の集計になる。日付の形式不正・終了日が開始日より前は400で、フォームの横に理由を出し、全期間を表示する。`from`はバックテストタブの起動に使うため別名）、合格ラインの判定と各項目の実績／基準、`initial_capital`（仮置きの注記つき）、コスト内訳、全期間と各切り口の表（n・損益・勝率・EV円・EVbps・PF・最大DD円・最大DD資金比。各指標は`値 [95%区間]`または「判定不能」）、Jevの的中率・Brier（ラベル版別と、ラベル版×判断日・週・方向・評価ホライズン別の表）、メタモデルのOOSと実績EVの並列表。取得失敗時は節内に固定文言を出して500（原因は表示しない）。
 - `GET /api/v1/performance/evaluation`（`api/endpoints/huma-api-insights.md`）が同じ集計をJSONで返す（`from`/`to`で`closed_at`の期間を絞れる）。上記の指標はすべて`n`・`lo`/`hi`・`reliable`を持つ。
 
 ## 6. 検証済みSQL（FR-EVAL-5）
 
-`tools/verify-queries.sql`は、画面と同じ指標を`sqlite3`で独立に再計算するクエリ集（Q0〜Q10、`-- name: Qn`で区切り）。実スキーマ（`db/migrations` 000004・6・7・8・11・33・34・35・36）に対して検証済みで、次を満たす。
+`tools/verify-queries.sql`は、画面と同じ指標を`sqlite3`で独立に再計算するクエリ集（Q0〜Q11、`-- name: Qn`で区切り）。実スキーマ（`db/migrations` 000004・6・7・8・11・33・34・35・36）に対して検証済みで、次を満たす。
 
 - `calibration_outcomes`は`label_version`で絞る／分ける（Q5〜Q7）。固定の「コスト0.1%」仮定ではなく、実際の約定コスト（`paper_orders.fees`・`slippage_bps`、Q4）とコスト控除後ラベル（`net_return_bps`、Q6）を使う。
 - 実取引と予測の結合: `positions.entry_order_id → paper_orders.trade_signal_id → trade_signals.jev_decision_id → jev_decisions / metalabel_predictions`（Q2・Q8）。入力の古さは`jev_decisions.data_age_ms`（Q7）。
@@ -87,7 +89,7 @@
 sqlite3 -readonly -header -column pitha.db ".read tools/verify-queries.sql"
 ```
 
-期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5・Q10の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5は`jev_decisions.timestamp`、Q10は`paper_orders.filled_at`で絞る）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
+期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5・Q10・Q11の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5・Q11は`jev_decisions.timestamp`、Q10は`paper_orders.filled_at`で絞る。Q11の日別・方向別は画面の「Jevの切り口別」表と同じ値だが、週キーは`strftime('%W')`（月曜始まりの年内週番号・第0週あり）で、画面のISO週とは年初・年末付近で区切りが異なるため、週別の行は画面と一致するとは限らない）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
 
 ## 7. 実データの実行記録
 

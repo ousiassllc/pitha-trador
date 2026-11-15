@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query/shadowquery"
@@ -35,6 +36,7 @@ type toolEnv struct {
 	paperLimits *config.RiskLimits             // risk.yaml's Paper section (defaults of the Paper keys)
 	policy      *config.PolicyConfig           // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
 	writer      func() (*mcpset.Writer, error) // the narrow write connection, opened on first use
+	experiments *experiment.SummaryCache       // experiments_list's rows of finished experiments
 }
 
 // tool is one entry of the dispatch table. The table is the complete set of
@@ -55,12 +57,10 @@ type tool struct {
 	decode func(raw json.RawMessage) (periodArgs, runFunc, *toolError)
 }
 
-// runFunc executes the tool's SQL and returns the data and the row count to
-// log.
+// runFunc executes the tool's SQL and returns the data and the row count to log.
 type runFunc func(ctx context.Context, env toolEnv) (data any, count int, err error)
 
-// strictDecode unmarshals raw into dst, rejecting unknown fields, wrong
-// types and trailing data. Empty raw is an empty object.
+// strictDecode unmarshals raw into dst, rejecting unknown fields, wrong types and trailing data; empty raw is {}.
 func strictDecode(raw json.RawMessage, dst any) *toolError {
 	if len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		raw = json.RawMessage("{}")
