@@ -10,11 +10,9 @@ package watchlistsize
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
@@ -66,22 +64,16 @@ func (r *Recorder) Check(ctx context.Context) error {
 	return r.cfg.Store.RecordRuntimeSize(ctx, date, r.cfg.Source, r.cfg.Size(), now)
 }
 
-// NewRanking returns the Recorder of the kabu ranking-driven watch list, which
-// writes to watch_list_runtime_days in db. It runs nothing until Start.
-func NewRanking(db *sql.DB) *Recorder {
-	return NewRecorder(Config{Store: watchlistruntime.New(db), Source: SourceRanking})
-}
-
-// Start runs r in the background (wg tracks it) when enabled; size is a count,
-// read once per pass. The caller passes enabled=false for a build without the
-// kabu runtime watch list, which is then left alone.
-func (r *Recorder) Start(ctx context.Context, wg *sync.WaitGroup, enabled bool, size func() int) {
+// Start runs a Recorder of size in the background (wg tracks it) when enabled;
+// size is a count, read once per pass. The caller passes enabled=false for a
+// build without the kabu runtime watch list, which is then left alone.
+func Start(ctx context.Context, wg *sync.WaitGroup, store Store, enabled bool, size func() int) {
 	if !enabled {
 		return
 	}
-	r.cfg.Size = size
+	rec := NewRecorder(Config{Store: store, Source: SourceRanking, Size: size})
 	wg.Add(1)
-	go func() { defer wg.Done(); r.Run(ctx) }()
+	go func() { defer wg.Done(); rec.Run(ctx) }()
 }
 
 // Run observes every CheckInterval until ctx is done. A panic or error in a

@@ -33,6 +33,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
@@ -49,7 +50,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
-	"github.com/ousiassllc/pitha-trador/internal/service/watchlistsize"
 )
 
 // Services holds every internal/service/* instance the composition root
@@ -114,8 +114,8 @@ type Services struct {
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
-	watchListSizes   *watchlistsize.Recorder // kabu runtime watch list size per day (issue #920)
-	proposalExec     proposalexec.Processor  // the Paper results MCP's order proposals (issue #828)
+	watchListSizes   *watchlistruntime.Repository // kabu runtime watch list size per day (issue #920)
+	proposalExec     proposalexec.Processor       // the Paper results MCP's order proposals (issue #828)
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -194,7 +194,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	}
 	alertChannels := alerts.New(secrets)
 
-	svc := &Services{strategy: state.Strategy, watchListSizes: watchlistsize.NewRanking(state.DB)}
+	svc := &Services{strategy: state.Strategy, watchListSizes: watchlistruntime.New(state.DB)}
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
