@@ -1,0 +1,79 @@
+package evaluation
+
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// jevBlock is Jev's hit rate and Brier score per label version, followed by
+// the same metrics sliced by decision day, week, direction and grading
+// horizon.
+templ jevBlock(rows []JevRow, tables []JevTable) {
+	<div class="mt-6 overflow-x-auto" data-testid="evaluation-jev">
+		<h3 class="mb-3 text-xl font-semibold text-ink">
+			Jevの方向的中率とBrier
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-jev", Label: "Jevの方向的中率とBrierの説明"}) {
+				ラベル版ごとの集計です。方向的中率は予測の向きが実際の値動きと一致した割合（変わらずは除く）、Brier は予測した確率と結果のずれを表すスコアで、小さいほど良い値です。
+			}
+		</h3>
+		if len(rows) == 0 {
+			<p class="mt-1 text-sm text-mute">ラベル付き判断はありません。</p>
+		} else {
+			<table class="mt-3 min-w-full text-sm">
+				<caption class="sr-only">Jevの方向的中率とBrier</caption>
+				<thead>
+					<tr class="border-b border-border text-right text-mute">
+						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">ラベル</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">方向的中率</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">Brier</th>
+					</tr>
+				</thead>
+				<tbody>
+					for i, r := range rows {
+						<tr class="border-t border-border">
+							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Label }</th>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", r.N) }</td>
+							@cell(r.HitRate, fmt.Sprintf("jev-%d-hit-rate", i))
+							@cell(r.Brier, fmt.Sprintf("jev-%d-brier", i))
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+		for _, t := range tables {
+			@jevTable(t)
+		}
+	</div>
+}
+
+templ jevTable(t JevTable) {
+	<div class="mt-6 overflow-x-auto" data-testid={ "evaluation-jev-" + t.ID }>
+		<h4 class="mb-3 text-lg font-semibold text-ink">{ t.Title }</h4>
+		<table class="mt-3 min-w-full text-sm">
+			<caption class="sr-only">Jevの方向的中率とBrier（{ t.Title }）</caption>
+			<thead>
+				<tr class="border-b border-border text-right text-mute">
+					<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">ラベル版</th>
+					<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">{ t.KeyHeader }</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">方向的中率</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">Brier</th>
+				</tr>
+			</thead>
+			<tbody>
+				for i, r := range t.Rows {
+					<tr class="border-t border-border" data-key={ r.Label + " " + r.Key }>
+						<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Label }</th>
+						<td class="px-2 py-1.5 text-left font-mono tabular-nums">{ r.Key }</td>
+						<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", r.N) }</td>
+						@cell(r.HitRate, fmt.Sprintf("jev-%s-%d-hit-rate", t.ID, i))
+						@cell(r.Brier, fmt.Sprintf("jev-%s-%d-brier", t.ID, i))
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+

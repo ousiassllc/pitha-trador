@@ -138,7 +138,7 @@ static/
 - `ScannerPage`（`layout.Shell`＋見出し、`ScanPanel`（一覧の説明・色の凡例は`ScannerTableFallback`の件数の隣のヘルプマークにある）、`ScannerTableFallback`、`pitha-scanner-table`バンドル）
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む。Jev/Risk/Positionパネルは`organisms`の`JevPanel`/`RiskPanel`/`PositionPanel`で、pagesは組み立てのみ。issue #630）
 - `PerformancePage`（`performancepanels.BacktestFoldTable`などの組み立てのみ。issue #630。実績評価節として`evaluation.EvaluationPanel`を先頭に置く。issue #777）
-- `evaluation.EvaluationPanel`（Performance画面の「実績評価」節`organisms/evaluation`。`Panel`は表示整形済みのplain props（切り口別の指標表・合格ライン・コスト内訳・Jev採点・メタモデルのOOS対Paper）だけを受け取り、基準未満は「判定不能」を明示する。読み取りに失敗したときは`EvaluationError`を表示する。`organisms`のディレクトリ行数上限のため別パッケージ。issue #777）
+- `evaluation.EvaluationPanel`（Performance画面の「実績評価」節`organisms/evaluation`。`Panel`は表示整形済みのplain props（評価期間の選択`Period`（`eval_from`/`eval_to`のフォームと全期間・直近7/30/90日のリンク）・切り口別の指標表・合格ライン・コスト内訳・Jev採点（ラベル版別と、ラベル版×判断日・週・方向・評価ホライズン別の`JevTables`）・メタモデルのOOS対Paper）だけを受け取り、基準未満は「判定不能」を明示する。読み取りに失敗したときは`EvaluationError`を表示する。`organisms`のディレクトリ行数上限のため別パッケージ（テンプレートは`panel.templ`・`jev.templ`・`period.templ`に分割）。issue #777）
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
 - `WatchlistPage`（issue #730。立花の監視リストをサーバ描画で一覧表示。アイランドなし）
 - `OrderProposalsPage`・`OrderProposalDetailPage`（issue #829。`GET /order-proposals`・`GET /order-proposals/:id`。MCP の注文案の読み取りと同じ値を、`handler/orderproposals` が整形済みの props（`ProposalRow`・`ProposalDetailProps`）にして渡す。サーバ描画のみでアイランド・アクションなし。自由文は `templ` のエスケープで文字として出し、情報源の URL は http / https だけ `rel="noopener noreferrer"` 付きのリンクにする。`layout.Shell(…, organisms.NavOrderProposals)`）

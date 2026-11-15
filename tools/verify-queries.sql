@@ -9,7 +9,7 @@
 -- 規約:
 --   * 全クエリは SELECT のみ（書き込みなし）。板・時価の生値（market_snapshots、jev_decisions.state_json、
 --     response_json、metalabel_predictions.features_json）は読まない・出力しない。出力は集計値だけ。
---   * 期間: Q1〜Q5・Q10 は先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
+--   * 期間: Q1〜Q5・Q10・Q11 は先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
 --     書き換える。既定は全期間。params を持たない Q0・Q6〜Q9 は全期間が対象（絞り方は docs/requirements/functional/performance-evaluation.md §6）。
 --     initial_capital（Q3 の params）は config/risk.yaml の paper.initial_capital（Paper では
 --     仮置きの値。口座残高ではない）に合わせて書き換える。
@@ -217,3 +217,23 @@ SELECT session, direction, MAX(n) AS fills, ROUND(AVG(bps), 4) AS mean_slippage_
        MAX(CASE WHEN rn = (95 * n + 99) / 100 THEN bps END) AS p95_slippage_bps
 FROM r GROUP BY session, direction
 ORDER BY CASE session WHEN 'open' THEN 0 WHEN 'regular' THEN 1 ELSE 2 END, direction;
+
+-- name: Q11 Jevの方向的中率とBrierの切り口別（label_version別×日・週・方向）。同値は除く。Q5の水平線別と合わせて画面の「Jevの切り口別」表と同じ値
+WITH params(from_ts, to_ts) AS (VALUES ('0000-01-01T00:00:00Z', '9999-12-31T00:00:00Z')),
+s AS (
+  SELECT o.label_version, d.direction, o.was_direction_correct AS hit,
+         (d.confidence - o.was_direction_correct) * (d.confidence - o.was_direction_correct) AS sq,
+         date(d.timestamp, '+9 hours') AS day, strftime('%Y-W%W', d.timestamp, '+9 hours') AS week
+  FROM calibration_outcomes o
+  JOIN jev_decisions d ON d.id = o.jev_decision_id, params
+  WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT') AND d.confidence IS NOT NULL
+    AND o.was_direction_correct IS NOT NULL AND d.timestamp >= from_ts AND d.timestamp < to_ts
+    AND NOT ((o.label_version = 1 AND o.future_return = 0) OR (o.label_version <> 1 AND COALESCE(o.net_return_bps, 1) = 0))
+),
+g AS (
+  SELECT label_version, 'day' AS dim, day AS k, hit, sq FROM s
+  UNION ALL SELECT label_version, 'week', week, hit, sq FROM s
+  UNION ALL SELECT label_version, 'direction', direction, hit, sq FROM s
+)
+SELECT label_version, dim, k AS key, COUNT(*) AS n, ROUND(AVG(hit), 4) AS hit_rate, ROUND(AVG(sq), 4) AS brier
+FROM g GROUP BY label_version, dim, k ORDER BY label_version, dim, k;

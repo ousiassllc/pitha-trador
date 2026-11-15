@@ -18,6 +18,7 @@ templ EvaluationPanel(p Panel, err string) {
 				損益は手数料控除後の実現損益（円）です。[ ] は95%信頼区間で、同じ日の取引は相関するため日単位でまとめて評価しています。サンプルが基準未満の指標は「判定不能」と表示します。EV は1取引あたりの平均損益、PF はプロフィットファクター（総利益 ÷ 総損失）、最大DD は損益の累計がピークから最も下がった幅です。
 			}
 		</h2>
+		@periodSelector(p.Period)
 		if err != "" {
 			<p class="rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="evaluation-error">{ err }</p>
 		} else {
@@ -36,7 +37,7 @@ templ EvaluationPanel(p Panel, err string) {
 			for _, t := range p.Tables {
 				@evalTable(t)
 			}
-			@jevBlock(p.Jev)
+			@jevBlock(p.Jev, p.JevTables)
 			@metaBlock(p.Meta)
 		}
 	</section>
@@ -142,42 +143,6 @@ templ evalTable(t Table) {
 				}
 			</tbody>
 		</table>
-	</div>
-}
-
-templ jevBlock(rows []JevRow) {
-	<div class="mt-6 overflow-x-auto" data-testid="evaluation-jev">
-		<h3 class="mb-3 text-xl font-semibold text-ink">
-			Jevの方向的中率とBrier
-			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-jev", Label: "Jevの方向的中率とBrierの説明"}) {
-				ラベル版ごとの集計です。方向的中率は予測の向きが実際の値動きと一致した割合（変わらずは除く）、Brier は予測した確率と結果のずれを表すスコアで、小さいほど良い値です。
-			}
-		</h3>
-		if len(rows) == 0 {
-			<p class="mt-1 text-sm text-mute">ラベル付き判断はありません。</p>
-		} else {
-			<table class="mt-3 min-w-full text-sm">
-				<caption class="sr-only">Jevの方向的中率とBrier</caption>
-				<thead>
-					<tr class="border-b border-border text-right text-mute">
-						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">ラベル</th>
-						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
-						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">方向的中率</th>
-						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">Brier</th>
-					</tr>
-				</thead>
-				<tbody>
-					for i, r := range rows {
-						<tr class="border-t border-border">
-							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Label }</th>
-							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", r.N) }</td>
-							@cell(r.HitRate, fmt.Sprintf("jev-%d-hit-rate", i))
-							@cell(r.Brier, fmt.Sprintf("jev-%d-brier", i))
-						</tr>
-					}
-				</tbody>
-			</table>
-		}
 	</div>
 }
 
