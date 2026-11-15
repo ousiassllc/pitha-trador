@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/airolewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
@@ -67,6 +68,7 @@ type Services struct {
 	KillSwitch  *system.KillSwitchRepository
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository
+	AIRoles     *system.AIRoleRepository // the AI roles' provider/model settings and history (issue #1080)
 
 	// DailyBars/DailyBarRuns store the 立花 nightly 日足 batch (issue #729).
 	DailyBars    *market.DailyBarRepository
@@ -99,6 +101,7 @@ type Services struct {
 	Updater      *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
 	strategy           *config.StrategyConfig
+	aiRoles            airolewire.Roles // each AI role's connection, resolved at start-up (issue #1080)
 	wg                 sync.WaitGroup
 	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 

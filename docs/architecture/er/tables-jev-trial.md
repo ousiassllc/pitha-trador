@@ -36,7 +36,7 @@ erDiagram
 | jev_decision_id | integer | NOT NULL, FK → `jev_decisions.id` | 並べたライブの判定。ライブの答えは同じ行で見る |
 | arm_id | varchar(48) | NOT NULL, CHECK 空でない | アーム（`jev.trial.arms` の `id`。例 `or-clef-flash-v3`）。#1010 のアームへ写せる文字列 id |
 | prompt_version | varchar(40) | NOT NULL, CHECK 空でない | 聞いた Trader プロンプトの版（`internal/service/jev/prompts.go` の登録名。第 1 段階はライブと同じ `trader-v3`） |
-| provider | varchar(40) | NOT NULL, 既定 '' | アームのプロバイダー（`openrouter`） |
+| provider | varchar(40) | NOT NULL, 既定 '' | アームのプロバイダー（`openrouter`／`custom`。issue #1080） |
 | requested_model | varchar(100) | NOT NULL, CHECK 空でない | リクエストに送ったモデル id |
 | served_model / served_provider / response_id | varchar | NOT NULL, 既定 '' | 応答が返したモデル・実際に処理したプロバイダー・応答 id。応答が無い行は空（OpenRouter は処理元を切り替えうるので、送ったモデルと別に残す） |
 | status | varchar(8) | NOT NULL, CHECK IN | `ok`＝全問に答えた／`failed`＝応答が得られなかった（通信・HTTP エラー・不正な応答）／`refused`＝全問を拒否／`partial`＝一部の質問を拒否 |

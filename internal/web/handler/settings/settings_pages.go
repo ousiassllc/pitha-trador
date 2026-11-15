@@ -35,12 +35,16 @@ func (h *SettingsHandler) SubPage(page settingspages.Page, swagger bool) gin.Han
 		props := pages.SettingsProps{
 			Page:        page,
 			Dialogs:     ids,
-			Connections: h.connections(ctx, connectionsOn(ids)),
 			Operational: h.opsGroupsOn(ctx, ids),
 			MCP:         h.mcp,
 			JevPrompt:   h.jevPrompt,
 			JevTrial:    h.jevTrial,
+			AIRoles:     h.aiRoles,
 			Links:       settingspages.LinksOf(page.ID, swagger),
+		}
+		props.Connections = h.connections(ctx, connectionsOn(ids))
+		if h.aiRoles {
+			props.AIProviders, props.Connections = splitAIProviders(props.Connections)
 		}
 		shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 	}
@@ -56,6 +60,29 @@ func connectionsOn(modalIDs []string) []connection {
 		}
 	}
 	return out
+}
+
+// aiProviderConnections are the connections that are AI providers (issue
+// #1080): 独自 API (the Jev connection) and OpenRouter. The page lists them in
+// their own section, before the roles that choose among them.
+var aiProviderConnections = []string{"jev", "openrouter"}
+
+// splitAIProviders separates the provider connections from the rest, keeping
+// the order of aiProviderConnections for the providers.
+func splitAIProviders(conns []molecules.ConnectionProps) (providers, rest []molecules.ConnectionProps) {
+	for _, id := range aiProviderConnections {
+		for _, conn := range conns {
+			if conn.ID == id {
+				providers = append(providers, conn)
+			}
+		}
+	}
+	for _, conn := range conns {
+		if !slices.Contains(aiProviderConnections, conn.ID) {
+			rest = append(rest, conn)
+		}
+	}
+	return providers, rest
 }
 
 // opsGroupsOn builds the setting groups whose dialog is in modalIDs, in

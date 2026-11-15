@@ -88,6 +88,9 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/settings/jev-prompt-panel` | Jev のプロンプトの版とシャドー評価のパネルのフラグメント（Settings「外部連携・AI」の`modal-jev-prompt`）。`Cache-Control: no-store` |
 | POST | `/settings/jev-prompt/shadow` | シャドー評価の保存（フォーム項目`enabled`（チェック時のみ送られる）・`candidate`（空は候補なし）・`cap`（USD。空は既定へ戻す））。1 日の費用上限が数値でない・範囲外、または候補の版が不正なときは422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-shadow-error`へ差し込み、何も保存しない（入力は残る）。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |
 | POST | `/settings/jev-prompt/promote` | ライブのプロンプトの版の昇格（フォーム項目`version`。昇格は誰が・いつ・前の版・新しい版を記録する）。不正な版は422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-promote-error`へ差し込み、変更しない。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |
+| GET | `/settings/ai-roles-panel` | 役割ごとのプロバイダーとモデルのパネルのフラグメント（Settings「外部連携・AI」の`modal-ai-roles`）。各役割の設定・最後の起動で使い始めた組・最近の履歴。API キーの値は出さない。`Cache-Control: no-store` |
+| POST | `/settings/ai-roles/:role` | 役割（`jev`/`sol`/`opus`/`luna`）の保存（フォーム項目`provider`（`custom`/`openrouter`）・`model`）。不正は 422＋インラインのエラーで何も保存しない。保存と履歴（`ai_role_history`）は 1 トランザクション。反映には再起動が要る。MCP からは呼べない |
+| DELETE | `/settings/ai-roles/:role` | 役割の保存した設定を消して既定（今までの接続）へ戻す（履歴に残る） |
 | GET | `/settings/jev-trial-panel` | モデル比較トライアルのパネルのフラグメント（Settings「外部連携・AI」の`modal-jev-trial`）。有効化・アーム（JSON）・全体の 1 日の費用上限・状態（今日と累計の「数えた費用」と回数、アームごとの今日の費用と上限・失敗回数と上限・停止の理由（上限・失敗上限・402・403・429/529 の待機）、全体の停止）・OpenRouter の API キーが設定済みか（はい/いいえのみ。値は返さない）・Paper でだけ動く旨。`Cache-Control: no-store` |
 | POST | `/settings/jev-trial` | トライアルの保存（フォーム項目`enabled`（チェック時のみ送られる）・`arms`（アームの JSON 配列。空は「アームなし」）・`cap`（全体の 1 日の費用上限、USD。空は既定 0.10 へ戻す））。**トライアルをオンにできる唯一の経路**（MCP の書き込み許可リストに無い）で、オフにするのはいつでもできる。保存前に全項目を検証し（費用上限が数値でない・範囲外、アームが JSON として不正・アームの検証違反・このビルドに登録されていないプロンプトの版）、1 つでも不正なら 422＋`atoms.InlineAlert`で`HX-Retarget`により`#jev-trial-error`へ差し込み、**何も保存しない**（入力は残る）。保存の失敗は500のトースト（原因は返さず`slog`のみ）。成功は200でパネルを再描画する。CSRF 必須 |
 | POST | `/settings/mcp/restart` | 停止（起動していれば）してから保存済みの設定で起動し直す。設定の保存・API キーの再生成の反映に使う。起動条件・エラーは`/settings/mcp/start`と同じ。CSRFヘッダ必須（issue #795） | `McpPanel`フラグメント |
@@ -262,3 +265,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.116 | 2026-11-14 | §3の`DELETE /ops-settings/:key`の説明を、バックアップ先を消すと無効ではなく既定のバックアップ先へ戻る、へ更新 | issue #890 |
 | 1.117 | 2026-11-14 | §5に`/api/v1/migration/{export,preview,confirm,cancel,status}`（PC移行用の移行ファイルの書き出しと、確認→予約→次回起動で適用の取り込み。全てCookie必須・POSTはCSRF必須。`api/endpoints/huma-api-export.md`）を追加。§1の認証の注記を追記 | issue #1075 |
 | 1.118 | 2026-11-15 | §3の`POST /ops-settings/:key`の対象に`research.labels.enabled`・`research.labels.retention_days`を追記 | issue #1073 / #1074（PR #1077 の直し） |
+| 1.119 | 2026-11-15 | §3に、役割ごとのプロバイダーとモデルの Settings の 3 ルート（`GET /settings/ai-roles-panel`・`POST`/`DELETE /settings/ai-roles/:role`）を追加 | issue #1080 |

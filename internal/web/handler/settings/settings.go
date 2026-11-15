@@ -65,6 +65,10 @@ type SettingsHandler struct {
 	// jevTrial shows the model-comparison trial card; the panel itself is
 	// served by internal/web/handler/jevtrial.
 	jevTrial bool
+	// aiRoles shows the 役割ごとのモデル card (issue #1080) and puts the two
+	// provider connections (独自 API, OpenRouter) in their own section above it;
+	// the panel itself is served by internal/web/handler/airoles.
+	aiRoles bool
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -91,6 +95,14 @@ func (h *SettingsHandler) WithJevPromptSettings() *SettingsHandler {
 // are registered.
 func (h *SettingsHandler) WithJevTrialSettings() *SettingsHandler {
 	h.jevTrial = true
+	return h
+}
+
+// WithAIRoleSettings shows the 役割ごとのモデル card (modal `modal-ai-roles`) on
+// the Settings screen, preceded by the AI provider connections; call it only
+// when the panel routes are registered.
+func (h *SettingsHandler) WithAIRoleSettings() *SettingsHandler {
+	h.aiRoles = true
 	return h
 }
 

@@ -19,7 +19,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/service/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
@@ -85,6 +87,7 @@ func newEngine(t *testing.T, s secrets) *gin.Engine {
 		router.WithMCPSettings(mcp),
 		router.WithJevPromptSettings(jevprompt.New(jevDB)),
 		router.WithJevTrialSettings(jevtrial.New(jevDB)),
+		router.WithAIRoleSettings(airoles.New(system.NewRuntimeSettingsRepository(jevDB), system.NewAIRoleRepository(jevDB), nil)),
 	)
 }
 

@@ -7,7 +7,7 @@
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、設定ツールが呼ばれたときだけ、`runtime_settings` と監査表だけを書く狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
-- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 18 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
+- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 19 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
 ## 2. パッケージ
 
@@ -31,6 +31,7 @@
 | 適時開示による見送りルールの記録の集計（`disclosure_skip_summary`、issue #935。`disclosure_skip_records` と `calibration_outcomes` を件数としてだけ読む）と、その HTTP のテスト | `internal/service/paperresultsmcp/disclosureskipdiag`、`internal/service/paperresultsmcp/disclosureskiptests` |
 | 意思決定モデル比較（お試し）の読み取り専用ツール（`jev_trial_compare` / `jev_trial_cost`、issue #1060。`jev_trial_decisions`・`jev_trial_skips`（cohort から落ちた見送りの理由別件数。issue #1062）・`calibration_outcomes`・`counterfactual_labels`・`runtime_settings` の `jev.trial.*` を読むだけ）: SQL と集計、引数と説明、HTTP のテスト（ツールの登録は `jev_models_tool.go`）。設計は `architecture/paper-results-mcp-jev-trial.md` | `internal/service/paperresultsmcp/query/trialquery`、`internal/service/paperresultsmcp/trialtool`、`internal/service/paperresultsmcp/trialtests` |
 | Jev 評価の読み取り専用ツール（`jev_evaluation`、issue #1073。全 LONG/SHORT trader 判断を同じ行のベースラインと比べる研究用の集計。`jev_decisions`・`market_snapshots`・`calibration_outcomes`・`trade_signals`・`runtime_settings` を読むだけ）: 引数と説明、読み込み、集計、ラベルの付け直し（`calibration.LabelWindow`）、HTTP のテスト（ツールの登録は `jev_models_tool.go`）。設計は `architecture/paper-results-mcp-jev-evaluation.md` | `internal/service/paperresultsmcp/evaldiag`、`internal/service/paperresultsmcp/evaltests` |
+| AI の役割のプロバイダー・モデルの読み取り専用ツール（`ai_roles`、issue #1080。`internal/service/paperresultsmcp/airoleview`・`settingstests`。`secrets`は読まず、役割の設定を変えるツールは無い） | `internal/service/paperresultsmcp/airoleview` |
 | 研究用ホライズンラベルの読み取り専用ツール（`research_horizon_summary`、issue #1074。`research_horizon_labels`・`research_label_days`・`research_label_day_stats`（マイグレーション `000056`。アプリの日次メンテナンスタスク `research_labels` が記録）と、`trader` / `scout` の scope では `jev_decisions` を読むだけ。取引の入力ではない）: SQL と集計、引数と説明、HTTP のテスト（ツールの登録は `jev_models_tool.go`）。設計は `architecture/paper-results-mcp-research-labels.md` | `internal/service/paperresultsmcp/researchdiag`、`internal/service/paperresultsmcp/researchtests` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
@@ -117,3 +118,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.17 | 2026-11-13 | §2 に `jev_trial_compare` / `jev_trial_cost`（`trialquery`・`trialtool`・`trialtests`）を追加。MCP が書けるキーは増えない（`jev.trial.*` は含まない） | issue #1060 |
 | 1.18 | 2026-11-14 | §2 に `jev_evaluation`（`evaldiag`・`evaltests`）と `research_horizon_summary`（`researchdiag`・`researchtests`）を追加（登録はどちらも `jev_models_tool.go`）。読み取りのツールは 18 つ・合計 37。MCP が書けるキーは増えない | issue #1073・#1074 |
 | 1.19 | 2026-11-15 | §2 のホワイトリストを 21 → 22 キーにした（`research.labels.enabled`） | issue #1073 / #1074（PR #1077 の直し） |
+| 1.20 | 2026-11-15 | §2 に`ai_roles`（`airoleview`・`settingstests`）を追加。読み取りのツール 18→19 | issue #1080 |

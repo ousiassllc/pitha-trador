@@ -1,0 +1,52 @@
+package pages
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// aiSections are the Settings page's AI sections (issue #1080), in the order the
+// operator works through them: the providers' connections (独自 API, OpenRouter),
+// then the roles' provider and model. The remaining connections follow them in
+// SettingsPage.
+templ aiSections(props SettingsProps) {
+	if len(props.AIProviders) > 0 {
+		<section aria-labelledby="settings-ai-providers-heading">
+			<h2 id="settings-ai-providers-heading" class="mb-6 flex items-center gap-2 text-2xl font-semibold text-ink">
+				AI のプロバイダー
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-ai-providers", Label: "AI のプロバイダーの説明"}) {
+					AI を呼ぶ先ごとの接続（URL・API キー）です。独自 API は URL とキー（今までの Jev の接続）、OpenRouter は OpenRouter のキーです。どの役割がどちらを使うかは、下の「役割ごとのモデル」で選びます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。
+				}
+			</h2>
+			<p class="mb-3 text-sm text-mute">保存・削除の反映には再起動が必要です。</p>
+			@organisms.ConnectionList(props.AIProviders)
+		</section>
+	}
+	if props.AIRoles && props.Has("modal-ai-roles") {
+		<section aria-labelledby="settings-ai-roles-heading">
+			<h2 id="settings-ai-roles-heading" class="mb-6 text-2xl font-semibold text-ink">役割ごとのモデル</h2>
+			<ul class="flex flex-col gap-3" data-testid="ai-roles-list">
+				@molecules.SettingsCard(molecules.SettingsCardProps{
+					ID:          "ai-roles",
+					ModalID:     "modal-ai-roles",
+					Name:        "役割ごとのプロバイダーとモデル",
+					ActionLabel: "開く",
+					Status:      settingsHelp("help-settings-ai-roles", "役割ごとのモデルの説明", "Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダーのどのモデルで AI を呼ぶかを選びます。保存しなければ今までと同じ接続先・キー・モデルです。Jev の設定はこの画面でだけ変えられます。"),
+				})
+			</ul>
+		</section>
+	}
+}
+
+// aiRolesModal is the dialog of the 役割ごとのモデル card.
+templ aiRolesModal(props SettingsProps) {
+	if props.AIRoles && props.Has("modal-ai-roles") {
+		@molecules.Modal("modal-ai-roles", "役割ごとのプロバイダーとモデル") {
+			// Filled in by `GET /settings/ai-roles-panel`
+			// (internal/web/organisms/airoles) on load; its forms swap this
+			// element's content in place.
+			<div id="ai-roles-panel" hx-get="/settings/ai-roles-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+		}
+	}
+}
