@@ -76,6 +76,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 			return researchlabelsettings.Text(researchlabelsettings.DefaultEnabled)
 		}
 		return strconv.Itoa(researchlabelsettings.DefaultRetentionDays)
+	case researchOnlyKey(key):
+		return researchOnlyDefaultText(key)
 	case watchsettings.IsKey(key):
 		return watchDefaultText(key)
 	case regimesettings.IsKey(key):

@@ -120,6 +120,7 @@ func Keys() []string {
 	keys = append(keys, paperbootstrapsettings.Keys()...)
 	keys = append(keys, sleepguardsettings.Keys()...)
 	keys = append(keys, researchlabelsettings.Keys()...)
+	keys = append(keys, researchOnlyKeys()...)
 	keys = append(keys, watchsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
@@ -160,7 +161,7 @@ func kindOf(key string) kind {
 		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || watchsettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || watchsettings.IsIntegerKey(key) || researchOnlyIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber

@@ -244,6 +244,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
+	case researchOnlyKey(key):
+		return validateResearchOnly(key, encoded)
 	case watchsettings.IsKey(key):
 		// Each value stands alone: only its own range is checked. The watch
 		// size is refused above the kabu stream cap; the information API limiter

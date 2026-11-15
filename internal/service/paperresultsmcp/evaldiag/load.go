@@ -54,6 +54,8 @@ type decisionRow struct {
 	storedNet *float64
 	// entered: a trade signal of the decision passed Risk.
 	entered bool
+	// attrs are the decision's own attributes (#1089): what the slicing tool cuts the evaluation by.
+	attrs Attrs
 }
 
 // scope is the SQL the decision list and the bar stream share: the population
@@ -88,8 +90,10 @@ func listDecisions(ctx context.Context, q query.Q, from, to string, horizon int,
 	stmt := `
 SELECT d.id, d.timestamp, d.created_at, d.direction, d.model_id, d.question_version,
 	m.id IS NOT NULL, m.return_5m, o.net_return_bps,
-	EXISTS (SELECT 1 FROM trade_signals s WHERE s.jev_decision_id = d.id AND s.risk_passed = 1)
+	EXISTS (SELECT 1 FROM trade_signals s WHERE s.jev_decision_id = d.id AND s.risk_passed = 1),
+	d.market_regime, d.regime_volatility_bps, d.confidence, m.spread_bps, m.turnover_5m, i.sector
 FROM jev_decisions d
+LEFT JOIN instruments i ON i.id = d.instrument_id
 LEFT JOIN market_snapshots m ON m.instrument_id = d.instrument_id AND m.timestamp = d.timestamp
 LEFT JOIN calibration_outcomes o ON o.jev_decision_id = d.id AND o.label_version = ? AND o.horizon_minutes = ?
 	AND o.net_return_bps IS NOT NULL
@@ -106,8 +110,13 @@ ORDER BY d.timestamp, d.id LIMIT ?`
 			d             decisionRow
 			at, createdAt string
 			ret, net      sql.NullFloat64
+			regime        sql.NullString
+			sector        sql.NullString
+			vol, conf     sql.NullFloat64
+			spread, turn  sql.NullFloat64
 		)
-		if err := rows.Scan(&d.id, &at, &createdAt, &d.direction, &d.modelID, &d.version, &d.hasBar, &ret, &net, &d.entered); err != nil {
+		if err := rows.Scan(&d.id, &at, &createdAt, &d.direction, &d.modelID, &d.version, &d.hasBar, &ret, &net, &d.entered,
+			&regime, &vol, &conf, &spread, &turn, &sector); err != nil {
 			return nil, fmt.Errorf("query: scan evaluated decision: %w", err)
 		}
 		if len(out) == LimitFor(horizon) {
@@ -128,12 +137,20 @@ ORDER BY d.timestamp, d.id LIMIT ?`
 		if net.Valid {
 			d.storedNet = &net.Float64
 		}
+		d.attrs = Attrs{Regime: regime.String, Sector: sector.String, VolatilityBps: nullable(vol), Confidence: nullable(conf), SpreadBps: nullable(spread), Turnover5m: nullable(turn)}
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("query: list evaluated decisions: %w", err)
 	}
 	return out, nil
+}
+
+func nullable(v sql.NullFloat64) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Float64
 }
 
 // barStream is the bars of every decision of scope in one statement (a join on
