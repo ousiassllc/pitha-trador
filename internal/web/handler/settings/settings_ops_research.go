@@ -10,7 +10,7 @@ import (
 var researchJobsGroup = opsGroup{id: "research-jobs", name: "研究用の日次評価の記録・学習・書き出し",
 	description: "Jev の評価の主な数字を毎日 1 行ずつ研究専用の表に残す記録と、特徴量だけで学習する研究用モデル（AI を使わない）の夜間の学習と、学習用データセットの書き出し（ローカルのフォルダだけ）です。いずれも取引の判断・Risk・発注・Paper ガード・Live・Jev・メタモデルには一切使いません。",
 	note: "どちらも既定はオフ（無効）で、オフの間は日次タスクが何も書きません。オンにすると 16:00 JST 以降のメンテナンスチェック（10 分ごと）から、それぞれ今日までの未記録の日を 1 日ずつ処理します。" +
-		"保持期間より古い行は、それぞれの研究用の表だけから削除されます。書き出しは Paper 実績 MCP の training_dataset_export を呼んだときだけ動き、オフの間は何も書き出しません（書き出したファイルは自動では削除されません）。保存した値は再起動不要で、次のチェックから反映されます。環境変数では設定できません。",
+		"保持期間より古い行は、それぞれの研究用の表だけから削除されます。書き出しは Paper 実績 MCP から依頼したときだけ動き、オフの間は何も書き出しません（書き出したファイルは自動では削除されません）。保存した値は再起動不要で、次のチェックから反映されます。環境変数では設定できません。",
 	fields: []opsField{
 		{key: researchjobsettings.KeyEvalEnabled, label: "評価の日次記録", onOff: true, hint: "オンで有効、オフで無効です。既定はオフ（無効）です。"},
 		{key: researchjobsettings.KeyEvalRetentionDays, label: "評価の記録の保持期間（日）", placeholder: "365",
@@ -23,8 +23,8 @@ var researchJobsGroup = opsGroup{id: "research-jobs", name: "研究用の日次�
 
 // promotionGroup holds the criteria of the read-only promotion checklist (issue #1091).
 var promotionGroup = opsGroup{id: "research-promotion", name: "昇格チェックリストの基準",
-	description: "Paper 実績 MCP の promotion_checklist（候補を今のものと同じ条件で比べる読み取り専用のツール）が当てる数字の基準です。このツールは何も適用しません（設定・プロンプト・モデルは変わりません）。",
-	note: "基準は、仕様書（docs/architecture/paper-results-mcp-promotion.md）に書いた値より厳しい方向にだけ変えられます（最小値は上げる方向、p 値の上限は下げる方向）。緩める値は保存できません。" +
+	description: "Paper 実績 MCP の昇格チェックリスト（候補を今のものと同じ条件で比べる読み取り専用のツール）が当てる数字の基準です。このツールは何も適用しません（設定・プロンプト・モデルは変わりません）。",
+	note: "基準は、仕様書に書いた値（各欄のヒントの下限・上限）より厳しい方向にだけ変えられます（最小値は上げる方向、p 値の上限は下げる方向）。緩める値は保存できません。" +
 		"保存した値は再起動不要で、次の呼び出しから反映されます。",
 	fields: []opsField{
 		{key: promotionsettings.KeyMinCommonRows, label: "共通の行数の下限", placeholder: promotionsettings.DefaultText(promotionsettings.KeyMinCommonRows),

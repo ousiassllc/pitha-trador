@@ -4,7 +4,7 @@
 // the current one must lie above zero, how many days must favour it, and how small the
 // multiple-comparison-adjusted p-value must be.
 //
-// The criteria are documented in docs/architecture/paper-results-mcp-promotion.md. The
+// The criteria are documented in docs/architecture/research-tools/paper-results-mcp-promotion.md. The
 // documented value of each is its Floor, and a setting can only make a criterion
 // STRICTER than its floor (a larger minimum, a smaller maximum): a value that is looser
 // is refused when it is saved (Validate) and ignored, with the floor applied, when it

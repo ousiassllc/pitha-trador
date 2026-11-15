@@ -32,6 +32,10 @@ func TestResearchHorizonLabelsAreReadOnlyByTheirRecorderAndTheResearchTool(t *te
 		"internal/service/paperresultsmcp/researchdiag/",      // the read-only MCP query
 		"internal/service/paperresultsmcp/jev_models_tool.go", // registers that tool (next to the other read-only diagnostic tools)
 		"db/migrations/",                                      // the schema
+		// Research-only readers of the labels (#1090, #1092, #1094): each has its own isolation test of its own tables.
+		"internal/repository/featuremodel/", "internal/service/featuremodel/", // the research model's training rows
+		"internal/service/paperresultsmcp/ledgerdiag/", // the candidate ledger's 30m / 60m / close horizons
+		"internal/service/datasetexport/",              // the training dataset's research label columns
 	}
 
 	for _, dir := range []string{"internal", "cmd"} {
