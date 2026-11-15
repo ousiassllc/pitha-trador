@@ -18,6 +18,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/migrationwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
@@ -101,6 +102,7 @@ func run() error {
 		router.WithWebSocketBase(wsBase),
 		router.WithAllowedHosts(middleware.WailsHosts()...),
 		router.WithUpdateController(services.Updater),
+		migrationwire.Option(state.DB, state.Paths.DBPath),
 	)...)
 
 	if len(wsListeners) > 0 {

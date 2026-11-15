@@ -18,9 +18,12 @@ import (
 // would hand broker/API credentials to whatever the backup destination
 // syncs to; after a restore the operator re-enters them on the Setup
 // screen. The copy is also switched to journal_mode=DELETE so no -wal/-shm
-// sidecar files outlive the operation.
-func scrubSecrets(ctx context.Context, path string) (err error) {
-	conn, err := openBackupCopy(path)
+// sidecar files outlive the operation. prune (may be nil) runs after the
+// secrets are deleted and before the VACUUM, so whatever else the caller
+// removes from the copy (the PC migration bundle's machine-specific
+// settings) is rewritten out of the file's free pages too.
+func scrubSecrets(ctx context.Context, path string, prune Prune) (err error) {
+	conn, err := OpenCopy(path)
 	if err != nil {
 		return err
 	}
@@ -30,19 +33,27 @@ func scrubSecrets(ctx context.Context, path string) (err error) {
 		"PRAGMA journal_mode=DELETE",
 		"PRAGMA secure_delete=ON",
 		"DELETE FROM secrets",
-		"VACUUM",
 	} {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("backup: scrub backup %q (%s): %w", path, stmt, err)
 		}
 	}
+	if prune != nil {
+		if err := prune(ctx, conn); err != nil {
+			return fmt.Errorf("backup: scrub backup %q: %w", path, err)
+		}
+	}
+	if _, err := conn.ExecContext(ctx, "VACUUM"); err != nil {
+		return fmt.Errorf("backup: scrub backup %q (VACUUM): %w", path, err)
+	}
 	return nil
 }
 
-// verifyCopy runs `PRAGMA integrity_check` against the backup copy at
-// path and returns an error unless SQLite reports "ok".
-func verifyCopy(ctx context.Context, path string) (err error) {
-	conn, err := openBackupCopy(path)
+// VerifyCopy runs `PRAGMA integrity_check` against the database copy at
+// path (no migration, never created) and returns an error unless SQLite
+// reports "ok".
+func VerifyCopy(ctx context.Context, path string) (err error) {
+	conn, err := OpenCopy(path)
 	if err != nil {
 		return err
 	}
@@ -58,10 +69,11 @@ func verifyCopy(ctx context.Context, path string) (err error) {
 	return nil
 }
 
-// openBackupCopy opens the backup file at path with a single plain
-// connection (no migrations, no instrumented driver: it is not the live
-// database). Callers must close it.
-func openBackupCopy(path string) (*sql.DB, error) {
+// OpenCopy opens the database copy at path (a backup, a migration bundle's
+// database) with a single plain connection (no migrations, no instrumented
+// driver: it is not the live database; mode=rw never creates the file).
+// Callers must close it.
+func OpenCopy(path string) (*sql.DB, error) {
 	conn, err := sql.Open("sqlite", sqlitedb.FileURI(path, "mode=rw&_busy_timeout=60000"))
 	if err != nil {
 		return nil, fmt.Errorf("backup: open backup %q: %w", path, err)

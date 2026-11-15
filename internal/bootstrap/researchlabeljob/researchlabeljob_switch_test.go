@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -168,8 +169,15 @@ func TestRunner_BackfillIsOneDayPerChunkAndBackupAndPurgeRunBetweenChunks(t *tes
 			lockWaits = append(lockWaits, time.Since(requestedAt))
 		}
 	}
-	backuper := backupjob.New(db, settings)
-	purger := retention.New(db, retention.Policy{SnapshotDays: 36500})
+	// The purge is the real one with the real snapshot archive (issue #1072: the
+	// market_snapshots are archived and verified before they are deleted). Its
+	// cutoff is the real clock minus SnapshotDays, so the days are computed to put
+	// the cutoff on 2026-10-14 (UTC): the purge in the first gap archives and
+	// deletes 2026-10-13, which the first chunk has labeled already.
+	dataDir := t.TempDir()
+	cutoffDay := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
+	backuper := backupjob.New(db, settings, filepath.Join(dataDir, "pitha.db"))
+	purger := retention.NewWithSnapshotArchive(db, retention.Policy{SnapshotDays: int(time.Since(cutoffDay) / (24 * time.Hour))}, filepath.Join(dataDir, "pitha.db"))
 	var runner *maintenance.Runner
 	runner = maintenance.NewRunner(settings, maintenance.WithClock(func() time.Time { return now }), maintenance.WithChunkWait(func(ctx context.Context) {
 		rowsAtGap = append(rowsAtGap, rows(t, db))
@@ -189,6 +197,9 @@ func TestRunner_BackfillIsOneDayPerChunkAndBackupAndPurgeRunBetweenChunks(t *tes
 	runner.Add(maintenance.Task{Name: "data_retention_purge", Label: "purge", Run: func(ctx context.Context) error {
 		acquired()
 		purges++
+		if purges == 1 {
+			return nil // the catch-up pass runs before the backfill (task order): nothing is labeled yet
+		}
 		return purger.Purge(ctx)
 	}})
 	runner.Add(job.Task())
@@ -207,6 +218,14 @@ func TestRunner_BackfillIsOneDayPerChunkAndBackupAndPurgeRunBetweenChunks(t *tes
 	}
 	if got := rows(t, db); got != 6*perDay {
 		t.Fatalf("rows after the backfill = %d, want %d", got, 6*perDay)
+	}
+	// The snapshot archive ran in a gap: 2026-10-13 is archived to the local folder and
+	// deleted from market_snapshots, its labels (no foreign key) survive.
+	if left := countOf(t, db, "market_snapshots WHERE timestamp < '2026-10-14'"); left != 0 {
+		t.Errorf("%d market_snapshots of 2026-10-13 left after the archive and purge", left)
+	}
+	if entries, err := os.ReadDir(filepath.Join(dataDir, "snapshot_archive")); err != nil || len(entries) == 0 {
+		t.Errorf("no snapshot archive written (%v)", err)
 	}
 	if backups != 1+5 || purges != 1+5 {
 		t.Errorf("backups = %d, purges = %d; want the catch-up run and one fixed-time run in each of the 5 gaps", backups, purges)
