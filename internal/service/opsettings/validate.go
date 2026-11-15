@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -88,7 +89,7 @@ func encode(key, raw string) (string, error) {
 		}
 		value = n
 	case kindWatch:
-		v, err := watchsettings.NormalizeSymbols(raw)
+		v, err := normalizeSymbols(key, raw)
 		if err != nil {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
@@ -244,6 +245,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
+	case researchfxsettings.IsKey(key):
+		return validateResearchFX(key, encoded)
 	case watchsettings.IsKey(key):
 		// Each value stands alone: only its own range is checked. The watch
 		// size is refused above the kabu stream cap; the information API limiter

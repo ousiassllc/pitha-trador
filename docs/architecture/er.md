@@ -35,6 +35,8 @@ erDiagram
     jev_decisions ||--o{ jev_trial_skips : "呼ばなかったアームと理由が判断ごとに紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
     instruments ||--o{ research_horizon_labels : "スナップショットの足ごとの研究用ラベルを持つ（FKなし・取引に使わない）"
+    research_fx_days ||--o{ research_fx_candles : "取引日ごとの取得済みの印が、その日の足（通貨ペア・取引日で対応。FKなし・取引に使わない）を数える"
+    research_notes ||--o{ research_note_versions : "版ごとの内容を追記で持つ（取引に使わない）"
     disclosure_skip_records ||--o{ disclosure_skip_matches : "該当した開示を持つ"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
@@ -60,11 +62,16 @@ erDiagram
 | `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-jev-trial.md` | `jev_trial_decisions` / `jev_trial_skips`（意思決定モデル比較のお試し記録と、呼ばなかった比較の理由別の記録。別モデル・別プロバイダーのアームの答えと費用の出所。取引に使わない。issue #1059・#1062） |
-| `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074） |
+| `docs/architecture/er/tables-research.md` | `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（研究用のホライズンラベル: 全スナップショットの 30 分・60 分・引けまでのコスト前後の bps と日次の集計。取引に使わない。issue #1074）、`research_fx_candles` / `research_fx_days`（研究用の為替 1 分足: GMOコイン 外国為替FX の BID・ASK を開始時刻で 1 行にまとめた足と、取引日ごとの取得済みの印。市場休みと欠けを区別する。取引に使わない。issue #1084） |
+| `docs/architecture/er/tables-research-notes.md` | `research_notes` / `research_note_versions`（研究ノート: 問い・仮説・やったこと・結果・結論・根拠リンク・タグと、更新のたびに追記される版。取引に使わない。issue #1095） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
 
 Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読む。書くのは、設定ツール（issue #806・#807）が `runtime_settings` のホワイトリストのキーと、設定変更の監査表 `mcp_settings_audit`（マイグレーション000040、`er/tables-system.md`）に対して行うものと、注文案ツール（issue #827）が注文案の表 `order_proposals` / `order_proposal_events`（マイグレーション000042、`er/tables-trading.md`）へ 1 案ごとに 2 行を `INSERT` するもの、注文案の受け付けスイッチ（`runtime_settings` の `mcp.order_proposals_enabled`）をオフにするものと、調整の実験ツール（issue #871）が実験の表 `tuning_experiments`（マイグレーション000046、`er/tables-system.md`）へ 1 実験ごとに 1 行を `INSERT` し、終了で 1 行を `UPDATE` するものだけ。`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+
+上の「書くのは…だけ」に加えて、研究ノートツール（issue #1095。`docs/architecture/paper-results-mcp-research-notes.md`）が、研究ノートの 2 表 `research_notes` / `research_note_versions`（マイグレーション000057、`er/tables-research-notes.md`）へ、作成で各 1 行を `INSERT`、更新で版の行 1 行を `INSERT` し現在の版の写し 1 行を `UPDATE` する（版の行は書き換え・削除しない）。どちらも書き込み許可（`runtime_settings` の `mcp.settings_write_enabled`）がオフの間は何も書かず、設定・取引の表には書かない。
+
+研究用の為替 1 分足（issue #1084。`docs/architecture/paper-results-mcp-research-fx.md`）の 2 表 `research_fx_candles` / `research_fx_days`（マイグレーション000058、`er/tables-research.md`）は、書くのは記録部品（日次タスク `research_fx`。`runtime_settings` の `research.fx.enabled` が 1 のときだけ GMOコイン 外国為替FX の公開 API を呼んで書く。既定オフ）だけで、Paper 実績 MCP の `fx_series_summary` と `jev_evaluation` の `fx_symbol` は `mode=ro` で読むだけ。
 
 `jev_model_changes`（マイグレーション000048、`er/tables-system.md`。issue #885）は Jev のモデル（`JEV_MODEL`）を Settings 画面で切り替えた記録で、書くのは Settings 画面の保存・削除（`system.SecretsRepository`）だけ。Paper 実績 MCP の調整の実験（`experiment_compare` の交絡の検出、`experiment_create` のモデルの実験の開始時刻の確認）はこの表を `mode=ro` で読む。値はモデル名だけで、ほかの秘密情報の値は入らない。
 
@@ -161,3 +168,5 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.86 | 2026-11-15 | `er/tables-system.md`のPC移行の除外キーに`broker.tachibana.{demo,production}.base_url`を追加（スキーマ変更なし） | issue #1075 |
 | 1.87 | 2026-11-14 | マイグレーション000056を追加し、`er/tables-research.md`を新設して`research_horizon_labels`（全スナップショットの 30 分・60 分・引けまでのコスト前後の bps。`snapshot_id`に外部キーなし）・`research_label_days`（記録を終えた JST の日の印）・`research_label_day_stats`（日×ホライズン×側の和）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1074 |
 | 1.88 | 2026-11-15 | `er/tables-research.md`の保持を実装に合わせて書き換え（`research_horizon_labels`の行を`research.labels.retention_days`（既定90日）より古い日から日次タスクが削除。印・日ごとの和は残す。記録は`research.labels.enabled`既定オフ）。`er/tables-system.md`の`runtime_settings`に`research.labels.enabled` / `research.labels.retention_days`と`research_labels`の最終成功日を追記（マイグレーションの変更なし） | issue #1073 / #1074（PR #1077 の直し） |
+| 1.89 | 2026-11-15 | マイグレーション000057を追加し、`er/tables-research-notes.md`を新設して`research_notes`（現在の版の写し。結論・根拠リンク・タグ）・`research_note_versions`（追記専用。版の行の UPDATE/DELETE はトリガが拒否）を追加。既存の表には列も制約もトリガも足さない。研究専用で取引に使わない | issue #1095 |
+| 1.90 | 2026-11-15 | マイグレーション000058を追加し、`er/tables-research.md`に`research_fx_candles`（GMOコイン 外国為替FX の 1 分足。BID と ASK を開始時刻で 1 行にまとめ、片側だけの分はもう片側が NULL）・`research_fx_days`（取引日ごとの取得済みの印。`recorded` / `empty`（市場休み＝欠けではない））を追加。既存の表には列も制約もトリガも足さない。`runtime_settings`の`research.fx.enabled`（既定オフ）・`research.fx.symbols`を`er/tables-system.md`に追記。研究専用で取引に使わない | issue #1084 |

@@ -23,6 +23,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -119,7 +120,7 @@ func Keys() []string {
 	keys = append(keys, config.BrokerSettingKeys()...)
 	keys = append(keys, paperbootstrapsettings.Keys()...)
 	keys = append(keys, sleepguardsettings.Keys()...)
-	keys = append(keys, researchlabelsettings.Keys()...)
+	keys = append(append(keys, researchlabelsettings.Keys()...), researchfxsettings.Keys()...)
 	keys = append(keys, watchsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
@@ -138,7 +139,7 @@ const (
 	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
 	kindSource     // a 立花 監視銘柄ソース setting validated by tachibanasource.NormalizeTachibanaSourceSetting
 	kindMetaLabel  // a meta-labeling setting (JSON string, or the minimum EV number) validated by metalabelsettings
-	kindWatch      // the observation-only symbols (JSON string) validated by watchsettings
+	kindWatch      // a symbol list (JSON string): the observation-only symbols (watchsettings) or the research FX pairs (researchfxsettings)
 	kindLog        // the log level (JSON string) or the log retention in days (JSON integer), validated by logsettings
 )
 
@@ -156,11 +157,11 @@ func kindOf(key string) kind {
 		return kindMetaLabel
 	case logsettings.IsKey(key):
 		return kindLog
-	case key == watchsettings.KeyObservationSymbols:
+	case key == watchsettings.KeyObservationSymbols || key == researchfxsettings.KeySymbols:
 		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || watchsettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || key == researchfxsettings.KeyEnabled || watchsettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber

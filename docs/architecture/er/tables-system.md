@@ -28,6 +28,8 @@ Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_pro
 
 監視銘柄数と観察用銘柄（issue #1055。FR-SCHED-12）は`scan.ranking_watch.max_symbols`（JSON 整数 1〜45。無ければ 45）・`scan.observation.enabled`（JSON 整数 `1`/`0`。無い・壊れていれば無効）・`scan.observation.symbols`（JSON 文字列。銘柄コードのカンマ区切り、最大 10 件）・`jev.observation.daily_cost_cap_usd`（JSON 数値。無ければ 0.10 USD）を使い、観察用の呼び出しの当日の使用量は`jev.observation.usage`（`{"date","calls","failures","cost_usd"}`。アプリが書く記録）に持つ。どれも MCP の`settings_set`では書けず、`jev.observation.usage`以外は Settings 画面で変える。新しいテーブルは増やさない。
 
+研究用の為替 1 分足の記録（issue #1084。`er/tables-research.md`、`paper-results-mcp-research-fx.md`）は`research.fx.enabled`（JSON 整数 `1`/`0`。**無い・壊れた値・`1`/`0` 以外は無効＝既定オフ**。オフの間は GMOコイン 外国為替FX への要求も書き込みも、メンテナンスランナーの最終成功日`system.maintenance.research_fx.last_success_date`もない。MCP の`settings_set`で書ける）と`research.fx.symbols`（JSON 文字列。GMO の通貨ペア名 `USD_JPY` 形式のカンマ区切り、最大 5 件・重複なし、無い・壊れていれば `USD_JPY`。MCP の`settings_set`では書けず、Settings 画面で変える）を使う。新しい設定の表は増やさない。
+
 Paper 実績 MCP の注文案の受け付け（issue #827）はキー`mcp.order_proposals_enabled`（JSON の整数`1`=受け付ける・`0`=受け付けない。**行が無いときも、`1`/`0`以外の壊れた値のときも受け付けない**＝既定オフ。書き込み許可とは既定が逆）。オンにできるのは Settings 画面（`POST /settings/mcp/order-proposals`）だけで、MCP は`order_proposals_disable`でオフにだけできる。`settings_set`のホワイトリストには入らない（`key_not_allowed`）。切り替えは`mcp_settings_audit`に残る。
 
 PC 移行（issue #1075、`requirements/functional/components-platform.md` §4.25）の移行ファイルは、この DB の写しに対して`secrets`を全削除し、`runtime_settings`のうち`system.backup_dir`・`system.log_dir`・`broker.tachibana.{demo,production}.private_key_path`（端末固有のパス）・`broker.tachibana.{demo,production}.base_url`（認証情報の送り先。他者の移行ファイルで書き換えられないよう除く）と、キー名が秘密を示す行・値が秘密を含む行を削除して作る（`migratebundle.ExcludedSettingKeys`、`overview/flows.md` §10.8）。取り込み後も、この 2 つのテーブルの除外分は取り込み前の PC の値を引き継ぐ。スキーマの変更はない。

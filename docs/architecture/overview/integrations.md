@@ -286,7 +286,7 @@ sequenceDiagram
 
 ## 14. 外国為替FXレート取得アダプタ（GMOコイン、issue #907）
 
-FX の業者を GMOコイン 外国為替FX にした決定（#852）の最初の部品。公開API（認証なし）から現在値と足を読むだけの**読み取り専用の独立部品**（`internal/service/fx/gmo`）で、現時点ではどこにも配線していない。
+FX の業者を GMOコイン 外国為替FX にした決定（#852）の最初の部品。公開API（認証なし）から現在値と足を読むだけの**読み取り専用の独立部品**（`internal/service/fx/gmo`）で、取引側（株・債券の取引、スキャン、Risk、発注、Paper、Feature Engine、Jev）にはどこにも配線していない。唯一の呼び出し元は**研究用の為替 1 分足の記録**（issue #1084、`internal/service/researchfx` / `internal/bootstrap/researchfxjob`。既定オフ。`runtime_settings`の`research.fx.enabled`がオンのときだけ、取引日が終わった日の 1 分足を BID・ASK で 1 日 2 回ずつ取って研究用の表に書く。`architecture/paper-results-mcp-research-fx.md`）で、アダプタの挙動と 1 秒 1 回の上限は変えず、kabu・立花の登録枠も使わない。
 
 - **役割**: `GET https://forex-api.coin.z.com/public/v1/ticker`（全ペアの現在値）と`GET /v1/klines`（四本値）を呼び、型付きの`Ticker`（Bid・Ask・タイムスタンプ・`OPEN`/`CLOSE`）と`Candle`（始値・高値・安値・終値・開始時刻）に変換して返す。公式: <https://api.coin.z.com/fxdocs/>
 - **やらないこと（境界）**: 発注・APIキー・ログイン（Private API）は持たない。株・債券の取引、スキャン、Risk、Paperの約定、資金配分には組み込まない。DBスキーマ・設定キーの既定値・リスクの既定値は変えない（設定は`gmo.Config`として持ち、アプリの`config/*.yaml`には載せない）。取引・Risk・発注のコードはimportしない
@@ -296,4 +296,4 @@ FX の業者を GMOコイン 外国為替FX にした決定（#852）の最初�
 - **回数制限**: 公開RESTの上限は公式に書かれていないため、アプリ側で**1秒に1回まで**（`Config.MinInterval`の既定・下限とも1秒）に抑える。`Client`を共有する全goroutineで1つの制限を共有し（同時呼び出しも順番待ち）、再試行の呼び出しも同じ制限に従う。時計は`Clock`インターフェースで差し替えられ、テストは仮想時計で待たずに検証する
 - **失敗時**: 通信エラー・HTTP 429/5xx・エラーコード`ERR-5003`（API呼出上限）・`ERR-5201`/`ERR-5202`（メンテナンス）は待って再試行する（判定はエラーコードとHTTPステータスだけで行い、応答の`status`の値には依存しない。メンテナンス時の応答の正確な形〔HTTPステータス・`status`の値〕は公式のFXドキュメントでは確認できていない）（待ち時間は1秒から倍々、上限30秒。`Config.InitialBackoff`/`MaxBackoff`。応答に`Retry-After`〔秒数またはHTTP-date〕があれば、待ち時間は「この倍々の待ち時間」と「`Retry-After`」の**長いほう**になり、倍々の待ち時間より短くはならない。`Retry-After`の上限は1分〔`MaxRetryAfter`〕で、不正・過去の値は無視する）。`Config.MaxAttempts`（既定5）回続けて失敗したら止まり、ERRORログ`gmo: giving up after repeated failures`を出して`ErrRetriesExhausted`（最後の失敗を包む）を返す。それ以外の4xx・不正なパラメータ（`ERR-5106`/`ERR-5207`）・応答の形が不正・価格が正でない場合は再試行せず即座に返す（`*APIError`・`ErrInvalidResponse`）。呼び出し元のcontextが終われば直ちに止まる
 - **テスト**: fixture（`internal/service/fx/gmo/testdata/`）は公式ドキュメントのスキーマから**手で作ったもの**で、実際のAPIの応答を録画したものではない（価格は架空。エラー応答の形は公式FXページに例がなく、GMOコインのAPI共通の形に合わせた仮定。`testdata/README.md`）。ticker・1分足・日足・BID/ASK・エラー応答を`httptest`のサーバーから返すだけで、実際のAPIは呼ばない（CIからも呼ばない）。`ticker`は全ペアを返すため、検証・変換は`Config.Symbols`のペアだけで、他のペアの行の不備は無視する（設定したペアが欠けている・不正・同じペアの行が複数ある場合は`ErrInvalidResponse`。設定外のペアの行は重複していても無視する）
-- **GMOコインの規約上の注意**（#852）: 約款21条3項で**商業利用・再配信が禁止**されている。他の人にアプリを配る場合に、レートを画面に出すことが再配信に当たるかは未確認（GMOコインへの問い合わせが必要）。この部品の取得結果を画面・外部へ出す配線を作る前に確かめること。また**1分足は2023-10-28以降のみ**取得でき、それより前の日付は`ErrUnsupportedDate`で拒否する（日足は2023年以降）
+- **GMOコインの規約上の注意**（#852）: 約款21条3項で**商業利用・再配信が禁止**されている。他の人にアプリを配る場合に、レートを画面に出すことが再配信に当たるかは未確認（GMOコインへの問い合わせが必要）。この部品の取得結果を画面・外部へ出す配線を作る前に確かめること（研究用の記録（#1084）は**研究用にのみ使い、再配布しない**。画面にも出さず、読み取り MCP の集計だけで読む）。また**1分足は2023-10-28以降のみ**取得でき、それより前の日付は`ErrUnsupportedDate`で拒否する（日足は2023年以降）

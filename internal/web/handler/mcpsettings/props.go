@@ -138,6 +138,7 @@ func (h *Handler) addWrite(ctx context.Context, props *mcp.PanelProps) {
 		return
 	}
 	props.WriteGate = true
+	_, props.ResearchNotes = h.researchNoteGate()
 	on, err := h.gate.Enabled(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "mcpsettings: read write switch", "error", err)

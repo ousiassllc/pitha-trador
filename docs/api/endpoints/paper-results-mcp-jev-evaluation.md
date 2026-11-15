@@ -18,6 +18,7 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 | `horizon_minutes` | 任意。ラベルの保有時間（分、1〜60）。省略は**いまの `calibration.barrier_timeout_minutes`**。保存済みラベルとの突き合わせも同じホライズンで行う |
 | `prompt_version` | 任意。この版（`question_version`。例 `trader-v4`）の判断だけ。省略は全版（版ごとに別集計） |
 | `model_id` | 任意。この `model_id` の判断だけ（100 文字まで）。省略は全モデル（モデルごとに別集計） |
+| `fx_symbol` | 任意。通貨ペア（`^[A-Z]{3}_[A-Z]{3}$`。例 `USD_JPY`）。指定すると各 cohort に `fx_context`（下記）を足す。省略は足さない（出力は変わらない） |
 
 不明な引数・型の違い・範囲外（`horizon_minutes` が 1〜60 でない、`prompt_version` の形が不正）は `invalid_argument`（422）、期間の誤りは `invalid_period`（422）。期間内の判断が 10,000 件（`MaxDecisions`）を超える（`horizon_minutes` が長いほど窓の行が増えるため、窓の行数の上限 `MaxWindowRows` = 200,000 から `200,000 ÷ (horizon_minutes + 4)` 件に下がる。ホライズン 60 なら 3,125 件）、または (`model_id`, `question_version`) の組が 50（`MaxCohorts`）を超えると、部分結果を返さず `limit_exceeded`（422。期間か `model_id` / `prompt_version` で狭める）。
 
@@ -71,6 +72,19 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 
 **`stored_label`**（Calibration 画面と同じ数字との突き合わせ。`calibration_outcomes` だけを読む）: `label_version`（2）・`horizon_minutes`・`all_decisions` / `evaluated_rows`（`decisions`・`with_label`・`without_label`・`mean_net_bps` = `label_version=2` かつ `horizon_minutes` 一致の保存済み `net_return_bps` の平均。`all_decisions` は期間内の全 LONG/SHORT trader 判断、`evaluated_rows` は比べた行）・`recomputed_mean_on_labeled_rows`（保存ラベルのある評価行の、付け直した llm の平均）・`max_abs_difference_bps`（同じ行の付け直した値と保存値の差の最大。設定を変えていなければ 0）。
 
+#### `fx_context`（`fx_symbol` を指定したとき）
+
+引数 `fx_symbol`（任意。`USD_JPY` のような通貨ペア）を指定すると、各 cohort に `fx_context` を足す。研究用の為替 1 分足の記録（`research_fx_candles`。`docs/api/endpoints/paper-results-mcp-research-fx.md`）を**読むだけ**で、記述のみ（しきい値なし・取引には使わない）。**指定しなければ `fx_context` というキーは出ず、応答はこの引数が無かった頃とバイト単位で同じ**（記録の有無にもよらない）。指定しても `fx_context` 以外の値は変わらない。
+
+| キー | 内容 |
+|---|---|
+| `symbol` | 指定した通貨ペア |
+| `lookback_minutes` / `staleness_minutes` | 60 / 5。固定値 |
+| `return` | 変化の定義の説明文 |
+| `buckets[]` | `up` / `flat` / `down` / `unmatched` の 4 要素（この順。0 件も出す）。`{bucket, n, mean_net_bps}`。`mean_net_bps` は、その区分の **llm アームの行**（cohort の `evaluated` の行）の、コスト控除後の平均 net bps（0 件は `null`）。4 区分の `n` の合計は cohort の `evaluated` に等しい |
+
+区分は、判断の時刻 `t` の mid 価格の、60 分前の mid 価格に対する**変化の符号**: `up`（上昇）/ `flat`（変化なし）/ `down`（下落）。mid は足の**始値**の BID・ASK の平均で、`t` 以前で最新の（BID・ASK の両方がある）足を、足の開始から 5 分以内のものに限って使う（`fxdiag.AtOrBefore`）。`t` と `t − 60 分` のどちらかに足が無ければ `unmatched`（市場休みや欠けの時間帯の判断が入る）。終値は 1 分あとにしか分からないので使わず、判断の時刻より後の価格は見ない。
+
 #### 出力の例（合成データ）
 
 テストの固定データ（`evaltests`。1 日目〜3 日目、`model-1` / `trader-v3` の 6 件。TP/SL 30・コスト 10 bps・10 分）の `all`:
@@ -105,3 +119,4 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 |---|---|---|---|
 | 1.0 | 2026-11-14 | 新規 | issue #1073 |
 | 1.1 | 2026-11-15 | 日の区切りが JST であること、出力の net bps が「いまの設定（`calibration.barrier_*`・`cost.*`）で付け直した値」で保存済みラベルの値ではないことを、引数表と冒頭の説明に明記 | issue #1073（PR #1077 の直し） |
+| 1.2 | 2026-11-15 | 任意の引数 `fx_symbol`（研究用の為替 1 分足の記録を判断の時刻に合わせて結合し、cohort ごとに `fx_context` を足す。指定しなければ出力は変わらない）を、引数表と「`fx_context`」の節に追記 | issue #1084 |

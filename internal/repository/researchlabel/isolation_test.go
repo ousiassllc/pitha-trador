@@ -140,6 +140,8 @@ func TestServicesBuildOnlyRegistersTheResearchMaintenanceTask(t *testing.T) {
 		}
 		switch {
 		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`:
+		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchfxjob"`: // the FX record's own task (its isolation is pinned in repository/researchfx)
+		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchfxjob.New(state.DB, s.Settings).Task())"):
 		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task())"):
 			calls++
 		default:

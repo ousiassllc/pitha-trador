@@ -3,6 +3,7 @@ package evaldiag
 import (
 	"math"
 	"slices"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/stats"
 )
@@ -22,6 +23,7 @@ const (
 // evalRow is one evaluated decision: its JST day, its own direction, the net
 // return (bps) of every arm on it, whether it entered, and the stored label.
 type evalRow struct {
+	at      time.Time // the decision's timestamp (the FX join of fxcontext.go)
 	day     string
 	dir     string
 	net     [numArms]float64

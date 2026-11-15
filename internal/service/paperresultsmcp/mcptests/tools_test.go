@@ -11,11 +11,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// periodTools are the tools taking the from/to period arguments (seventeen since
-// metalabel_training_readiness / jev_models, issues #848 / #849,
-// session_diagnostics, issue #850, entry_quality_whatif, issue #911, and
-// disclosure_skip_summary, issue #935, jev_trial_compare / jev_trial_cost, issue #1060,
-// jev_evaluation #1073, research_horizon_summary #1074); health_today (#808) takes none (healthToday).
+// periodTools are the tools taking the from/to period arguments (seventeen, the
+// diagnostics of issues #848-#1074); health_today (#808) takes none (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
@@ -58,8 +55,11 @@ var writingTools = []string{
 	"settings_set", "settings_write_enable", "settings_write_disable",
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 	"experiment_create", "experiment_close",
-	"jev_prompt_promote",
+	"jev_prompt_promote", "research_note_create", "research_note_update",
 }
+
+// researchTools are the tools of issues #1095 / #1084: the research notes (two write, two read) and the FX series summary.
+var researchTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary"}
 
 func near(t *testing.T, name string, got *float64, want float64) {
 	t.Helper()
@@ -83,8 +83,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 }
 
 // tools/list returns exactly the eighteen read tools, the six settings tools, the
-// six order-proposal tools, the four experiment tools and the three Jev prompt tools
-// (37 in all); only the nine writing tools are not marked read-only.
+// six order-proposal tools, the four experiment tools, the three Jev prompt tools and the five research tools
+// (42 in all); only the eleven writing tools are not marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -112,12 +112,12 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools)
+	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -132,7 +132,7 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) {
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchTools, name) {
 			continue // their reach is pinned in settingstests and proposaltests
 		}
 		if !slices.Contains(allTools, name) {

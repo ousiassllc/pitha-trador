@@ -15,7 +15,9 @@
 // those two; the shadow's cost cap, failure cap, halt and throttle records and
 // the live prompt version are not on it) and the research horizon labels'
 // recording switch (researchlabelsettings.KeyEnabled, issue #1073: only the
-// switch; its retention is not on it). It never holds a Live value
+// switch; its retention is not on it) and the research FX candle record's
+// recording switch (researchfxsettings.KeyEnabled, issue #1084: only the
+// switch; its pairs are not on it). It never holds a Live value
 // (policy.long|short.min_entry_quality, the Live thresholds, are not on it),
 // the Paper bootstrap switch, a secret, or anything that orders, moves money or
 // releases the Kill Switch - those have no key in runtime_settings the MCP
@@ -40,6 +42,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 )
 
@@ -134,6 +137,7 @@ var specs = []Spec{
 	{jevshadowsettings.KeyEnabled, UnitText, "Jev のお試し判断（シャドー）のオン・オフ。オンでも取引には使わず、結果は別表に残すだけ。既定 false（オフ）。1 日の費用上限・失敗回数の上限・呼び出し間隔・429/529 での停止はこの API から変えられない", shadowEnabledConstraint, false},
 	{jevshadowsettings.KeyCandidateVersion, UnitText, "シャドーが動かす候補の Trader の版。ライブの版の切り替え（昇格）ではない。既定は未設定（候補なし）。未設定のままオンにはできない", shadowCandidateConstraint, false},
 	{researchlabelsettings.KeyEnabled, UnitText, "研究用ホライズンラベル（30 分・60 分・引けまでのコスト前後の bps）の日次記録のオン・オフ。記録は研究専用の表に書くだけで取引には使わない。既定 0（オフ）で、オフの間は日次タスクが何も書かない。保持期間（research.labels.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{researchfxsettings.KeyEnabled, UnitText, "研究用の為替 1 分足（USD_JPY など）の記録のオン・オフ。GMOコイン 外国為替FX の公開 API から 1 分足を取り、研究専用の表に書くだけで取引には使わない。既定 0（オフ）で、オフの間は外部への要求も書き込みもない。通貨ペア（research.fx.symbols）はこの API から変えられない", researchLabelEnabledConstraint, false},
 }
 
 // Specs returns the whitelist in display order. The slice is a copy.

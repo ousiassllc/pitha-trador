@@ -27,6 +27,8 @@
 | `multiple_variables` | 422 | `experiment_create` の `changes` が 2 つ以上（同じ変数の 2 回も含む）。何も書かない（issue #871） | 1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。 |
 | `experiment_not_found` | 404 | `experiment_compare` / `experiment_close` の `experiment_id` の実験が無い | その experiment_id の実験はありません。experiments_list で確認してください。 |
 | `experiment_not_running` | 409 | `experiment_close` の実験が、もう終わっている（`closed` / `aborted`）。再び開けない。何も書かない | この実験はもう終わっています（再び開くことはできません）。 |
+| `research_note_not_found` | 404 | `research_note_update` / `research_note_get` の `note_id` の研究ノートが無い。何も書かない | その note_id の研究ノートはありません。research_notes_list で確認してください。 |
+| `research_note_version_conflict` | 409 | `research_note_update` の `expected_version` が、ノートの現在の版と違う（別の書き込みで版が進んでいる）。何も書かない。`error.data.detail` に現在の版（`current_version は N です`） | ノートはすでに別の版に更新されています。research_note_get で最新の版を読み、その current_version を expected_version にして出し直してください。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -39,7 +41,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 37 個（読み取り 18（期間指定 17 + `health_today`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 42 個（読み取り 18（期間指定 17 + `health_today`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究 5）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
@@ -66,3 +68,5 @@
 | 1.8 | 2026-10-22 | `jev_prompt_promote`（Jev のプロンプトの昇格）を `write_disabled` と `invalid_value` の対象に足し、ツール数を 31 にした。新しいコードは無い | issue #872 |
 | 1.9 | 2026-11-14 | `invalid_argument` の条件のツール数を 31 → 35 に直し、内訳を実装（`paperresultsmcp.ToolNames()`）に合わせた（読み取り 16 = 期間指定 15 + `health_today`）。ずれは `mcptests` の `TestToolCountInDocsMatchesDispatchTable` が検出する。新しいコードは無い | issue #1070 |
 | 1.10 | 2026-11-15 | `invalid_argument` の条件のツール数を 35 → 37 に直した（`jev_evaluation` と `research_horizon_summary` の読み取り 2 つを足したため。読み取り 18 = 期間指定 17 + `health_today`） | issue #1073 / #1074（PR #1077 への main の取り込み） |
+| 1.11 | 2026-11-15 | 研究ノートツールのコード `research_note_not_found`（404）・`research_note_version_conflict`（409）を追加。`write_disabled` を研究ノートの書き込み（`research_note_create` / `research_note_update`）にも使い、`invalid_argument`（`error.data.detail` は値を引用しない）を研究ノートの引数規則にも使う。ツール数の記述は別途更新 | issue #1095 |
+| 1.12 | 2026-11-15 | `invalid_argument` の条件のツール数を 37 → 42 に直した（研究ノートの 4 つと `fx_series_summary` を足したため。内訳に「研究 5」を追加） | issue #1095 / #1084 |

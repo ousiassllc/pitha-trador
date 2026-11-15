@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net"
 	"net/http"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -71,7 +71,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcR
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.QueryTimeout)
 	defer cancel()
-	data, n, err := s.execute(ctx, run, rng, clientHost(r))
+	data, n, err := s.execute(ctx, run, rng, mcpset.ClientHost(r.RemoteAddr))
 	if err != nil {
 		finish(classify(ctx, err))
 		return
@@ -110,14 +110,4 @@ func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range, clie
 		q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now(),
 		client: client, paperLimits: s.opts.PaperLimits, policy: s.opts.PolicyThresholds, writer: s.Writer, experiments: s.experiments,
 	})
-}
-
-// clientHost is the caller's host for the audit log: the IP of the TCP peer,
-// never a header value (headers are caller-controlled).
-func clientHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

@@ -140,7 +140,13 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 		Caveats:     caveats(cutoff),
 	}
 	for _, acc := range order {
-		out.Cohorts = append(out.Cohorts, acc.cohort(horizon))
+		c := acc.cohort(horizon)
+		if req.FXSymbol != "" {
+			if c.FXContext, err = fxContext(ctx, q, req.FXSymbol, acc.rows); err != nil {
+				return nil, 0, err
+			}
+		}
+		out.Cohorts = append(out.Cohorts, c)
 	}
 	return out, len(decisions), nil
 }
@@ -176,7 +182,7 @@ func labelDecision(d decisionRow, window []domain.Snapshot, horizon int, l legs)
 
 	long, short := nets[domain.JevDirectionLong], nets[domain.JevDirectionShort]
 	row := evalRow{
-		day: d.at.In(query.JST).Format(time.DateOnly), dir: d.direction, entered: d.entered, stored: d.storedNet,
+		at: d.at, day: d.at.In(query.JST).Format(time.DateOnly), dir: d.direction, entered: d.entered, stored: d.storedNet,
 	}
 	row.net[iLLM] = nets[d.direction]
 	row.net[iRandom] = (long + short) / 2

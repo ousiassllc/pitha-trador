@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -76,6 +77,11 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 			return researchlabelsettings.Text(researchlabelsettings.DefaultEnabled)
 		}
 		return strconv.Itoa(researchlabelsettings.DefaultRetentionDays)
+	case researchfxsettings.IsKey(key):
+		if key == researchfxsettings.KeyEnabled {
+			return researchfxsettings.Text(researchfxsettings.DefaultEnabled)
+		}
+		return researchfxsettings.DefaultSymbolsText
 	case watchsettings.IsKey(key):
 		return watchDefaultText(key)
 	case regimesettings.IsKey(key):

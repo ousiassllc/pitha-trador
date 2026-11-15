@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strings"
-
-	"modernc.org/sqlite"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -43,6 +40,9 @@ const (
 	CodeMultipleVariables    Code = "multiple_variables"
 	CodeExperimentNotFound   Code = "experiment_not_found"
 	CodeExperimentNotRunning Code = "experiment_not_running"
+	// The research-note tools' codes (issue #1095).
+	CodeResearchNoteNotFound        Code = "research_note_not_found"
+	CodeResearchNoteVersionConflict Code = "research_note_version_conflict"
 )
 
 type codeInfo struct {
@@ -73,6 +73,7 @@ var codeTable = map[Code]codeInfo{
 	CodeMultipleVariables:    {http.StatusUnprocessableEntity, "1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。"},
 	CodeExperimentNotFound:   {http.StatusNotFound, "その experiment_id の実験はありません。experiments_list で確認してください。"},
 	CodeExperimentNotRunning: {http.StatusConflict, "この実験はもう終わっています（再び開くことはできません）。"},
+	CodeResearchNoteNotFound: {http.StatusNotFound, "その note_id の研究ノートはありません。research_notes_list で確認してください。"}, CodeResearchNoteVersionConflict: {http.StatusConflict, "ノートはすでに別の版に更新されています。research_note_get で最新の版を読み、その current_version を expected_version にして出し直してください。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.
@@ -106,9 +107,12 @@ func failDetail(code Code, detail string) *toolError { return &toolError{code: c
 // reports the interruption as a generic error.
 func classify(ctx context.Context, err error) *toolError {
 	var te *toolError
+	var ce query.CodedError
 	switch {
 	case errors.As(err, &te):
 		return te
+	case errors.As(err, &ce):
+		return &toolError{code: Code(ce.ErrorCode()), detail: ce.ErrorDetail(), cause: err}
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return &toolError{code: CodeQueryTimeout, cause: err}
 	case errors.Is(err, query.ErrLimitExceeded):
@@ -117,35 +121,10 @@ func classify(ctx context.Context, err error) *toolError {
 		return &toolError{code: CodeInvalidArgument, cause: err}
 	case errors.Is(err, readdb.ErrUnavailable), errors.Is(err, mcpset.ErrUnavailable), errors.Is(err, sql.ErrConnDone):
 		return &toolError{code: CodeDBUnavailable, cause: err}
-	case isBusy(err):
+	case readdb.IsBusy(err):
 		return &toolError{code: CodeDBLocked, cause: err}
-	case isMissingSchema(err):
+	case readdb.IsMissingSchema(err):
 		return &toolError{code: CodeDBUnavailable, cause: err}
 	}
 	return &toolError{code: CodeInternal, cause: err}
-}
-
-// SQLite primary result codes (sqlite3.h).
-const (
-	sqliteBusy   = 5
-	sqliteLocked = 6
-)
-
-func isBusy(err error) bool {
-	if strings.Contains(err.Error(), "database is locked") {
-		return true
-	}
-	var se *sqlite.Error
-	if errors.As(err, &se) {
-		primary := se.Code() & 0xff
-		return primary == sqliteBusy || primary == sqliteLocked
-	}
-	return false
-}
-
-// isMissingSchema reports a table or column the tool needs that the file
-// lacks (an older schema).
-func isMissingSchema(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "no such table") || strings.Contains(msg, "no such column")
 }

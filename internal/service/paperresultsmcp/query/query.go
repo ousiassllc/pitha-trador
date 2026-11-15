@@ -37,6 +37,13 @@ var ErrLimitExceeded = errors.New("query: scan limit exceeded")
 // package issued.
 var ErrBadCursor = errors.New("query: invalid cursor")
 
+// CodedError is a tool failure that names its own spec error code (and an
+// optional client-visible detail); the server maps it without knowing the tool.
+type CodedError interface {
+	ErrorCode() string
+	ErrorDetail() string
+}
+
 // Q is satisfied by *sql.Tx (and *sql.DB).
 type Q interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
