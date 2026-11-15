@@ -37,10 +37,10 @@ var (
 	// urlUserinfoRe is the password of https://user:password@host.
 	urlUserinfoRe = regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.\-]*://[^/\s:@]+:)[^/\s@]+@`)
 	// bearerRe is a Bearer credential written without its header name; the scheme stays.
-	bearerRe = regexp.MustCompile(`(?i)\b(bearer)([ \t]+)([A-Za-z0-9\-._~+/]+=*)`)
+	bearerRe = regexp.MustCompile(`(?i)\b(bearer)([\p{Zs}\t]+)([A-Za-z0-9\-._~+/]+=*)`)
 	// spacedRe is a token / secret / password written with a space and no
 	// separator ("token abc12345xyz"); maskSpaced masks it only if the value is opaque.
-	spacedRe = regexp.MustCompile("(?i)(^|[^A-Za-z0-9_.\\-])([A-Za-z0-9_.\\-]*(?:token|secret|password|passwd))([ \\t]+)([^\\s\"'`,]{8,})")
+	spacedRe = regexp.MustCompile("(?i)(^|[^A-Za-z0-9_.\\-])([A-Za-z0-9_.\\-]*(?:token|secret|password|passwd))([\\p{Zs}\\t]+)([^\\s\"'`,]{8,})")
 	// dottedRe is three or more dot-separated base64url segments of 8+ characters
 	// (a JWT without the eyJ header); maskDotted masks it only if every segment
 	// has both a letter and a digit, so a host name like a.b-1.amazonaws.com stays.

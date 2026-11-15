@@ -11,11 +11,11 @@ import (
 // "password", \"token\", X-Api-Key ...) followed by : = ： ＝ (an optional
 // closing quote, plain or JSON-escaped, may sit between), or one of the
 // Japanese key words followed by those or は. valueSpan then finds the value.
-var assignRe = regexp.MustCompile("(?i)(?:([A-Za-z0-9_.\\-]+)(\\\\?[\"'`]?[ \\t]*[:=：＝][ \\t]*)|(パスワード|トークン|秘密鍵|シークレット|秘密|API ?キー|認証)([ \\t]*(?:[:=：＝]|は)[ \\t]*))")
+var assignRe = regexp.MustCompile("(?i)(?:([A-Za-z0-9_.\\-]+)(\\\\?[\"'`]?[\\p{Zs}\\t]*[:=：＝][\\p{Zs}\\t]*)|(パスワード|トークン|秘密鍵|シークレット|秘密|API ?キー|認証)([\\p{Zs}\\t]*(?:[:=：＝]|は)[\\p{Zs}\\t]*))")
 
 var (
 	// schemeRe is an authorization scheme in front of a value (token: Bearer abc).
-	schemeRe = regexp.MustCompile(`(?i)^(?:Bearer|Basic|Digest|Token|ApiKey)[ \t]+`)
+	schemeRe = regexp.MustCompile(`(?i)^(?:Bearer|Basic|Digest|Token|ApiKey)[\p{Zs}\t]+`)
 	// queryParamRe is the start of the next query parameter (&name=): an
 	// unquoted value ends there so ?token=zzz&b=2 keeps b=2.
 	queryParamRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.\-]*=`)

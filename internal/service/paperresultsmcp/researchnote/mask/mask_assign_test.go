@@ -108,3 +108,18 @@ func TestTextKeepsOrdinaryKeyNames(t *testing.T) {
 		}
 	}
 }
+
+// A no-break or ideographic space (an IME writes U+3000) after the separator
+// does not hide the value.
+func TestTextMasksValuesAfterUnicodeSpaces(t *testing.T) {
+	checkTable(t, map[string]string{
+		"password:\u00a0hunter2xx":            "password:\u00a0[masked]",
+		"password:\u3000hunter2xx":            "password:\u3000[masked]",
+		"パスワード：\u3000hunter2xx":               "パスワード：\u3000[masked]",
+		"token\u3000=abc12345":                "token\u3000=[masked]",
+		"api_key:\u2003abcdef123":             "api_key:\u2003[masked]",
+		"Bearer\u00a0abcdef123456":            "Bearer\u00a0[masked]",
+		"token\u3000abc12345xyz":              "token\u3000[masked]",
+		"authorization:\u00a0Bearer abc12345": "authorization:\u00a0[masked]",
+	})
+}
