@@ -187,6 +187,7 @@ func definitions() []string {
 		"価格差 bps = (立花の price − kabu の price) / kabu の price × 10000。mean_abs / median_abs / p95_abs（最近順位）/ max_abs は絶対値、mean_signed は符号つき（正: 立花が高い）",
 		"only_tachibana: 立花だけがある分（kabu のスナップショットがない）、only_kabu: kabu だけがある分（立花の記録がない）",
 		"by_phase の局面は、立花の行はその行の session_phase、kabu だけの分はその時刻から決める（open_auction=9:00〜9:05 / morning=〜11:25 / lunch=〜12:35 / afternoon=〜15:20 / close=15:20 以降。立会外は記録しない）",
+		"立花の行は各分の 5 秒目の最新値（observed_at が値の更新時刻。静かな銘柄は古い値のまま繰り返す）で、kabu はその分の最後のスナップショットのため、差には最大で約 55 秒の値動きが混ざる。速い相場では差が大きく出る",
 		"via: event は EVENT の通知から、rest は REST の 時価の取得から入った値（その分に使った最新の値の入り方）",
 	}
 }

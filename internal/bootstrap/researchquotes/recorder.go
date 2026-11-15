@@ -56,6 +56,13 @@ const (
 	// tickOffset is where in each minute the recorder runs (the 5th second, so
 	// the minute's last notifications are in).
 	tickOffset = 5 * time.Second
+	// watchGrowEvery is the least time between two subscription changes: every
+	// change of the EVENT subscription is a reconnect that counts against the
+	// day's connection budget, and kabu's ranking watch list changes almost
+	// every minute in session, so growth is applied in batches.
+	watchGrowEvery = 10 * time.Minute
+	// screenRetryAfter is how long a failed daily-screen read is not retried.
+	screenRetryAfter = 10 * time.Minute
 )
 
 // Feed is the part of the 立花 EVENT feed (*event.Feed) the recorder uses.
@@ -117,10 +124,12 @@ type Recorder struct {
 
 	feed    Feed
 	plan    planner
-	watched []string // what SetWatch was last given
+	watched []string  // what SetWatch was last given
+	watchAt time.Time // when SetWatch last changed the subscription
 
 	extrasKey string // what extras was computed for (daily_screen: per JST day)
 	extras    []string
+	extrasBad time.Time // when the daily screen last failed for extrasKey
 }
 
 // New returns a Recorder; Run starts it.
@@ -187,13 +196,16 @@ func (r *Recorder) Tick(ctx context.Context, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	if !slices.Equal(symbols, r.watched) {
+	if !slices.Equal(symbols, r.watched) && (len(r.watched) == 0 || now.Sub(r.watchAt) >= watchGrowEvery) {
 		if err := feed.SetWatch(ctx, symbols); err != nil {
 			r.status(ctx, researchstatus.StateError, "立花の購読銘柄を設定できませんでした", now)
 			return fmt.Errorf("researchquotes: set watch: %w", err)
 		}
-		r.watched = slices.Clone(symbols)
+		r.watched, r.watchAt = slices.Clone(symbols), now
 	}
+	// Only subscribed symbols are recorded: a planned symbol that is not yet
+	// subscribed would only ever get one REST value and then repeat it.
+	symbols = r.watched
 	switch {
 	case len(symbols) == 0:
 		r.status(ctx, researchstatus.StateWaiting, "記録する銘柄がまだありません（kabu の監視銘柄も追加の銘柄も空）", now)
@@ -262,12 +274,15 @@ func (r *Recorder) extrasFor(ctx context.Context, set tachibanasource.TachibanaS
 		return research.QuotesExtraSymbols, nil
 	}
 	key := day + "|" + fmt.Sprint(set.Screen) + "|" + strings.Join(set.Nightly.ExcludeSymbols, ",")
-	if key != r.extrasKey {
+	if key != r.extrasKey || (!r.extrasBad.IsZero() && now.Sub(r.extrasBad) >= screenRetryAfter) {
 		picked, err := r.cfg.ScreenSymbols(ctx, set, now)
 		if err != nil {
-			return nil, fmt.Errorf("researchquotes: daily screen: %w", err)
+			// kabu's symbols are still recorded; the screen is retried later.
+			slog.Warn("researchquotes: 日足スクリーニングを読めませんでした。追加銘柄なしで続けます", "error", err)
+			r.extrasKey, r.extras, r.extrasBad = key, nil, now
+			return nil, nil
 		}
-		r.extrasKey, r.extras = key, picked
+		r.extrasKey, r.extras, r.extrasBad = key, picked, time.Time{}
 	}
 	return r.extras, nil
 }

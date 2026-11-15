@@ -17,7 +17,7 @@
 1. スイッチがオフ → 状態 `disabled`、終わり（`Start`・フィードの呼び出しゼロ）。
 2. 立会日の 08:50 JST〜15:30 の窓の外 → `waiting`（接続しない）。
 3. 窓の中 → `Config.Start` で研究用フィードを取る（初回にログインと EVENT の起動。`ErrNotConfigured` → `not_configured`、`ErrBrokerIsTachibana` → `broker_is_tachibana`、いずれもネットワークには出ず、翌分にまた試す）。
-4. 銘柄の計画（`plan.go`）: kabu が今見ている銘柄（`KabuSymbols`。読むだけ）を先に順に、続いて追加分（`research.tachibana_quotes.extra_source` が `manual` なら `extra_symbols`、`daily_screen` なら前の立会日の日足スクリーニングの上位。`ScreenSymbols`。日足は保存済みのものだけを読み、ブローカーには何も頼まない）。重複と不正なコードを除き、`max_symbols`（≦ 120 = EVENT の購読上限）で切る。**JST の日の中は粘着**: 追加だけで順序を変えず、新しい銘柄が増えたときだけ `SetWatch` を呼ぶ（EVENT の購読は再接続でしか変わらず、フィードが 1 日の接続回数の範囲で 1 回にまとめる）。
+4. 銘柄の計画（`plan.go`）: kabu が今見ている銘柄（`KabuSymbols`。読むだけ）を先に順に、続いて追加分（`research.tachibana_quotes.extra_source` が `manual` なら `extra_symbols`、`daily_screen` なら前の立会日の日足スクリーニングの上位。`ScreenSymbols`。日足は保存済みのものだけを読み、ブローカーには何も頼まない）。重複と不正なコードを除き、`max_symbols`（≦ 120 = EVENT の購読上限）で切る。**JST の日の中は粘着**: 追加だけで順序を変えず、新しい銘柄が増えたときだけ `SetWatch` を呼ぶ。購読の変更は再接続で、1 日の接続回数を使うため、最初の購読のあとは **10 分以上あけて**まとめて反映する（kabu のランキング監視は毎分近く入れ替わる）。記録するのは購読済みの銘柄だけ。値は同じ JST の日のものだけを使い、前日の値しかない銘柄は REST 補助（フィードの間隔の範囲）に回す。日足スクリーニングを読めない日は、追加銘柄なしで kabu の銘柄だけを記録し、10 分あけて読み直す。
 5. 立会中（`InSession`。昼休みは記録しない）: 計画した銘柄ごとに `Peek`（EVENT・REST が合流した最新の値を、古くても返す。要求は出さない）。値が 1 つも無い銘柄だけ `Latest`（フィードが REST の間隔で絞る）。価格のない銘柄は行を作らない。1 分 1 トランザクションで `INSERT … ON CONFLICT DO NOTHING`（`(source, symbol, timestamp)` が一意なので、同じ分の再実行は増えない）。`timestamp` は分に切り捨てた UTC、`observed_at` はその値の最終更新時刻、`via` は最後の更新が EVENT か REST か、`session_phase` は 9:05 前 / 〜11:25 / 〜12:35 / 〜15:20 / 以降。
 6. 状態: `running`（銘柄数・直近の分の行数・本日の接続回数）、セッションが無いと `error`（理由は平易な固定文で、認証情報・URL は入らない）。
 

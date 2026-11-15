@@ -130,9 +130,9 @@ func (r *rig) tick(now time.Time) {
 
 func (r *rig) state() (string, string) {
 	r.t.Helper()
-	s, ok, err := r.status.Get(context.Background(), researchstatus.ComponentQuotes)
-	if err != nil || !ok {
-		r.t.Fatalf("status = %+v, ok=%v, err=%v", s, ok, err)
+	s, _, err := r.status.Get(context.Background(), researchstatus.ComponentQuotes)
+	if err != nil {
+		r.t.Fatalf("status = %+v, err=%v", s, err)
 	}
 	return s.State, s.Detail
 }

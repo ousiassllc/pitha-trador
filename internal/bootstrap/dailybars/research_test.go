@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/researchstatus"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/market"
 	tt "github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/tachibanatest"
 )
 
@@ -93,7 +94,7 @@ func TestResearchSendsNothingWhenOffUnconfiguredOrNotDue(t *testing.T) {
 		state    string
 		acquires int
 	}{
-		"switch off":          {night1, func(f *researchFixture) { f.settings.Research.BarsEnabled = false }, researchstatus.StateDisabled, 0},
+		"switch off":          {night1, func(f *researchFixture) { f.settings.Research.BarsEnabled = false }, "", 0},
 		"before the run time": {tt.AtJST(2026, 10, 8, 17, 59), nil, researchstatus.StateWaiting, 0},
 		"daytime":             {tt.AtJST(2026, 10, 8, 12, 0), nil, researchstatus.StateWaiting, 0},
 		"closed window":       {tt.AtJST(2026, 10, 9, 4, 0), func(f *researchFixture) { f.settings.Nightly.RunTime = "01:00" }, researchstatus.StateWaiting, 0},
@@ -235,5 +236,29 @@ func TestResearchKeepsTheRateAndNeverRequestsInTheDaytime(t *testing.T) {
 	}
 	if len(g.source.calls) != 2 {
 		t.Fatalf("requests = %v, want 2 before 08:00", g.source.calls)
+	}
+}
+
+// Right after the first login the morning master loads in the background: the
+// night waits for the next cycle instead of failing, and sends no request.
+func TestResearchWaitsForTheMasterWithoutFailingTheNight(t *testing.T) {
+	f := newResearchFixture(t, night1)
+	f.threeSymbols()
+	f.source.targetErr = market.ErrMasterNotLoaded
+	r := f.newResearch()
+	f.runDue(t, r)
+	if n := len(f.source.calls); n != 0 {
+		t.Fatalf("%d requests sent while the master was loading", n)
+	}
+	if got := f.state(t); got != researchstatus.StateWaiting {
+		t.Fatalf("status = %q, want waiting", got)
+	}
+	if _, found, _ := f.store.Get(context.Background(), "2026-10-08"); found {
+		t.Fatal("a failed run row was written for a master that was only loading")
+	}
+	f.source.targetErr = nil // the master arrives: the next cycle (no retry back-off) runs the night
+	f.runDue(t, r)
+	if got := f.state(t); got != researchstatus.StateOK {
+		t.Fatalf("status = %q, want ok once the master is loaded", got)
 	}
 }

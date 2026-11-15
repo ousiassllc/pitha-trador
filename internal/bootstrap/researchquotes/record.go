@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/researchquote"
 	"github.com/ousiassllc/pitha-trador/internal/repository/researchstatus"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
 )
 
 // record stores the minute of now for every planned symbol that has a price,
@@ -23,7 +24,7 @@ func (r *Recorder) record(ctx context.Context, now time.Time, feed Feed, symbols
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		q, observed, via, err := r.quoteOf(ctx, feed, symbol)
+		q, observed, via, err := r.quoteOf(ctx, feed, symbol, now)
 		switch {
 		case err == nil:
 			samples = append(samples, newSample(minute, q, observed, via))
@@ -48,20 +49,20 @@ func (r *Recorder) record(ctx context.Context, now time.Time, feed Feed, symbols
 var errNoQuote = errors.New("researchquotes: no price")
 
 // quoteOf is symbol's value for the minute: the feed's latest merged value
-// (EVENT, or an earlier REST refill) whatever its age, with the time it was
+// (EVENT, or an earlier REST refill) whatever its age within the JST day, with the time it was
 // last updated (observed_at tells a quiet symbol from a dead connection). Only
 // when there is no value at all is the feed's REST refill asked (Latest; the
 // feed rate-limits it by the REST interval and answers ErrStale in between). An
 // error means there is no price to record (broker.ErrNoSession when the cause
 // is the missing session).
-func (r *Recorder) quoteOf(ctx context.Context, feed Feed, symbol string) (broker.Quote, time.Time, string, error) {
-	if q, at, ok := feed.Peek(symbol); ok {
+func (r *Recorder) quoteOf(ctx context.Context, feed Feed, symbol string, now time.Time) (broker.Quote, time.Time, string, error) {
+	if q, at, ok := feed.Peek(symbol); ok && sameJSTDay(at, now) {
 		return q, at, viaOf(feed, symbol), nil
 	}
 	latest, err := feed.Latest(ctx, symbol)
 	switch {
 	case err == nil && latest.Price > 0:
-		if q, at, ok := feed.Peek(symbol); ok {
+		if q, at, ok := feed.Peek(symbol); ok && sameJSTDay(at, now) {
 			return q, at, viaOf(feed, symbol), nil
 		}
 		return latest, time.Time{}, researchquote.ViaREST, nil
@@ -69,6 +70,12 @@ func (r *Recorder) quoteOf(ctx context.Context, feed Feed, symbol string) (broke
 		return broker.Quote{}, time.Time{}, "", err
 	}
 	return broker.Quote{}, time.Time{}, "", errNoQuote
+}
+
+// sameJSTDay reports whether a value observed at at belongs to now's JST day:
+// yesterday's price kept by a feed whose EVENT is down is no value today.
+func sameJSTDay(at, now time.Time) bool {
+	return at.In(tachibana.JST).Format(time.DateOnly) == now.In(tachibana.JST).Format(time.DateOnly)
 }
 
 func viaOf(feed Feed, symbol string) string {

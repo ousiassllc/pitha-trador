@@ -27,8 +27,8 @@ func TestTickSwitchOffNeverStartsOrTouchesTheFeed(t *testing.T) {
 	if r.starts != 0 || len(r.feed.watches) != 0 || len(r.feed.latestCalls) != 0 || r.rows() != 0 {
 		t.Fatalf("starts=%d watches=%v latest=%v rows=%d, want none of them while the switch is off", r.starts, r.feed.watches, r.feed.latestCalls, r.rows())
 	}
-	if state, _ := r.state(); state != researchstatus.StateDisabled {
-		t.Errorf("state = %s, want disabled", state)
+	if state, _ := r.state(); state != "" {
+		t.Errorf("state = %q, want no status row for a collection that was never on", state)
 	}
 }
 
@@ -197,16 +197,22 @@ func TestTickSetWatchOnlyWhenThePlannedSetChanges(t *testing.T) {
 	if len(r.feed.watches) != 1 || !slices.Equal(r.feed.watches[0], []string{"7203", "6758", "9984"}) {
 		t.Fatalf("watches = %v, want one call with kabu's symbols first, then the extra", r.feed.watches)
 	}
-	// kabu drops 6758 and adds 8306: only the addition changes the subscription.
+	// kabu drops 6758 and adds 8306: only the addition changes the subscription,
+	// and a reconnect for it waits until watchGrowEvery after the last change.
 	r.kabu = []string{"7203", "8306"}
 	r.tick(thursday(9, 33, 5))
-	r.tick(thursday(9, 34, 5))
+	r.tick(thursday(9, 39, 5))
+	if len(r.feed.watches) != 1 {
+		t.Fatalf("watches = %v, want growth held back inside the 10 minutes after the last change", r.feed.watches)
+	}
+	r.tick(thursday(9, 41, 5))
+	r.tick(thursday(9, 42, 5))
 	if len(r.feed.watches) != 2 || !slices.Equal(r.feed.watches[1], []string{"7203", "6758", "9984", "8306"}) {
 		t.Fatalf("watches = %v, want a second call with the sticky list plus 8306", r.feed.watches)
 	}
 	// A shrinking source changes nothing.
 	r.kabu = nil
-	r.tick(thursday(9, 35, 5))
+	r.tick(thursday(10, 5, 5))
 	if len(r.feed.watches) != 2 {
 		t.Errorf("watches = %v, want no call when only symbols went away", r.feed.watches)
 	}

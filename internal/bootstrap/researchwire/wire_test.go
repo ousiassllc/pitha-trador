@@ -25,9 +25,9 @@ func TestCollectionsSendNothingWhileOffOrUnset(t *testing.T) {
 	for name, tc := range map[string]struct {
 		authID string
 		on     bool
-		want   string // the quotes row's state
+		want   string // the quotes row's state ("" = no row at all)
 	}{
-		"off by default":        {authID: tt.AuthID, on: false, want: researchstatus.StateDisabled},
+		"off by default":        {authID: tt.AuthID, on: false, want: ""},
 		"on, credentials unset": {authID: "", on: true, want: researchstatus.StateNotConfigured},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -67,8 +67,16 @@ func TestCollectionsSendNothingWhileOffOrUnset(t *testing.T) {
 				t.Errorf("the broker received %d requests, want 0", n)
 			}
 			st, ok, err := researchstatus.New(state.DB).Get(context.Background(), researchstatus.ComponentQuotes)
-			if err != nil || !ok || st.State != tc.want {
+			if err != nil || ok != (tc.want != "") || st.State != tc.want {
 				t.Errorf("quotes status = %+v, %v, %v; want state %q", st, ok, err, tc.want)
+			}
+			if !tc.on { // a default install writes nothing to any research table
+				for _, table := range []string{"research_tachibana_status", "research_daily_bar_runs", "research_daily_bar_progress", "research_quote_samples"} {
+					var n int
+					if err := state.DB.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&n); err != nil || n != 0 {
+						t.Errorf("%s has %d rows (err %v), want 0 by default", table, n, err)
+					}
+				}
 			}
 		})
 	}

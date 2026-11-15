@@ -45,13 +45,19 @@ type Repository struct{ db *sql.DB }
 // New returns a Repository backed by db.
 func New(db *sql.DB) *Repository { return &Repository{db: db} }
 
-// Set stores the state of component. The row is rewritten only when the state
-// or detail changed, so a steady state (e.g. "disabled" every minute) costs no write.
+// Set stores the state of component. Nothing is written when the state and
+// detail are unchanged (a steady state costs no write), nor for "disabled"
+// while no row exists: a default install, where every collection is off, gains
+// no write at all.
 func (r *Repository) Set(ctx context.Context, component, state, detail string, now time.Time) error {
-	if cur, ok, err := r.Get(ctx, component); err == nil && ok && cur.State == state && cur.Detail == detail {
+	cur, found, err := r.Get(ctx, component)
+	if err != nil {
+		return err
+	}
+	if (found && cur.State == state && cur.Detail == detail) || (!found && state == StateDisabled) {
 		return nil
 	}
-	_, err := r.db.ExecContext(ctx, `INSERT INTO research_tachibana_status (component, state, detail, updated_at)
+	_, err = r.db.ExecContext(ctx, `INSERT INTO research_tachibana_status (component, state, detail, updated_at)
 		VALUES (?, ?, ?, ?) ON CONFLICT (component) DO UPDATE SET state = excluded.state,
 		detail = excluded.detail, updated_at = excluded.updated_at`,
 		component, state, detail, sqlutil.FormatTime(now))

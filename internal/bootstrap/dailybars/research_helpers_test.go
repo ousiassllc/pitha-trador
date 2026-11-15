@@ -109,11 +109,13 @@ func (f *researchFixture) acquireCount() int {
 	return f.acquires
 }
 
+// state is the recorded state; "" when nothing was recorded (a collection that
+// is off and never was on writes no status row).
 func (f *researchFixture) state(t *testing.T) string {
 	t.Helper()
-	s, ok, err := f.status.Get(context.Background(), researchstatus.ComponentBars)
-	if err != nil || !ok {
-		t.Fatalf("status: ok=%v err=%v", ok, err)
+	s, _, err := f.status.Get(context.Background(), researchstatus.ComponentBars)
+	if err != nil {
+		t.Fatalf("status: %v", err)
 	}
 	return s.State
 }

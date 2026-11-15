@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/researchstatus"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/market"
 )
 
 // The two reasons ResearchConfig.Acquire gives for not handing out a source.
@@ -124,6 +125,12 @@ func (r *Research) RunDue(ctx context.Context) error {
 		return err
 	}
 
+	if _, err := source.DailyBarTargets(ctx); errors.Is(err, market.ErrMasterNotLoaded) {
+		// The login just happened: the morning master loads in the background.
+		// Wait for the next cycle instead of failing the night.
+		r.report(ctx, researchstatus.StateWaiting, "立花の銘柄マスタの取得を待っています")
+		return nil
+	}
 	r.report(ctx, researchstatus.StateRunning, night+" の夜の日足を取得しています")
 	run := r.batch(source, s.Nightly).night(ctx, prev)
 	if run.Status == domain.DailyBarRunSucceeded {
