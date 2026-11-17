@@ -172,3 +172,4 @@
 | 1.165 | 2026-11-14 | FR-MCP-38（`jev_evaluation`。全 LONG/SHORT 判断の同じ行のベースライン比較。研究用でしきい値なし）・FR-MCP-39（`research_horizon_summary`。研究用ホライズンラベルの読み取り）を追加。FR-META-9（研究用ホライズンラベルの記録。研究専用の 3 表・16:00 JST 以降の日次タスク・取引に不使用・purge は未決）を追加。FR-MCP-4 の読み取りのツールを 18 に、合計を 37 に更新 | issue #1073・#1074 |
 | 1.166 | 2026-11-15 | FR-META-9 に、記録が Settings の`research.labels.enabled`（既定オフ・オフの間は何も書かない）の下にあること、取り込みが 1 日ずつのチャンクで保守の mutex を放すこと、保持期間`research.labels.retention_days`（既定90日・研究用の表だけを削除）を追記。FR-SETTINGS-12 を新設し、FR-MCP-20 のホワイトリストを 21 → 22 キー（`research.labels.enabled`）にした | issue #1073 / #1074（PR #1077 の直し） |
 | 1.167 | 2026-11-15 | FR-SETTINGS-13（AI のプロバイダー設定: 役割ごとにプロバイダー・モデルを選ぶ。既定は今までと同じ接続。ライブの Jev は画面だけ）と FR-MCP-40（`ai_roles`）を追加 | issue #1080 |
+| 1.168 | 2026-11-18 | FR-MCP-21 の、画面でのシャドーの 2 キー `jev.shadow.*` の変更は監査に残らないという制限を解消: 保存・既定への戻しも `mcp_settings_audit` に `actor=gui` で残る（検証は変えず、拒否された保存は何も書かない） | issue #1113 |

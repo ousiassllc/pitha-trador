@@ -41,7 +41,7 @@
 ```text
 pitha-trador/
 ├── cmd/
-│   ├── backtestverify/           # バックテスト再現性の検証ツール（FR-BT-4・#775。読み取り専用のCLI。`bootstrap.Run`の`ReadOnly`・`backtestsource.NewForDB`で組んだ`Source.VerifyReproducibility`を`parity.Provisional`で実行し、不合格は終了コード1）
+│   ├── backtestverify/           # バックテスト再現性の検証ツール（FR-BT-4・#775。読み取り専用のCLI。`bootstrap.Run`の`ReadOnly`・`backtestsource.NewForDB`で組んだ`Source.VerifyReproducibility`を`parity.Provisional`で実行し、不合格は終了コード1）。`-compare-legacy`（#1114）を付けると、再現性検証の代わりに`Source.RunConfigs`と`backtest.CompareEntryRules`で新旧エントリールール（Meta／旧確信度しきい値）の件数・勝率・Expectancy・PF・MaxDD・純損益と差（新−旧）を表示のみで出す（既定は従来どおりの再現性検証。DBは読み取り専用のまま、取引・保存には使わない）
 │   ├── dailyguardreplay/         # 日次エントリー停止ルール（FR-RISK-8）の再現ツール（読み取り専用CLI、#782）。`-db`のSQLiteを`sqlitedb.OpenReadOnly`（`mode=ro`、マイグレーションなし・DBファイルは変更しない）で開き、`trading.PositionRepository.ListTouchingBetween`の範囲内で建てた・決済したPaperポジション（未決済を含む）を`service/dailyguardreplay`で再生して取引日（JST）ごとの表を出す
 │   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, ws_listener.go, wails.json）。`main`は`cmd/server`と同じく`startup.RunMain`で始まる。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
 │   ├── metaablation/             # メタモデル×entry_quality足切りの2x2比較（#1046。オフラインCLI、`init`で最新の却下モデル（`-model <version>`で版を指定も可）と事前登録値をmanifestに固定→`run`で実行）。`-db`はDBの**写し**で`sqlitedb.OpenReadOnly`（`mode=ro`・マイグレーションなし）だけで開き、SHA-256を実行の前後で照合する。JSON・Markdown・manifestの集計だけを、DBのディレクトリの外へ出す。学習・較正・LLM呼び出し・発注はしない。`docs/research/metaablation.md`

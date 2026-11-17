@@ -148,3 +148,4 @@
 | 1.141 | 2026-11-15 | §4 の Retention の行を、研究用ホライズンラベルの行を日次タスク`research_labels`が Settings の保持期間（既定90日）で自分で削除する形に直し、記録は`research.labels.enabled`（既定オフ）である旨を追記。メンテナンスランナーは`ErrMore`のチャンクのあいだ mutex を放す（`maintenance.ErrMore`） | issue #1073 / #1074（PR #1077 の直し） |
 | 1.142 | 2026-11-15 | §6 に AI のプロバイダー設定（役割ごとにプロバイダーとモデルを選ぶ層）を追加し、詳細を分割章`overview/integrations-ai-providers.md`に新設 | issue #1080 |
 | 1.143 | 2026-11-15 | §6 のトライアルに ChatGPT のサブスク（公式 Codex CLI のログイン）のアームを追加し、調べた結果と設計を分割章`overview/integrations-codex-chatgpt.md`に新設 | issue #1081 |
+| 1.144 | 2026-11-18 | 分割章`overview/integrations-codex-chatgpt.md`に §5「運用手順の根拠」を追加し、調査メモ`research/chatgpt-plan-usage-direct-responses.md`への参照を追加 | issue #1110 / #1111 |

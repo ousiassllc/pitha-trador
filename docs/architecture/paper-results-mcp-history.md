@@ -45,3 +45,4 @@
 | 1.38 | 2026-11-14 | §5 に`jev_evaluation`（分割章`paper-results-mcp-jev-evaluation.md`。全 LONG/SHORT 判断の同じ行のベースライン比較・ラベルの付け直し・cutoff・日クラスタの区間）と`research_horizon_summary`（分割章`paper-results-mcp-research-labels.md`。研究用ホライズンラベルの集計。アプリの日次タスク`research_labels`が記録する 3 表を読む）を追加。読み取りのツール 16→18・合計 35→37（§5 の「合計 33」の古い値も直した）。どちらも読み取り専用で書き込みの許可リストは変わらない | issue #1073・#1074 |
 | 1.39 | 2026-11-15 | §7.1 のホワイトリストに`research.labels.enabled`（研究用ホライズンラベルの記録のオン・オフ。既定オフ）を足し 21 → 22 キーにした。分割章`paper-results-mcp-research-labels.md`・`paper-results-mcp-jev-evaluation.md`を更新 | issue #1073 / #1074（PR #1077 の直し） |
 | 1.40 | 2026-11-15 | §5 に読み取り専用ツール`ai_roles`（AI の役割ごとのプロバイダー・モデルの設定と履歴。`secrets`は読まず、変えるツールは無い）を追加。ツール数 37→38 | issue #1080 |
+| 1.41 | 2026-11-18 | §7.4 の、画面でのシャドーの 2 キーの変更は監査ログに残らないという制限を解消（`mcpset/jevaudit`。`actor=gui`）。実験の切り替え確認・交絡の説明（`paper-results-mcp-experiments.md`）も合わせて訂正 | issue #1113 |

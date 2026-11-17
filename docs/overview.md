@@ -114,6 +114,7 @@ graph TD
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 | 環境構築 | `docs/environment/setup.md`（CI/CDは `docs/environment/ci.md`、改訂履歴は `docs/environment/setup/history.md` に分割） | 開発環境・必要ツール・環境変数・銘柄マスタ投入・Makefile・Lint/Format/Linterly/Git Hooks・Swagger/OpenAPI・CI/CD |
 | 調査・研究メモ（メタ×品質足切りの比較） | `docs/research/metaablation.md`（事前登録値の提案は `docs/research/metaablation-thresholds.md`） | オフラインCLI `cmd/metaablation` の目的・手順・結果の読み方（proxyラベル・3つの母集団・`優劣未確定`・DBの写しの取得に別途承認が要ること）。仕様ではなく研究用 |
+| 調査メモ（ChatGPT plan usage の直接 Responses 経路） | `docs/research/chatgpt-plan-usage-direct-responses.md` | Sign in with ChatGPT の ChatGPT plan usage を Codex CLI を使わず直接呼ぶ経路を、公開情報だけで調べた結果（OSS の対象・OAuth の登録・`store:false`/`stream:true`・上限エラー・Codex CLI との比較・不明点）。調査のみで実装ではない（issue #1111） |
 
 ## マイルストーン / リリース計画
 
@@ -177,3 +178,4 @@ graph TD
 | 1.13 | 2026-10-21 | ドキュメントマップの Paper 実績 MCP に、注文案の処理（`architecture/order-proposal-processing.md`）を追記 | issue #828 |
 | 1.14 | 2026-10-22 | ドキュメントマップの Paper 実績 MCP に、調整の実験の分割章（API と設計）を追記 | issue #871 |
 | 1.15 | 2026-10-30 | スコープ「含むもの」に、適時開示を使った機械的な見送りルールの記録（記録だけで取引・Policy・Risk・発注・Jevのプロンプトには使わない）を追記。「含まないもの」の、開示を単独のエントリー起点にしない方針は維持。判断・発注は変わらない | issue #935 |
+| 1.16 | 2026-11-18 | ドキュメントマップに調査メモ`research/chatgpt-plan-usage-direct-responses.md`の行を追加 | issue #1111 |
