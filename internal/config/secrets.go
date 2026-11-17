@@ -79,11 +79,14 @@ const (
 	KeyTachibanaDemoAuthID         = "TACHIBANA_DEMO_AUTH_ID"
 	KeyTachibanaProdAuthID         = "TACHIBANA_PROD_AUTH_ID"
 	KeyTachibanaDemoSecondPassword = "TACHIBANA_DEMO_SECOND_PASSWORD"
-	// KeyOpenRouterAPIKey/KeyOpenRouterBaseURL supply the Jev model-comparison
-	// trial's arms (internal/service/jev/trialwire; issue #1059). Both are
+	// KeyOpenRouterAPIKey/KeyOpenRouterBaseURL are the OpenRouter provider's
+	// connection (issue #1080): the Jev model-comparison trial's OpenRouter arms
+	// (internal/service/jev/trialwire; issue #1059) and every AI role set to
+	// OpenRouter (internal/config/airole) call with them. Both are
 	// optional: unset leaves the trial inert (the app still starts), and they
 	// are never part of RequiredSecretKeys, so the Setup Guard does not ask
-	// for them. They are independent of the live Jev keys. An empty base URL
+	// for them. They are independent of the live Jev keys (the live Jev uses them
+	// only when the Settings screen sets its role to OpenRouter). An empty base URL
 	// makes the trial use OpenRouter's public endpoint.
 	KeyOpenRouterAPIKey  = "OPENROUTER_API_KEY"
 	KeyOpenRouterBaseURL = "OPENROUTER_BASE_URL"

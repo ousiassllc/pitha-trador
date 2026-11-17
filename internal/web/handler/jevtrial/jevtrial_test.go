@@ -175,6 +175,28 @@ func TestSave_CollectsTheRowsIntoArms(t *testing.T) {
 	}
 }
 
+// The form always sends data_collection (its select has a default), but the
+// OpenRouter routing preferences cannot be stored for another provider: the
+// default is dropped, a real choice is kept so validation refuses it.
+func TestSave_RoutingDefaultIsNotSentToOtherProviders(t *testing.T) {
+	f := &fakeService{state: jevtrial.State{CapUSD: 0.1}}
+	custom := armForm(0, "mine")
+	custom.Set("arm-0-provider", "custom")
+	allow := armForm(1, "loose")
+	allow.Set("arm-1-provider", "custom")
+	allow.Set("arm-1-data_collection", "allow")
+	if rec := do(engine(f), http.MethodPost, "/settings/jev-trial", merge(custom, allow)); rec.Code != http.StatusOK {
+		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
+	}
+	got := f.saved[0].Arms
+	if got[0].Provider != "custom" || got[0].DataCollection != "" {
+		t.Errorf("custom arm = %+v, want no data_collection", got[0])
+	}
+	if got[1].DataCollection != "allow" {
+		t.Errorf("an explicit allow = %q, want it kept", got[1].DataCollection)
+	}
+}
+
 // A row that cannot be read is a 422 into the form's error slot and the service is not called.
 func TestSave_UnreadableRowsSaveNothing(t *testing.T) {
 	for name, form := range map[string]url.Values{

@@ -6,7 +6,7 @@
 
 ライブの Jev（TypeSafe AI）の判断と**同じ入力**を、別のモデル（**アーム**）にも聞き、答えと費用と失敗を並べて残す、Paper 専用の**比較用の記録**。ライブの採否・発注・RAG・較正・メタモデルには**一切入らない**。既存の Jev プロンプトのシャドー（`internal/service/jev/shadow`、`jev_shadow_decisions`、`jev.shadow.*`）とは**別系統**で、表・ランナー・設定キー・API キー・HTTP クライアントを共有しない（シャドーの挙動は変えない）。
 
-- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jevtrial` / `internal/web/handler/jevtrial` / `internal/web/organisms/jevtrial`（Settings 画面のトライアルカード。オンにできる唯一の経路）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
+- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jevtrial` / `internal/web/handler/jevtrial` / `internal/web/organisms/jevtrial`（Settings 画面のトライアルカード。オンにできる唯一の経路）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/service/jev/codexwire`（ChatGPT のサブスクのアームの Codex CLI クライアント。issue #1081）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
 - **多数決・合議・「採用すべきアーム」・自動昇格は作らない**。MCP の出力にも無い。比較して何を選ぶかは人が決める。
 
 ## フロー
@@ -46,6 +46,7 @@
 | `prompt_version_unregistered` | アームのプロンプト版が登録済みの Trader 版でない |
 | `stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other` | 402 の全体停止・403 のアーム停止・失敗回数の上限・この版が知らない理由の停止記録 |
 | `throttled` | 429/529 の待機中 |
+| `provider_disabled` / `not_logged_in` / `stopped_usage_limit` / `stopped_provider_failed` / `daily_cap_calls` / `daily_cap_tokens` / `provider_busy` | ChatGPT のサブスク（`codex_chatgpt`）のアームだけ: Codex 用のスイッチがオフ・CLI が ChatGPT でログインしていない・使用量の上限（文面が一致したとき）で停止中・失敗で停止中・1 日の呼び出し回数／トークン数の上限・前の判断の Codex がまだ動いている。意味は`overview/integrations-codex-chatgpt.md` |
 | `check_failed` | 停止記録・費用が読めない、リクエストの大きさを求められない、設定を全部は読めなかった（アームは分かる）ため呼ばなかった |
 
 - 見送りの行は、答え・費用・status を持たず、成功・失敗の行としては扱わない。費用の上限の判定（`counted_cost_usd` の合計）にも入らない。書き込みは**書ければ書く**（失敗はログだけ。見送り自体は変わらない）。
@@ -60,6 +61,7 @@
 |---------------|-----------|--------------------------------------|
 | `reported` | 応答の `usage.cost`（報告値。最優先） | 報告値 |
 | `list_price_estimate` | アームの定価（`list_price_usd_per_mtok`、1M 入力トークンあたり）× 入力トークン数（報告値が無ければリクエストのバイト数からの推定） | **処理先を固定していないアーム（`provider_only` なし）は、定価と `WorstCaseUSDPerMtok` の高い方**の単価 × 入力トークン数。`provider_only` で固定したアームは定価のまま |
+| `subscription` | **NULL**（ChatGPT のサブスク。USD は発生しない。issue #1081） | **0**（USD の上限には数えない。代わりにプロバイダー単位の 1 日の呼び出し回数・トークン数の上限。`overview/integrations-codex-chatgpt.md`） |
 | `unknown` | **NULL（0 ではない）** | 最悪値側の単価 `jevtrialsettings.WorstCaseUSDPerMtok`（0.24 USD/百万トークン。第 1 段階のモデルのうち最も高い Clef の定価）× 入力トークン数 |
 
 - **上限の判定は、処理元が分からないうちは高い方の単価で数える**。OpenRouter は処理元（プロバイダー）を切り替えうるため、`unknown` は 0 円と数えず最悪値側で数える。第 1 段階の定価は、Clef-flash が 0.038、Clef 系が 0.192〜0.24 USD/百万トークン（2026-11-13 時点の公表値）。実請求との一致は未確認。
@@ -90,16 +92,19 @@
 | `jev.trial.arms` | `[]`（空） | アームの JSON 配列として保存する（Settings 画面ではアームごとのフォームで編集し、保存時にこの配列へ変換する）。空なら何も呼ばない |
 | `jev.trial.daily_cost_cap_usd` | 0.10 USD | 全アーム合計の 1 日（JST）の上限 |
 | `jev.trial.halt` | なし | トライアル全体の 1 日の停止記録（全体上限・HTTP 402） |
+| `jev.trial.codex.enabled` | `0`（オフ） | ChatGPT のサブスク（`codex_chatgpt`）のアームのスイッチ。オフの間はアームを保存できず、呼ばない（issue #1081） |
+| `jev.trial.codex.daily_call_cap` / `jev.trial.codex.daily_token_cap` | 30 回／500,000 トークン | Codex の 1 日（JST）の呼び出し回数・トークン数（入力＋出力）の上限。USD ではない |
+| `jev.trial.codex.halt` / `jev.trial.codex.login` | なし | Codex プロバイダー全体の停止記録（理由コード・再開時刻）・最後のログイン確認の状態（アプリが書く） |
 | `jev.trial.halt.<arm>` / `jev.trial.failures.<arm>` / `jev.trial.throttle.<arm>` | なし | アームごとの停止記録・失敗回数・429/529 の記録。`jev.shadow.*` とは重ならない |
 
-**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
+**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元〈openrouter・custom・codex_chatgpt から選ぶ。openrouter 以外では、送り先・データの扱い・ZDR は保存せず、データの扱いの既定値「学習に使わない提供元だけ」はハンドラが落とす。codex_chatgpt では 1 日の上限・定価も使えない〉・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
 
 アーム（`jev.trial.arms` の要素）の形:
 
 | フィールド | 意味 |
 |------------|------|
 | `id` | アーム名（`jev_trial_decisions.arm_id`。英小文字・数字・`.`・`_`・`-`、48 文字まで） |
-| `provider` | 第 1 段階は `openrouter` のみ |
+| `provider` | `openrouter`（既定の使い方。OpenRouter のキーとアームの `model` で呼ぶ）・`custom`（独自 API の URL とキー。`provider_only`・`data_collection`・`zdr` は付けられない。issue #1080、`overview/integrations-ai-providers.md`）・`codex_chatgpt`（ChatGPT のサブスク。公式の Codex CLI のログイン。USD では数えない。`provider_only`・`data_collection`・`zdr`・`daily_cost_cap_usd`・`list_price_usd_per_mtok`は付けられない。Codex 用のスイッチ`jev.trial.codex.enabled`がオフの間は保存できない。issue #1081、`overview/integrations-codex-chatgpt.md`） |
 | `model` | 送るモデル id |
 | `prompt_version` | 登録済みの Trader プロンプト版（例 `trader-v3`） |
 | `daily_cost_cap_usd` | このアームの 1 日の上限（省略・0 は 0.05 USD） |
@@ -144,7 +149,7 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | `jev_trial_decisions` を名指しするのは `internal/repository/judgement/trial_repo.go` だけ | 同 `TestOnlyTheTrialRepositoryTouchesTheTrialTable` |
 | トライアルのキーは自己改善ループ（`ValidatePolicyChanges`）・MCP の `settings_set`・汎用の運用設定のどれでも書けず、`jev.shadow.*` と重ならない | 同 `TestTrialKeysAreOutsideEveryAutomaticWritePath` |
 | ランナー・ワイヤ層は取引・学習のパッケージを import せず、ライブ Jev のシークレットを読まない | 同 `TestTrialRunnerImportsNoTradingPackageAndReadsNoLiveJevSecret` |
-| ライブの判断経路（Jev 本体・プロンプト・判断の保存）・Risk・発注・RAG・較正・メタモデルは、トライアル側（`internal/service/jevtrial` / `internal/service/jev/trial` / `internal/service/jev/trialwire`）を、直接にも他のパッケージ経由でも import しない。トライアル側を import してよいのは、許可リスト（`internal/bootstrap`・`internal/web/handler/jevtrial`・`internal/web/handler/settings`・`internal/service/jev/trial`。理由はテストに明記）の中だけで、リストに載るのに import しなくなった項目もテストが落ちる | 同 `TestLivePathDoesNotImportTheTrial`（import グラフは `internal/` と `cmd/` の本番ソースから読む） |
+| ライブの判断経路（Jev 本体・プロンプト・判断の保存）・Risk・発注・RAG・較正・メタモデルは、トライアル側（`internal/service/jevtrial` / `internal/service/jev/trial` / `internal/service/jev/trialwire` / `internal/service/jev/codexwire`）を、直接にも他のパッケージ経由でも import しない。トライアル側を import してよいのは、許可リスト（`internal/bootstrap`・`internal/web/handler/jevtrial`・`internal/web/handler/settings`・`internal/service/jev/trial`。理由はテストに明記）の中だけで、リストに載るのに import しなくなった項目もテストが落ちる | 同 `TestLivePathDoesNotImportTheTrial`（import グラフは `internal/` と `cmd/` の本番ソースから読む） |
 | トライアル側のパッケージは、取引・学習のパッケージに加え、発注（`execution`・`broker`）と注文案の経路（`proposalexec`・`proposalstore`・`paperresultsmcp/proposal`）を直接 import しない（推移的には見ない。ワイヤ層はライブ Jev のプロンプトのパッケージの上に載り、それが Risk の上にあるため） | 同 `TestTrialPackagesImportNoTradingOrOrderPlacementPackage` |
 | 上の 2 つの検査自体が、違反を見つけて失敗できること（合成した import グラフで確認） | 同 `TestImportGuardCheckersFailOnViolations` |
 | `OPENROUTER_*` は必須キーでなく、Setup Guard も求めない | 同 `TestOpenRouterSecretsAreNotRequired`、`internal/config/secretsflow` |
@@ -158,4 +163,6 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。トライアルのフロー・費用の数え方・上限・設定・隔離のテストを `integrations.md` §6 から分割して記述 | issue #1059 |
 | 1.1 | 2026-11-14 | 隔離の保証の表に、ライブ側からトライアル側への import を許可リスト方式で禁じるテストと、トライアル側が発注に触れないことのテストを追加 | issue #1069 |
-| 1.2 | 2026-11-15 | Settings のアーム入力を、JSON のテキストエリアから 1 アーム 1 カードのフォーム（追加・編集・削除）に変更。検証は保存済み JSON と同じ`jevtrialsettings.ValidateArms`に一本化し、1 つでも不正なら何も保存しない | issue #1066 |
+| 1.2 | 2026-11-15 | アームの`provider`に`custom`（独自 API）を追加。ライブ側からの import の許可リストに`internal/bootstrap/airolewire`（アームの接続の組み立て）を追加 | issue #1080 |
+| 1.3 | 2026-11-15 | アームの`provider`に`codex_chatgpt`（ChatGPT のサブスク。USD では数えず、呼び出し回数・トークン数の上限、プロバイダー単位の停止）、`cost_source=subscription`、見送りの理由 7 件、`jev.trial.codex.*`のキーを追加。詳細は`integrations-codex-chatgpt.md`。ライブ側からの import を禁じる対象に`codexwire`を追加 | issue #1081 |
+| 1.4 | 2026-11-15 | Settings のアーム入力を、JSON のテキストエリアから 1 アーム 1 カードのフォーム（追加・編集・削除）に変更。検証は保存済み JSON と同じ`jevtrialsettings.ValidateArms`に一本化し、1 つでも不正なら何も保存しない。提供元は openrouter・custom・codex_chatgpt から選べる（main の #1080・#1081 と合流） | issue #1066 |

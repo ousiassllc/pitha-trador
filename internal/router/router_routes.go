@@ -9,6 +9,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
@@ -103,6 +104,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	if o.jevPrompt != nil {
 		settingsHandler.WithJevPromptSettings()
 		jevprompt.New(o.jevPrompt).Register(engine)
+	}
+	if o.aiRoles != nil {
+		settingsHandler.WithAIRoleSettings()
+		airoles.New(o.aiRoles).Register(engine)
 	}
 	if o.jevTrial != nil {
 		settingsHandler.WithJevTrialSettings()

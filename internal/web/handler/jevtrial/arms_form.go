@@ -124,10 +124,16 @@ func buildArms(rows []view.ArmField) ([]jevtrialsettings.Arm, error) {
 		if err != nil {
 			return nil, rowsError(label + " の定価は数値（USD）で入力してください")
 		}
+		dataCollection := r.DataCollection
+		if r.Provider != jevtrialsettings.ProviderOpenRouter && dataCollection == jevtrialsettings.DataCollectionDeny {
+			// The select always sends a value; its default is not a choice made for
+			// a provider the OpenRouter routing preferences do not apply to.
+			dataCollection = ""
+		}
 		arms = append(arms, jevtrialsettings.Arm{
 			ID: r.ID, Provider: r.Provider, Model: r.Model, PromptVersion: r.PromptVersion,
 			DailyCostCapUSD: capUSD, ListPriceUSDPerMtok: price,
-			ProviderOnly: splitProviders(r.ProviderOnly), DataCollection: r.DataCollection, ZDR: r.ZDR,
+			ProviderOnly: splitProviders(r.ProviderOnly), DataCollection: dataCollection, ZDR: r.ZDR,
 		})
 	}
 	return arms, nil

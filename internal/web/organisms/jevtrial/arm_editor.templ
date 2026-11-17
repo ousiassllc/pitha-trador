@@ -64,9 +64,8 @@ templ armCard(i int, f ArmField, versions []string) {
 			}
 			@armLabel(i, "provider", "提供元") {
 				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "provider"), Name: armName(i, "provider"), Class: "w-full", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-provider"}}) {
-					<option value="openrouter" selected?={ f.Provider == "" || f.Provider == "openrouter" }>openrouter</option>
-					if f.Provider != "" && f.Provider != "openrouter" {
-						<option value={ f.Provider } selected>{ f.Provider }</option>
+					for _, p := range providerChoices(f.Provider) {
+						<option value={ p.Value } selected?={ p.Value == providerOrDefault(f.Provider) }>{ p.Label }</option>
 					}
 				}
 			}

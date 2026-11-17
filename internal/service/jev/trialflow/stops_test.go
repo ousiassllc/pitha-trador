@@ -1,6 +1,9 @@
 package trialflow_test
 
 import (
+	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,7 +13,42 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 )
+
+// meeting answers every call with resp once n calls are in flight together, so
+// the n arms of one decision have all passed their cap checks (and hold their
+// reservations) before any of them stores a row. It is a cyclic barrier: the
+// next decision's calls meet again. The 10 s is a bound that only an arm that is
+// never called ever reaches.
+type meeting struct {
+	mu      sync.Mutex
+	n       int
+	arrived int
+	release chan struct{}
+}
+
+func newMeeting(n int) *meeting { return &meeting{n: n, release: make(chan struct{})} }
+
+func (m *meeting) answer(resp trialwire.Response, bytes int) func(context.Context, jev.TraderRequest) (trialwire.Response, time.Duration, int, error) {
+	return func(ctx context.Context, _ jev.TraderRequest) (trialwire.Response, time.Duration, int, error) {
+		m.mu.Lock()
+		gate := m.release
+		if m.arrived++; m.arrived == m.n {
+			close(gate)
+			m.arrived, m.release = 0, make(chan struct{})
+		}
+		m.mu.Unlock()
+		select {
+		case <-gate:
+			return resp, 80 * time.Millisecond, bytes, nil
+		case <-ctx.Done():
+			return trialwire.Response{}, 0, 0, ctx.Err()
+		case <-time.After(10 * time.Second):
+			return trialwire.Response{}, 0, 0, errors.New("the other arm was never called in parallel")
+		}
+	}
+}
 
 func (e *env) halt(key string) *jevtrialsettings.Halt {
 	e.t.Helper()
@@ -29,11 +67,16 @@ func TestOverallCapStopsEveryArmAndResumesTheNextJSTDay(t *testing.T) {
 	e := newEnv(t, metalabelsettings.ModePaper, nil)
 	costly := okResp()
 	costly.ReportedCostUSD = new(0.004)
-	a1, a2 := e.addArm("a1", answer(costly, 3000)), e.addArm("a2", answer(costly, 3000))
+	// The two arms of one decision must both be called: they meet inside the call, so
+	// both have passed their cap check before either row is stored. Without it, an
+	// arm that checks after the other stored its row while the other's reservation is
+	// still held counts that call twice (the safe side, see reserved) and may be
+	// skipped: 0.004 stored + 0.0016 + 0.0016 reserved exceeds the cap.
+	meet := newMeeting(2)
+	a1, a2 := e.addArm("a1", meet.answer(costly, 3000)), e.addArm("a2", meet.answer(costly, 3000))
 	e.enable(defaultArm("a1"), defaultArm("a2"))
-	// A call is reserved at about 0.0016 (its request at the worst-case price): whichever
-	// order the two calls end in, the cap has room for the other's reservation on top of
-	// one stored call (0.004 + 0.0016), and the two calls together reach it (0.008).
+	// A call is reserved at about 0.0016 (its request at the worst-case price): both
+	// reservations fit (0.0032), and the two calls together reach the cap (0.008).
 	e.set(jevtrialsettings.KeyDailyCostCapUSD, "0.006")
 
 	e.evaluate() // both are called (nothing spent yet): 0.008 counted

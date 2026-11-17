@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/airolewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
@@ -96,7 +97,7 @@ func (s *Services) wireActivity() {
 // is not switched off the service still exists (its cache is simply always
 // empty, so no news_context is injected and no news flag is raised) but its
 // polling loop is not started; start-up never depends on either. dbPath: the file the disclosure skip record (#935) opens.
-func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
+func (s *Services) buildExternalClients(db *sql.DB, secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
 	infoAPIMax := 0
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
@@ -107,16 +108,14 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	s.OrderFlow = orderflow.NewTracker()
 	s.rankingWatchMaxAge = snapshotagesettings.Load(context.Background(), s.Settings)
 	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, s.rankingWatchMaxAge, alertChannels.BrokerNotices(s.Activity))
-	s.Jev = jev.NewClient(jev.Config{
-		BaseURL: secrets.JevBaseURL,
-		Model:   secrets.JevModel,
-		APIKey:  secrets.JevAPIKey,
-		Alerts:  alertChannels.JevAlerts(),
+	s.aiRoles = airolewire.Resolve(context.Background(), db, s.Settings, secrets)
+	s.Jev = jev.NewClient(s.aiRoles.JevConfig(jev.Config{ // the default (custom) provider is JEV_BASE_URL / JEV_MODEL / JEV_API_KEY as before
+		Alerts: alertChannels.JevAlerts(),
 		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
 		MaxAttempts: cfg.jevMaxAttempts,
-	})
+	}))
 
-	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
+	luna := assist.NewLuna(s.aiRoles.Luna(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}, s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
 	s.newsEnabled = feedOn && luna.Configured()
 	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath, s.newsEnabled)
@@ -136,7 +135,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig,
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener), jev.WithObservation(observation.New(s.Settings, rankingwatch.Held{Positions: s.Positions, Orders: s.Orders}, nil)), // observation-only symbols: Scout only, never Trader, unless held (#1055)
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
-	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, trial.TraderOptions(db, s.Jev, s.Settings, s.News, trial.Keys{APIKey: secrets.OpenRouterAPIKey, BaseURL: secrets.OpenRouterBaseURL})...)
+	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, trial.TraderOptions(db, s.Jev, s.Settings, s.News, airolewire.TrialKeys(secrets))...)
 }
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine
@@ -197,13 +196,11 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 // nor an override, the stage is skipped every day (assist.ErrNotConfigured)
 // instead of blocking start-up.
 func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, secrets config.Secrets, alertChannels alerts.Channels) {
-	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
-	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
 		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()), metalabeljob.ChangeGuard(db),
-		selfimprove.WithSol(assist.NewSol(solClient, assist.WithJev(s.Jev))),
-		selfimprove.WithOpus(assist.NewOpus(opusClient, assist.WithJev(s.Jev))))
+		selfimprove.WithSol(assist.NewSol(s.aiRoles.Sol(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey}, s.Jev))),
+		selfimprove.WithOpus(assist.NewOpus(s.aiRoles.Opus(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey}, s.Jev))))
 }
 
 // buildScheduler builds the Scheduler with its maintenance tasks and, when

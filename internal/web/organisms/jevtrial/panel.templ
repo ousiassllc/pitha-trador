@@ -15,6 +15,9 @@ type ArmRow struct {
 	FailureCap    int
 	// Status is "" while the arm runs, else why it is stopped today.
 	Status string
+	// Subscription is true for an arm of the ChatGPT subscription: it has no USD
+	// cost or cap (the provider's call and token caps are shown with it).
+	Subscription bool
 }
 
 // PanelProps is Panel's input.
@@ -41,6 +44,8 @@ type PanelProps struct {
 	TotalUSD   string
 	// HaltNote is why the whole trial is stopped today ("" when it is not).
 	HaltNote string
+	// Codex is the ChatGPT subscription provider (codex.templ).
+	Codex CodexProps
 	Arms     []ArmRow
 	// Notice is the outcome of the action that produced this fragment.
 	Notice string
@@ -74,7 +79,7 @@ templ Panel(props PanelProps) {
 				<div class="flex items-center gap-2">
 					<span class="text-ink">アーム</span>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-arms", Label: "アームの説明"}) {
-						アームは比べるモデル 1 つの設定です。1 行が 1 つのアームで、最大 8 つまで追加できます（0 件ならトライアルは何も呼びません）。アーム名は英小文字・数字・. _ - の 1〜48 文字で、アームごとに別の名前にします。提供元は openrouter、モデルは OpenRouter のモデル id、プロンプトの版はこのビルドに登録された trader の版から選びます。この 4 つは必須です。1 日の上限（USD）は、そのアームだけの 1 日の上限で、空にすると 0.05 USD です。定価は、応答が費用を返さないときの見積りに使う入力 100 万トークンあたりの定価で、空なら不明として扱います。送り先の提供元は、指定すると OpenRouter がその提供元だけに送り（ほかへ切り替えません）、カンマ区切りで最大 8 件です。データの扱いの既定は「学習に使わない提供元だけ」で、送り先が減るぶん応答が失敗しやすくなることがあります。「制限しない」にすると送り先は増えますが、入力が提供元の学習に使われ得ます。ZDR は、データを保持しない提供元だけに送ります。保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは、外部連携・AI の「OpenRouter」で設定します。
+						アームは比べるモデル 1 つの設定です。1 行が 1 つのアームで、最大 8 つまで追加できます（0 件ならトライアルは何も呼びません）。アーム名は英小文字・数字・. _ - の 1〜48 文字で、アームごとに別の名前にします。提供元は OpenRouter・独自 API（custom）・ChatGPT サブスク（codex_chatgpt）から選び、モデルはその提供元のモデル id、プロンプトの版はこのビルドに登録された trader の版から選びます。この 4 つは必須です。1 日の上限（USD）は、そのアームだけの 1 日の上限で、空にすると 0.05 USD です。定価は、応答が費用を返さないときの見積りに使う入力 100 万トークンあたりの定価で、空なら不明として扱います。送り先の提供元は、指定すると OpenRouter がその提供元だけに送り（ほかへ切り替えません）、カンマ区切りで最大 8 件です。データの扱いの既定は「学習に使わない提供元だけ」で、送り先が減るぶん応答が失敗しやすくなることがあります。「制限しない」にすると送り先は増えますが、入力が提供元の学習に使われ得ます。ZDR は、データを保持しない提供元だけに送ります。送り先・データの扱い・ZDR は OpenRouter のアームだけで使えます。ChatGPT サブスクのアームは USD で数えないため、1 日の上限と定価も使えません（上限は下の「ChatGPT サブスク」の呼び出し回数とトークン数です）。保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは、外部連携・AI の「OpenRouter」で設定します。
 					}
 				</div>
 				@ArmEditor(props.Editor)
@@ -108,6 +113,7 @@ templ Panel(props PanelProps) {
 					}
 				</span>
 			</div>
+			@Codex(props.Codex)
 			<div id="jev-trial-error" data-testid="jev-trial-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-trial-save"}}) {
@@ -138,7 +144,13 @@ templ Panel(props PanelProps) {
 							<tr data-testid="jev-trial-arm-row">
 								<td class="px-2 py-1.5"><code>{ a.ID }</code><br/><span class="text-mute">{ a.Model }・{ a.PromptVersion }</span></td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(a.TodayCalls) }</td>
-								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">{ a.TodayUSD } / { a.CapUSD }</td>
+								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">
+									if a.Subscription {
+										サブスク（USD なし）
+									} else {
+										{ a.TodayUSD } / { a.CapUSD }
+									}
+								</td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-failures">{ itoa(a.FailuresToday) } / { itoa(a.FailureCap) }</td>
 								<td class="px-2 py-1.5" data-testid="jev-trial-arm-status">
 									if a.Status == "" {

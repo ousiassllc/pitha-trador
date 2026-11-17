@@ -64,11 +64,12 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
-| Jev | `/settings/integrations#modal-jev` | 売買判断を行う AI（Jev）の API キー・接続先・モデルを設定します。 | 外部連携・AI |
+| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
+| 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
-| OpenRouter（モデル比較） | `/settings/integrations#modal-openrouter` | モデル比較トライアルが比較対象のモデルを呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
+| OpenRouter | `/settings/integrations#modal-openrouter` | 「役割ごとのモデル」で OpenRouter を選んだ役割とモデル比較トライアルのアームが呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
 | MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開する MCP サーバーの接続設定が主役です。上から、状態と起動・停止・再起動、有効/無効と待受アドレス、API キー、接続 URL（Grok Bot に登録する値）、そのあとに MCP からの設定変更の許可（既定オン）・AIからの注文提案の受け付け（オンにできるのはこの画面だけ。MCP からはオフにだけできる）・設定変更の監査ログ（変更元＝MCP か Settings 画面か、を表示）が並びます。1280×800 の画面で、待受アドレス・API キー・接続 URL がスクロールなしで見えます。調整の実験はこのダイアログの外（次の行）です。 | 外部連携・AI |
@@ -120,6 +121,7 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
-| 1.18 | 2026-11-15 | 成績に4つ目のタブ「お試し」（`GET /performance/trial`、`organisms/trialresults`・`handler/trialresults`・`bootstrap/trialview`）を追加。モデル比較のお試しの欠測率・見送り・費用の出どころ別（不明は件数のみ）・NONE と反実仮想（参考値・proxy）を読み取り専用で表示。勝者・多数決・昇格は出さず、書き込みルートなし | issue #1067 |
-| 1.19 | 2026-11-15 | Settings「外部連携・AI」のモデル比較トライアルで、アームを JSON のテキストエリアから 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版・1 日の上限・定価・送り先の提供元・データの扱い・ZDR。追加・削除は htmx）に変更。画面の説明文を短くし、詳しい説明は「?」に移した。キーは設定の有無だけ | issue #1066 |
-| 1.20 | 2026-11-15 | Settings「外部連携・AI」の MCP ダイアログを接続設定中心の並びに変更（状態・起動停止 → 有効/無効と待受アドレス → API キー → 接続 URL → 設定変更の許可・注文提案の受け付け・監査ログ）。調整の実験（`#mcp-experiments`）を MCP ダイアログから外して別カード・別ダイアログ（`modal-mcp-experiments`、登録簿に追加）へ移し、一覧と判定を先に、手で記録するフォームを既定で閉じた `<details>`（「手で記録する」）の中に置いた。監査ログ・昇格の記録の列名を「変更元」にし、MCP と Settings 画面のどちらから変わったかを表示。Jev プロンプトのパネルは費用と昇格の記録を先、手で変える操作を後ろに、設定項目の行は既定値の表示を操作の前に並べ替えた。値・既定値・書き込みの許可・注文提案の受け付けの規則は変えていない | issue #1079 |
+| 1.18 | 2026-11-15 | Settings「外部連携・AI」に「役割ごとのプロバイダーとモデル」のカードを追加し、並びを「AI のプロバイダー（独自 API・OpenRouter）→ 役割ごとのモデル → そのほかの接続先」にした。Jev の接続カードを「独自 API（Jev）」、OpenRouter のカードを「OpenRouter」に改めた | issue #1080 |
+| 1.19 | 2026-11-15 | 成績に4つ目のタブ「お試し」（`GET /performance/trial`、`organisms/trialresults`・`handler/trialresults`・`bootstrap/trialview`）を追加。モデル比較のお試しの欠測率・見送り・費用の出どころ別（不明は件数のみ）・NONE と反実仮想（参考値・proxy）を読み取り専用で表示。勝者・多数決・昇格は出さず、書き込みルートなし | issue #1067 |
+| 1.20 | 2026-11-15 | Settings「外部連携・AI」のモデル比較トライアルで、アームを JSON のテキストエリアから 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版・1 日の上限・定価・送り先の提供元・データの扱い・ZDR。追加・削除は htmx）に変更。画面の説明文を短くし、詳しい説明は「?」に移した。キーは設定の有無だけ | issue #1066 |
+| 1.21 | 2026-11-15 | Settings「外部連携・AI」の MCP ダイアログを接続設定中心の並びに変更（状態・起動停止 → 有効/無効と待受アドレス → API キー → 接続 URL → 設定変更の許可・注文提案の受け付け・監査ログ）。調整の実験（`#mcp-experiments`）を MCP ダイアログから外して別カード・別ダイアログ（`modal-mcp-experiments`、登録簿に追加）へ移し、一覧と判定を先に、手で記録するフォームを既定で閉じた `<details>`（「手で記録する」）の中に置いた。監査ログ・昇格の記録の列名を「変更元」にし、MCP と Settings 画面のどちらから変わったかを表示。Jev プロンプトのパネルは費用と昇格の記録を先、手で変える操作を後ろに、設定項目の行は既定値の表示を操作の前に並べ替えた。値・既定値・書き込みの許可・注文提案の受け付けの規則は変えていない | issue #1079 |
