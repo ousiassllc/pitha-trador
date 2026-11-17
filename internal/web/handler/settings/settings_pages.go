@@ -33,14 +33,15 @@ func (h *SettingsHandler) SubPage(page settingspages.Page, swagger bool) gin.Han
 			ids[i] = d.ModalID
 		}
 		props := pages.SettingsProps{
-			Page:        page,
-			Dialogs:     ids,
-			Operational: h.opsGroupsOn(ctx, ids),
-			MCP:         h.mcp,
-			JevPrompt:   h.jevPrompt,
-			JevTrial:    h.jevTrial,
-			AIRoles:     h.aiRoles,
-			Links:       settingspages.LinksOf(page.ID, swagger),
+			Page:           page,
+			Dialogs:        ids,
+			Operational:    h.opsGroupsOn(ctx, ids),
+			MCP:            h.mcp,
+			MCPExperiments: h.mcpExperiments,
+			JevPrompt:      h.jevPrompt,
+			JevTrial:       h.jevTrial,
+			AIRoles:        h.aiRoles,
+			Links:          settingspages.LinksOf(page.ID, swagger),
 		}
 		props.Connections = h.connections(ctx, connectionsOn(ids))
 		if h.aiRoles {

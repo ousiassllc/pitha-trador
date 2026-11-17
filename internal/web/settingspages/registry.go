@@ -191,6 +191,7 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
+	{PageIntegrations, "modal-mcp-experiments", nil},
 	{PageIntegrations, "modal-jev-prompt", nil},
 	{PageIntegrations, "modal-jev-trial", nil},
 

@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
@@ -43,6 +44,7 @@ func New(opts ...Option) *gin.Engine {
 		orderProposals:    orderproposals.StaticSource{},
 		watchlistSource:   watchlist.StaticSource{},
 		homeSource:        home.StaticSource{},
+		trialResults:      trialresults.StaticSource{},
 		errorLogExporter:  system.UnconfiguredErrorLogExporter{},
 	}
 	for _, opt := range opts {

@@ -8,8 +8,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 )
 
-// armsMessage words an invalid arms setting in Japanese for the screen: which
-// part is wrong, never the setting's key or the Go error text.
+// armsMessage words an invalid arm in Japanese for the screen: which part is
+// wrong, never the setting's key or the Go error text. The field names are the
+// ones the form labels carry.
 func armsMessage(err error) string {
 	var ae *jevtrialsettings.ArmsError
 	if !errors.As(err, &ae) {
@@ -20,28 +21,26 @@ func armsMessage(err error) string {
 		which = "アーム " + strconv.Quote(ae.ArmID)
 	}
 	switch ae.Kind {
-	case jevtrialsettings.ArmsErrJSON:
-		return "アームの設定を JSON の配列として読み取れません（括弧・カンマ・項目名を確認してください）"
 	case jevtrialsettings.ArmsErrTooMany:
 		return "アームは最大 " + strconv.Itoa(jevtrialsettings.MaxArms) + " 件までです"
 	case jevtrialsettings.ArmsErrDuplicateID:
-		return which + " の id が重複しています"
+		return which + " のアーム名が重複しています"
 	case jevtrialsettings.ArmsErrID:
-		return "アームの id は英小文字・数字・. _ - の 1〜48 文字で指定してください"
+		return "アーム名は英小文字・数字・. _ - の 1〜48 文字で入力してください"
 	case jevtrialsettings.ArmsErrProvider:
-		return which + " の provider は openrouter・custom・codex_chatgpt のどれかにしてください（OpenRouter 専用の項目 provider_only・data_collection・zdr と、codex_chatgpt の費用の項目 daily_cost_cap_usd・list_price_usd_per_mtok は、その provider では使えません）"
+		return which + " の提供元は openrouter・custom・codex_chatgpt のどれかを選んでください（送り先・データの扱い・ZDR は OpenRouter 専用、codex_chatgpt では 1 日の上限と定価も使えません）"
 	case jevtrialsettings.ArmsErrModel:
-		return which + " の model を 1〜" + strconv.Itoa(jevtrialsettings.MaxModelLen) + " 文字で指定してください"
+		return which + " のモデルを 1〜" + strconv.Itoa(jevtrialsettings.MaxModelLen) + " 文字で入力してください"
 	case jevtrialsettings.ArmsErrPromptVersion:
-		return which + " の prompt_version を指定してください"
+		return which + " のプロンプトの版を選んでください"
 	case jevtrialsettings.ArmsErrCap:
-		return which + " の daily_cost_cap_usd は 0 より大きく " + strconv.FormatFloat(jevshadowsettings.MaxDailyCostCapUSD, 'g', -1, 64) + " 以下にしてください"
+		return which + " の 1 日の上限は 0 より大きく " + strconv.FormatFloat(jevshadowsettings.MaxDailyCostCapUSD, 'g', -1, 64) + " USD 以下にしてください"
 	case jevtrialsettings.ArmsErrListPrice:
-		return which + " の list_price_usd_per_mtok は 0〜" + strconv.FormatFloat(jevtrialsettings.MaxListPriceUSDPerMtok, 'g', -1, 64) + " にしてください"
+		return which + " の定価は 0〜" + strconv.FormatFloat(jevtrialsettings.MaxListPriceUSDPerMtok, 'g', -1, 64) + " USD にしてください"
 	case jevtrialsettings.ArmsErrProviderOnly:
-		return which + " の provider_only は最大 " + strconv.Itoa(jevtrialsettings.MaxProviderOnly) + " 件の提供元名（英数字と . _ - / :）で指定してください"
+		return which + " の送り先は最大 " + strconv.Itoa(jevtrialsettings.MaxProviderOnly) + " 件の提供元名（英数字と . _ - / :）で入力してください"
 	case jevtrialsettings.ArmsErrDataCollection:
-		return which + " の data_collection は deny か allow にしてください"
+		return which + " のデータの扱いは「学習に使わない提供元だけ」か「制限しない」を選んでください"
 	}
 	return "アームの設定が正しくありません"
 }

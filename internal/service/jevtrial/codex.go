@@ -46,7 +46,7 @@ func (s *Service) codexStatus(ctx context.Context, cfg jevtrialsettings.CodexSet
 // validateCodex checks the Codex part of the form against the arms: an arm of the
 // ChatGPT subscription is saved only while the provider's own switch is on in the
 // same form, so nothing can start a Codex call before a person turned it on.
-func validateCodex(f Form, armsJSON string) error {
+func validateCodex(f Form, arms []jevtrialsettings.Arm) error {
 	if f.CodexCallCap != nil || f.CodexTokenCap != nil {
 		calls, tokens := jevtrialsettings.DefaultCodexDailyCallCap, jevtrialsettings.DefaultCodexDailyTokenCap
 		if f.CodexCallCap != nil {
@@ -62,10 +62,6 @@ func validateCodex(f Form, armsJSON string) error {
 	}
 	if f.CodexEnabled {
 		return nil
-	}
-	arms, err := jevtrialsettings.ParseArms(normalizeArms(armsJSON))
-	if err != nil {
-		return nil // ValidateArms words this
 	}
 	for _, a := range arms {
 		if a.Provider == jevtrialsettings.ProviderCodexChatGPT {
