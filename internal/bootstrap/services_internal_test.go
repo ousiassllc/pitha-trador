@@ -11,8 +11,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
+
+// tradingHours is a fixed instant inside the 前場 (2026-09-29 10:00 JST):
+// paper entries are session-gated, so tests must not enter at time.Now().
+var tradingHours = time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
 func newTestServices(t *testing.T) *Services { svc, _ := newTestServicesWithState(t); return svc }

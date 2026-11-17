@@ -1,4 +1,4 @@
-package bootstrap
+package wiringflow_test
 
 import (
 	"context"

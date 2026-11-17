@@ -1,4 +1,4 @@
-package bootstrap
+package wiringflow_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -26,15 +27,15 @@ func (n *recordingRiskNotifier) KillSwitchTriggered(_ context.Context, ev domain
 	return nil
 }
 
-func buildServicesWithSecrets(t *testing.T, secrets config.Secrets, notifiers ...risk.Notifier) *Services {
+func buildServicesWithSecrets(t *testing.T, secrets config.Secrets, notifiers ...risk.Notifier) *bootstrap.Services {
 	t.Helper()
-	state, err := Run(Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc := BuildServices(state, secrets, WithNotifiers(notifiers...))
+	svc := bootstrap.BuildServices(state, secrets, bootstrap.WithNotifiers(notifiers...))
 	return svc
 }
 
