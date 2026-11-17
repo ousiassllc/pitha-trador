@@ -53,7 +53,14 @@ func (h *Handler) Panel(c *gin.Context) { h.render(c, "") }
 // arm) and `cap` (USD; blank restores the default). Invalid input is a 422 and
 // nothing is saved.
 func (h *Handler) Save(c *gin.Context) {
-	form := jevtrial.Form{Enabled: c.PostForm("enabled") != "", ArmsJSON: c.PostForm("arms")}
+	form := jevtrial.Form{Enabled: c.PostForm("enabled") != "", ArmsJSON: c.PostForm("arms"), CodexEnabled: c.PostForm("codex_enabled") != ""}
+	var ok bool
+	if form.CodexCallCap, ok = codexCap(c, "codex_call_cap"); !ok {
+		return
+	}
+	if form.CodexTokenCap, ok = codexCap(c, "codex_token_cap"); !ok {
+		return
+	}
 	if capText := strings.TrimSpace(c.PostForm("cap")); capText != "" {
 		v, err := strconv.ParseFloat(capText, 64)
 		if err != nil {
@@ -72,6 +79,21 @@ func (h *Handler) Save(c *gin.Context) {
 		return
 	}
 	h.render(c, "保存しました。")
+}
+
+// codexCap reads a Codex cap field: nil for a blank one (the default applies). A
+// value that is not an integer is a 422 (ok false) and nothing is saved.
+func codexCap(c *gin.Context, field string) (v *int, ok bool) {
+	text := strings.TrimSpace(c.PostForm(field))
+	if text == "" {
+		return nil, true
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		shared.RespondFormError(c, formError, "ChatGPT サブスクの 1 日の上限は整数で入力してください。保存していません。")
+		return nil, false
+	}
+	return &n, true
 }
 
 func (h *Handler) render(c *gin.Context, notice string) {
@@ -95,14 +117,19 @@ func props(st jevtrial.State, notice string) view.PanelProps {
 		TodayDate: st.TodayDate, TodayCalls: st.Today.Calls, TodayUSD: usd(st.Today.CountedCostUSD),
 		TotalCalls: st.Total.Calls, TotalUSD: usd(st.Total.CountedCostUSD),
 		HaltNote: wholeHaltNote(st.Halt),
+		Codex:    codexProps(st.Codex),
 		Notice:   notice,
 	}
 	for _, a := range st.Arms {
+		status := armStatus(a)
+		if a.Arm.Provider == jevtrialsettings.ProviderCodexChatGPT && status == "" {
+			status = codexArmNote(st.Codex)
+		}
 		p.Arms = append(p.Arms, view.ArmRow{
 			ID: a.Arm.ID, Model: a.Arm.Model, PromptVersion: a.Arm.PromptVersion,
 			TodayCalls: a.Today.Calls, TodayUSD: usd(a.Today.CountedCostUSD), CapUSD: usd(a.CapUSD),
 			FailuresToday: a.FailuresToday, FailureCap: a.FailureCap,
-			Status: armStatus(a),
+			Status: status, Subscription: a.Arm.Provider == jevtrialsettings.ProviderCodexChatGPT,
 		})
 	}
 	return p

@@ -16,24 +16,25 @@ import (
 // imports only; build tags are ignored on purpose, so a windows-only file counts).
 
 // trialPackages are the packages of the trial: the Settings service, the runner,
-// the wire client and the Settings screen's handler. trialflow holds tests only.
+// the wire clients (OpenRouter's, and the Codex CLI's, issue #1081) and the Settings screen's handler. trialflow holds tests only.
 var trialPackages = []string{
-	"internal/service/jevtrial", "internal/service/jev/trial", "internal/service/jev/trialwire",
+	"internal/service/jevtrial", "internal/service/jev/trial", "internal/service/jev/trialwire", "internal/service/jev/codexwire",
 	"internal/web/handler/jevtrial",
 }
 
 // trialImportTargets are the packages the live side must never import.
-var trialImportTargets = []string{"internal/service/jevtrial", "internal/service/jev/trial", "internal/service/jev/trialwire"}
+var trialImportTargets = []string{"internal/service/jevtrial", "internal/service/jev/trial", "internal/service/jev/trialwire", "internal/service/jev/codexwire"}
 
 // allowedTrialImporters are the only packages that import a trial target, with
 // the reason. Anything else (a new package that reaches the trial) must be
 // added here on purpose; an entry that no longer imports one fails too.
 var allowedTrialImporters = map[string]string{
-	"internal/bootstrap":            "wires the runner and the Settings service into the app",
-	"internal/bootstrap/airolewire": "builds the trial arms' provider connections (trial.Keys) from the AI provider layer (issue #1080)",
-	"internal/web/handler/jevtrial": "the Settings screen's trial section (service/jevtrial)",
-	"internal/web/handler/settings": "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
-	"internal/service/jev/trial":    "the runner builds its arms from trialwire",
+	"internal/bootstrap":             "wires the runner and the Settings service into the app",
+	"internal/bootstrap/airolewire":  "builds the trial arms' provider connections (trial.Keys) from the AI provider layer (issue #1080)",
+	"internal/web/handler/jevtrial":  "the Settings screen's trial section (service/jevtrial)",
+	"internal/web/handler/settings":  "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
+	"internal/service/jev/trial":     "the runner builds its arms from trialwire and codexwire",
+	"internal/service/jev/codexwire": "the Codex client answers with a trialwire.Response and reuses its request state",
 }
 
 // liveRoots are the live decision path, Risk, order placement, RAG, Calibration

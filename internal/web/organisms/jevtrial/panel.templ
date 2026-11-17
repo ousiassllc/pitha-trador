@@ -15,6 +15,9 @@ type ArmRow struct {
 	FailureCap    int
 	// Status is "" while the arm runs, else why it is stopped today.
 	Status string
+	// Subscription is true for an arm of the ChatGPT subscription: it has no USD
+	// cost or cap (the provider's call and token caps are shown with it).
+	Subscription bool
 }
 
 // PanelProps is Panel's input.
@@ -41,6 +44,8 @@ type PanelProps struct {
 	TotalUSD   string
 	// HaltNote is why the whole trial is stopped today ("" when it is not).
 	HaltNote string
+	// Codex is the ChatGPT subscription provider (codex.templ).
+	Codex CodexProps
 	Arms     []ArmRow
 	// Notice is the outcome of the action that produced this fragment.
 	Notice string
@@ -74,7 +79,7 @@ templ Panel(props PanelProps) {
 				<div class="flex items-center gap-2">
 					<label for="jev-trial-arms" class="text-ink">アーム（JSON）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-arms", Label: "アームの説明"}) {
-						アームは比べるモデル 1 つの設定で、JSON の配列で書きます（空の配列 [] ならアームなし）。項目は id（英小文字・数字・. _ - の 1〜48 文字）・provider（openrouter）・model・prompt_version（このビルドに登録された trader の版）が必須で、daily_cost_cap_usd（アームごとの 1 日の上限。省略は 0.05 USD）・list_price_usd_per_mtok（応答が費用を返さないときの見積りに使う、入力 100 万トークンあたりの定価）・provider_only・data_collection・zdr は任意です。data_collection の既定は deny（学習に使わない提供元だけに送る）で、送り先が減るぶん応答が失敗しやすくなることがあります。allow にすると送り先は増えますが、入力が提供元の学習に使われ得ます。アームは最大 8 つで、保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは OPENROUTER_API_KEY（外部連携・AI の「OpenRouter」）に設定します。
+						アームは比べるモデル 1 つの設定で、JSON の配列で書きます（空の配列 [] ならアームなし）。項目は id（英小文字・数字・. _ - の 1〜48 文字）・provider（openrouter・custom・codex_chatgpt）・model・prompt_version（このビルドに登録された trader の版）が必須で、daily_cost_cap_usd（アームごとの 1 日の上限。省略は 0.05 USD）・list_price_usd_per_mtok（応答が費用を返さないときの見積りに使う、入力 100 万トークンあたりの定価）・provider_only・data_collection・zdr は任意です。data_collection の既定は deny（学習に使わない提供元だけに送る）で、送り先が減るぶん応答が失敗しやすくなることがあります。allow にすると送り先は増えますが、入力が提供元の学習に使われ得ます。アームは最大 8 つで、保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは OPENROUTER_API_KEY（外部連携・AI の「OpenRouter」）に設定します。
 					}
 				</div>
 				@atoms.Textarea(atoms.TextareaProps{ID: "jev-trial-arms", Name: "arms", Class: "w-full font-mono text-xs", Attrs: templ.Attributes{"rows": "10", "spellcheck": "false", "autocomplete": "off", "data-testid": "jev-trial-arms"}}) {
@@ -110,6 +115,7 @@ templ Panel(props PanelProps) {
 					}
 				</span>
 			</div>
+			@Codex(props.Codex)
 			<div id="jev-trial-error" data-testid="jev-trial-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-trial-save"}}) {
@@ -140,7 +146,13 @@ templ Panel(props PanelProps) {
 							<tr data-testid="jev-trial-arm-row">
 								<td class="px-2 py-1.5"><code>{ a.ID }</code><br/><span class="text-mute">{ a.Model }・{ a.PromptVersion }</span></td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(a.TodayCalls) }</td>
-								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">{ a.TodayUSD } / { a.CapUSD }</td>
+								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">
+									if a.Subscription {
+										サブスク（USD なし）
+									} else {
+										{ a.TodayUSD } / { a.CapUSD }
+									}
+								</td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-failures">{ itoa(a.FailuresToday) } / { itoa(a.FailureCap) }</td>
 								<td class="px-2 py-1.5" data-testid="jev-trial-arm-status">
 									if a.Status == "" {

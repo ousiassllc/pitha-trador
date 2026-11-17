@@ -41,6 +41,10 @@ func (r spentResults) SpentByArmBetween(context.Context, string, time.Time, time
 	return judgement.TrialSpend{CountedCostUSD: r.arm}, nil
 }
 
+func (spentResults) UsageByProviderBetween(context.Context, string, time.Time, time.Time) (judgement.ProviderUsage, error) {
+	return judgement.ProviderUsage{}, nil
+}
+
 func newReserveTrial(results Results) (*Trial, *memStore) {
 	store := &memStore{values: map[string]string{}}
 	t := New(results, store, func(jevtrialsettings.Arm) Caller { return nil }, metalabelsettings.ModePaper, time.Now)

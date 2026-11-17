@@ -54,6 +54,7 @@
 `jev_trial_cost` は `jev_trial_decisions.cost_source` を区別する（記録側の定義は `integrations-jev-trial.md`）。
 
 - `reported`（応答の `usage.cost`）と `list_price_estimate`（定価×入力トークン）は、それぞれ件数と `cost_usd` の合計（`usd`）、上限に数えた額の合計（`counted_usd`）を出す。`reported` は両者が同じ。`list_price_estimate` は、処理先を固定していないアーム（`provider_only` なし）を定価と最悪単価の高い方で数えるので、`counted_usd` が `usd` 以上になる
+- `subscription`（ChatGPT のサブスク。`cost_usd` NULL・上限に数えた額 0）は、USD の数字（`reported` / `list_price_estimate` / `unknown` / `counted_total_usd`）に入れず、`subscription` に呼び出し数とトークン数（入力・出力）だけを出す。`limits.codex`に、Codex 用のスイッチ・最後のログイン確認の状態・今日の呼び出し回数とトークン数と上限（USD ではない）・停止の理由コードと再開の時刻（`halt.until`。**他の停止記録と違い、再開の時刻を返す**。CLI の文面・認証情報・パスは返さない）を出す（記録側は`overview/integrations-codex-chatgpt.md`）。
 - `unknown`（どちらも無い）は、実費が分からないので `actual_usd` を `null` にする。0 円にしない。上限の判定に数えた額 `unknown_counted_usd`（最悪値側の単価 `0.24` USD/M で数えた上限の見積り）は別の欄に置き、`reported` / `list_price_estimate` の合計には混ぜない。課金されない前提の 4xx（413 を除く）・529 応答は 0 と数えるので、その件数 `counted_as_zero_calls` を並べて出し、低い数えた額が「無料」に見えないようにする
 - `counted_total_usd` は上限の判定に数えた額（`counted_cost_usd` の合計 ＝ `reported.counted_usd` + `list_price_estimate.counted_usd` + `unknown_counted_usd`）で、保存済みの行の分。飛んでいる呼び出しの予約（メモリ上）は含まない（`integrations-jev-trial.md`「飛んでいる呼び出しと、上限を超え得る幅」）。1 日の上限（全体・アームごと）の基準と一致する
 - `limits.skipped_today`（全体）と `limits.arms[].skipped_today`（アームごと）に、今日（JST。`jev_trial_skips.created_at`）の見送り（呼ばなかった比較）の件数を理由別に出す（全理由を 0 を含めて返す）。見送りは呼び出し数にも費用にも入らない。判断との対応は `jev_trial_compare` の `fairness.skipped`
@@ -72,3 +73,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-13 | 新規 | issue #1060 |
+| 1.1 | 2026-11-15 | `subscription`と`limits.codex`を追加 | issue #1081 |
