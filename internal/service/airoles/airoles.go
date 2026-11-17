@@ -60,15 +60,18 @@ type Provider struct {
 // Role is one role's setting.
 type Role struct {
 	airole.Info
-	// Setting is the setting in force once the app restarts: the stored one, or
-	// the default.
+	// Setting is the setting in force: the stored one, or the default. Sol, Opus
+	// and Luna use it from their next call (issue #1112); the live Jev uses it
+	// once the app restarts.
 	Setting airole.Setting
 	// Stored is true when Setting is a saved value, not the default.
 	Stored bool
-	// Damaged says why a stored value is ignored ("" when it is fine).
+	// Damaged says why a stored value is ignored ("" when it is fine): the live
+	// Jev runs on the default, Sol, Opus and Luna are skipped.
 	Damaged string
 	// Running is the pair the role has run on since the last start, nil when no
-	// start is recorded yet. It differs from Setting between a save and a restart.
+	// start is recorded yet. For the live Jev it differs from Setting between a
+	// save and a restart; Sol, Opus and Luna follow their setting without one.
 	Running *airole.Setting
 }
 
@@ -110,6 +113,11 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		last, ok, err := s.store.LastStarted(ctx, info.ID)
 		if err != nil {
 			return State{}, err
+		}
+		if r.Damaged != "" && !info.Live {
+			// Sol, Opus and Luna read their setting on every call (issue #1112): with a
+			// stored value they cannot use, the role is skipped, not run on the default.
+			r.Damaged = "保存した値が正しくないため、この役割は動かしていません。保存し直すか、既定に戻してください。"
 		}
 		if ok {
 			running := last.After

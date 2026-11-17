@@ -32,7 +32,7 @@ erDiagram
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
 | id | integer | PK, AUTOINCREMENT | |
-| at | text | NOT NULL | 記録した時刻（UTC）。設定の反映にはアプリの再起動が要る |
+| at | text | NOT NULL | 記録した時刻（UTC）。Sol・Opus・Luna は保存後の次の呼び出しから反映され、`jev`は再起動が要る |
 | kind | text | NOT NULL, CHECK(`saved`/`started`) | `saved`＝画面での保存・既定に戻した変更、`started`＝起動時に使い始めた組 |
 | actor | text | NOT NULL, CHECK(`gui`/`app`) | `saved`は`gui`（Settings 画面）、`started`は`app` |
 | role | text | NOT NULL, CHECK(`jev`/`sol`/`opus`/`luna`) | 役割 |

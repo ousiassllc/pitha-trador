@@ -17,8 +17,8 @@
 | 任意の役割・openrouter | `OPENROUTER_BASE_URL`（空なら公開エンドポイント） | `OPENROUTER_API_KEY` | 役割のモデル（必須） |
 
 - OpenRouter を選んだ sol / opus / luna は、役割ごとの上書きを使わず、OpenRouter 向けの`jev.Client`（`/v1/systemone`）で呼ぶ。**OpenRouter のキーが無ければ、独自 API のキーに落ちず、その段は見送る**（`assist.ErrNotConfigured`）。ライブの Jev も同様に、キーが無い OpenRouter へは独自 API のキーを送らない。
-- 保存した値が壊れている・読めないときは、別のプロバイダーへ動かさず**既定**で動き、起動時に警告を出し、画面に理由を出す。
-- 設定の反映には**アプリの再起動が必要**（キーと同じ。`BuildServices`が起動時に 1 回解決する）。
+- 保存した値が壊れている・読めないとき、別のプロバイダーへは動かさない。ライブの Jev は起動時に**既定**へ戻して動き（警告ログ・画面に理由）、Sol・Opus・Luna はその呼び出しを**見送る**（`assist.ErrNotConfigured`。画面に理由）。
+- **反映のタイミング（issue #1112）**: Sol・Opus・Luna は**呼び出しのたびに**自分の設定（`runtime_settings`の`ai.role.<role>`）と、OpenRouter を選んだときは OpenRouter のキー・URL（`secrets`）を読み直す（`airolewire.Roles.Backend`、`assist.WithBackend`）ので、Settings で保存・既定に戻すと**次の呼び出しから**効き、再起動は要らない。ライブの Jev（Scout・Trader＝売買判断。`airolewire.Roles.JevConfig`）は起動時に 1 回解決した接続のままで、**再起動が必要**（MCP からは変えられないのも従来どおり）。独自 API の接続（`JEV_*`）と各役割の上書き（`SOL_*`等）も再起動が必要。
 
 ## 画面からだけ変えられる
 
@@ -28,7 +28,7 @@
 ## 記録（`ai_role_history`、マイグレーション000057）
 
 - 画面で保存・既定に戻した変更（`kind=saved`）を、設定の保存と同じトランザクションで 1 行（いつ・何から何へ・誰が（`gui`））。値が変わらない保存は行を作らない。
-- アプリの起動時に、各役割が実際に使い始めた組（`kind=started`、`actor=app`）を、直前の記録と違うときだけ 1 行。保存した設定と今動いている組のずれ（再起動待ち）が分かる。
+- アプリの起動時に、各役割が実際に使い始めた組（`kind=started`、`actor=app`）を、直前の記録と違うときだけ 1 行。ライブの Jev では、保存した設定と今動いている組のずれ（再起動待ち）が分かる（Sol・Opus・Luna は保存後すぐ効くので、この組ではなく保存した設定が動いている）。
 - 入るのはプロバイダー名とモデル名だけ（キー・URL は入れない）。ライブの Jev の`saved`の行は、Paper 実績 MCP の調整の実験で`JEV_MODEL`の切り替え（`jev_model_changes`。issue #885）と並ぶ交絡（`Confounder.Name=AI_ROLE_JEV`）として検出される。
 - MCP は読み取りツール`ai_roles`（API §3.35）で、役割ごとの設定・最後の起動で使い始めた組・履歴を読める。秘密は返さず、キーの有無も返さない。
 

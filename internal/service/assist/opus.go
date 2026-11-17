@@ -117,15 +117,14 @@ type OpusReview struct {
 // qualitative review is Jev's noul adoption probability (opus_jev.go); when
 // OPUS_BASE_URL is set the external Opus API reviews instead.
 type Opus struct {
-	client *Client
-	jev    Asker
+	backend Backend
 }
 
 // NewOpus returns an Opus adapter that calls client
 // (OPUS_API_KEY/OPUS_BASE_URL), or Jev (WithJev) when client is not
 // configured.
 func NewOpus(client *Client, opts ...Option) *Opus {
-	return &Opus{client: client, jev: applyOptions(opts).jev}
+	return &Opus{backend: backendFor(client, opts)}
 }
 
 type opusRequest struct {
@@ -228,7 +227,7 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 }
 
 func (o *Opus) callAPI(ctx context.Context, in OpusReviewInput, expectancyNotWorse, maxDrawdownWithinBudget bool) (OpusResponse, error) {
-	viaJev, err := useJev(o.client, o.jev)
+	client, jev, viaJev, err := pick(ctx, o.backend)
 	if err != nil {
 		return OpusResponse{}, fmt.Errorf("assist: opus review: %w", err)
 	}
@@ -266,9 +265,9 @@ func (o *Opus) callAPI(ctx context.Context, in OpusReviewInput, expectancyNotWor
 
 	var resp OpusResponse
 	if viaJev {
-		resp, err = o.reviewWithJev(ctx, req)
+		resp, err = reviewWithJev(ctx, jev, req)
 	} else {
-		err = o.client.PostJSON(ctx, OpusReviewPath, req, &resp)
+		err = client.PostJSON(ctx, OpusReviewPath, req, &resp)
 	}
 	if err != nil {
 		return OpusResponse{}, fmt.Errorf("assist: opus review: %w", err)

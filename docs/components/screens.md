@@ -63,7 +63,7 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
-| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
+| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続。Sol・Opus・Luna は保存後すぐに反映、Jev の売買判断は再起動が必要。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
 | 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |

@@ -15,7 +15,7 @@ AI の役割（Jev の売買判断・Sol の改善提案・Opus の提案の検�
 | キー | 内容 |
 |---|---|
 | `providers` | 選べるプロバイダー id（`custom`＝独自 API・`openrouter`） |
-| `roles[]` | 役割ごと。`role`（`jev`/`sol`/`opus`/`luna`）・`name`・`live`（取引に使われる役割。jev だけ true）・`configured`（`provider`・`model`。再起動後に効く設定）・`source`（`stored`＝Settings で保存した値、`default`＝既定。既定は今までと同じ接続先・キー・モデル）・`running`（最後の起動で実際に使い始めた`provider`・`model`。記録が無ければ null。モデルが空は「指定なし」）・`changeable_via_mcp`（常に false） |
+| `roles[]` | 役割ごと。`role`（`jev`/`sol`/`opus`/`luna`）・`name`・`live`（取引に使われる役割。jev だけ true）・`configured`（`provider`・`model`。効く設定。Sol・Opus・Luna は保存後の次の呼び出しから、`jev`は再起動後）・`source`（`stored`＝Settings で保存した値、`default`＝既定。既定は今までと同じ接続先・キー・モデル）・`running`（最後の起動で実際に使い始めた`provider`・`model`（`jev`ではこれが実際に動いている組）。記録が無ければ null。モデルが空は「指定なし」）・`changeable_via_mcp`（常に false） |
 | `history[]` | 新しい順に最大 20 件。`at`（UTC）・`kind`（`saved`＝Settings での保存、`started`＝起動時の記録）・`role`・`before`（`saved`のとき保存前の組、`started`は null）・`after` |
 
 秘密は返さない: `runtime_settings`と`ai_role_history`だけを読み、`secrets`は読まない（API キー・接続先 URL・キーの有無は出ない）。モデル名は秘密ではない。ライブの Jev の`saved`の行は、`experiment_compare`の交絡（`kind=model`、`name=AI_ROLE_JEV`）にもなる。

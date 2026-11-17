@@ -42,7 +42,23 @@ func (h *Handler) Register(engine *gin.Engine) {
 	engine.DELETE("/settings/ai-roles/:role", h.Reset)
 }
 
-const restartNote = "保存しました。反映にはアプリの再起動が必要です。"
+// Sol, Opus and Luna read their setting on every call (issue #1112): a save applies
+// to their next call. The live Jev (what is traded) keeps its start-up connection
+// until the app restarts.
+const (
+	savedHotNote     = "保存しました。次の呼び出しから反映されます。"
+	savedRestartNote = "保存しました。反映にはアプリの再起動が必要です。"
+	resetHotNote     = "既定に戻しました。次の呼び出しから反映されます。"
+	resetRestartNote = "既定に戻しました。反映にはアプリの再起動が必要です。"
+)
+
+// notice picks the hot or the restart note for role.
+func notice(role, hot, restart string) string {
+	if role == airole.RoleJev {
+		return restart
+	}
+	return hot
+}
 
 // Panel implements `GET /settings/ai-roles-panel`.
 func (h *Handler) Panel(c *gin.Context) { h.render(c, "", "") }
@@ -55,7 +71,7 @@ func (h *Handler) Save(c *gin.Context) {
 	if !h.handled(c, role, err, "AI の設定を保存できませんでした。") {
 		return
 	}
-	h.render(c, role, restartNote)
+	h.render(c, role, notice(role, savedHotNote, savedRestartNote))
 }
 
 // Reset implements `DELETE /settings/ai-roles/:role`.
@@ -65,7 +81,7 @@ func (h *Handler) Reset(c *gin.Context) {
 	if !h.handled(c, role, err, "AI の設定を既定に戻せませんでした。") {
 		return
 	}
-	h.render(c, role, "既定に戻しました。反映にはアプリの再起動が必要です。")
+	h.render(c, role, notice(role, resetHotNote, resetRestartNote))
 }
 
 // handled answers a failed action and reports whether the action succeeded.
@@ -117,7 +133,7 @@ func props(st airoles.State, noticeRole, notice string) view.PanelProps {
 			Provider: r.Setting.Provider, Model: r.Setting.Model, Stored: r.Stored, Damaged: r.Damaged,
 			ModelHint: modelHint(r.ID),
 		}
-		if r.Running != nil {
+		if r.Running != nil && r.Live { // only the live Jev stays on its start-up pair; the others follow their setting
 			row.Running = label(*r.Running)
 		}
 		if r.ID == noticeRole {

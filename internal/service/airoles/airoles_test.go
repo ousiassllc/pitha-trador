@@ -121,3 +121,31 @@ func TestInvalidInputIsRejectedWithAReasonAndSavesNothing(t *testing.T) {
 		}
 	}
 }
+
+// A stored value that cannot be used: the live Jev runs on the default, but Sol, Opus and Luna read
+// their setting on every call (issue #1112) and are skipped, so the screen must not say "default".
+func TestStateDamagedValueExplainsWhatEachRoleDoes(t *testing.T) {
+	svc, db := newService(t, nil)
+	for _, role := range []string{"jev", "sol"} {
+		if _, err := db.Exec(`INSERT INTO runtime_settings (key, value, updated_at) VALUES (?, '{"provider":"openrouter"}', '2026-01-01T00:00:00Z')`, airole.Key(role)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := svc.State(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]airoles.Role{}
+	for _, r := range st.Roles {
+		byID[r.ID] = r
+	}
+	if got := byID["jev"].Damaged; !strings.Contains(got, "既定を使っています") {
+		t.Errorf("jev damaged = %q, want the default to be named", got)
+	}
+	if got := byID["sol"].Damaged; !strings.Contains(got, "動かしていません") || strings.Contains(got, "既定を使っています") {
+		t.Errorf("sol damaged = %q, want it to say the role is not run", got)
+	}
+	if byID["opus"].Damaged != "" {
+		t.Errorf("opus damaged = %q, want none", byID["opus"].Damaged)
+	}
+}

@@ -217,3 +217,27 @@ func TestSaveStoresRecordsAndNeedsTheTokenAndAValidForm(t *testing.T) {
 		t.Errorf("the setting is still stored after the reset (%d)", n)
 	}
 }
+
+// Sol, Opus and Luna apply a save at their next call (issue #1112): the notice says so and the panel
+// does not tell the operator to restart; only the live Jev needs one.
+func TestSaveAndResetOfSolOpusLunaNeedNoRestart(t *testing.T) {
+	a := newApp(t)
+	form := url.Values{"provider": {"openrouter"}, "model": {"vendor/model"}}
+	for _, role := range []string{"sol", "opus", "luna"} {
+		rec := a.do(http.MethodPost, "/settings/ai-roles/"+role, form, true)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK || !strings.Contains(body, "保存しました。次の呼び出しから反映されます。") {
+			t.Fatalf("save %s = %d %s", role, rec.Code, body)
+		}
+		if strings.Contains(body, "保存しました。反映にはアプリの再起動が必要です。") {
+			t.Errorf("save %s asks for a restart", role)
+		}
+		if !strings.Contains(body, "Sol・Opus・Luna は保存後すぐに反映されます") || !strings.Contains(body, "Jev の売買判断は再起動が必要です") {
+			t.Errorf("the panel does not explain what is hot reloaded: %s", body)
+		}
+		rec = a.do(http.MethodDelete, "/settings/ai-roles/"+role, nil, true)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "既定に戻しました。次の呼び出しから反映されます。") {
+			t.Fatalf("reset %s = %d %s", role, rec.Code, rec.Body.String())
+		}
+	}
+}

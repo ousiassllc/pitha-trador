@@ -123,7 +123,7 @@ type solJevRationale struct {
 // analyzeWithJev asks Jev one choice question over the generated candidates
 // (plus "none") and proposes the chosen change. Jev is never asked to write a
 // proposal: the candidates, their values and the rationale come from code.
-func (s *Sol) analyzeWithJev(ctx context.Context, in SolAnalysisInput) (SolProposal, bool, error) {
+func analyzeWithJev(ctx context.Context, jev Asker, in SolAnalysisInput) (SolProposal, bool, error) {
 	candidates := solCandidates(in)
 	if len(candidates) == 0 {
 		return SolProposal{}, false, nil
@@ -144,7 +144,7 @@ func (s *Sol) analyzeWithJev(ctx context.Context, in SolAnalysisInput) (SolPropo
 				"A bucket whose direction accuracy is low or whose average future return is negative suggests tightening; consistently strong buckets suggest room to loosen.",
 			options...),
 	}
-	result, err := s.jev.Ask(ctx, "sol", newSolRequest(in), questions)
+	result, err := jev.Ask(ctx, "sol", newSolRequest(in), questions)
 	if err != nil {
 		return SolProposal{}, false, err
 	}
