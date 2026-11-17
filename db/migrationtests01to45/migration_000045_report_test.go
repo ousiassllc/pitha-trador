@@ -1,4 +1,4 @@
-package db_test
+package migrationtests01to45
 
 import (
 	"bytes"

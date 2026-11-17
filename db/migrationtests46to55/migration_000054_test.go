@@ -1,4 +1,4 @@
-package db_test
+package migrationtests46to55
 
 import (
 	"database/sql"
