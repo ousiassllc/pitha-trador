@@ -63,6 +63,6 @@ func (a *Audited) audited(ctx context.Context, key string, reset bool, change fu
 		if err != nil {
 			return err
 		}
-		return recordOn(ctx, tx, now, key, before, after, reset)
+		return RecordGUIChange(ctx, tx, now, key, before, after, reset)
 	})
 }

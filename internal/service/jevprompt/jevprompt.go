@@ -84,6 +84,16 @@ func New(db *sql.DB) *Service {
 // SetClock replaces the clock; tests use it.
 func (s *Service) SetClock(now func() time.Time) { s.now = now }
 
+// WithSettings returns a copy of s that reads and writes the runtime settings
+// through store (typically a repository over a transaction), so a change can
+// commit together with its audit row (mcpset/jevaudit). Validation is
+// unchanged.
+func (s *Service) WithSettings(store *system.RuntimeSettingsRepository) *Service {
+	c := *s
+	c.settings = store
+	return &c
+}
+
 // State reads the current state.
 func (s *Service) State(ctx context.Context) (State, error) {
 	cfg := jevshadowsettings.Load(ctx, s.settings)
