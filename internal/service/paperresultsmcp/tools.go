@@ -68,6 +68,9 @@ func strictDecode(raw json.RawMessage, dst any) *toolError {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
+		if ue := unsupportedKind(err); ue != nil { // promotion_checklist's kinds are checked while decoding
+			return ue
+		}
 		return &toolError{code: CodeInvalidArgument, cause: err}
 	}
 	if _, err := dec.Token(); err != io.EOF {

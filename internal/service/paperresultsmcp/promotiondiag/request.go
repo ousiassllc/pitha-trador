@@ -15,20 +15,14 @@ import (
 // MaxFamilyExtra bounds family_size_extra (an absurd family is a typo, not a count).
 const MaxFamilyExtra = 10000
 
-// candidateKinds are the kinds a candidate can have; the first four can also be the current one
-// (a live_cohort judged other decisions, so nothing can be paired with it).
+// candidateKinds are the kinds a candidate can have on the same rows as the current answer; the first
+// four can also be the current one (a live_cohort judged other decisions, so nothing can be paired
+// with it). settingsSetKinds (settingsset.go) are the other kinds a candidate can have.
 var candidateKinds = []string{ledgerdiag.KindShadow, ledgerdiag.KindTrial, ledgerdiag.KindResearchModel, ledgerdiag.KindBaseline, ledgerdiag.KindLiveCohort}
-
-// Kinds that name a set of settings rather than answers on the same rows.
-var unsupportedKinds = []string{"experiment", "setting"}
 
 // ErrInvalidArgument is what a failure of the arguments that needs the database to detect (a
 // criterion looser than the stored setting) is wrapped in: the MCP maps it to invalid_argument.
 var ErrInvalidArgument = fmt.Errorf("promotiondiag: invalid argument: %w", query.ErrBadCursor)
-
-// ErrUnsupportedCandidateKind is the error of an experiment or setting candidate: a set of
-// settings cannot be compared on the same rows. The MCP maps it to invalid_argument.
-var ErrUnsupportedCandidateKind = fmt.Errorf("promotiondiag: unsupported_candidate_kind: %w", query.ErrBadCursor)
 
 // Ref names a candidate or the current answer: a kind and the kind's id.
 type Ref struct {
@@ -105,9 +99,16 @@ func (r Request) overrides() []struct {
 
 // Validate reports an argument the tool does not accept. A per-call criterion looser than the
 // documented floor is refused here; one looser than a stricter stored setting is refused by Check.
+// A kind or a combination that cannot be checked is an *UnsupportedError (unsupported_candidate_kind).
 func (r Request) Validate() error {
 	if r.Candidate == nil {
 		return errors.New("promotiondiag: candidate {kind, id} is required")
+	}
+	if isSettingsSet(r.Candidate.Kind) {
+		if err := r.validateSettingsSet(); err != nil {
+			return err
+		}
+		return r.validateCommon()
 	}
 	if err := checkRef("candidate", *r.Candidate, candidateKinds); err != nil {
 		return err
@@ -119,7 +120,7 @@ func (r Request) Validate() error {
 			return fmt.Errorf("promotiondiag: current of kind live has the id %q", ledgerdiag.LiveID)
 		}
 		if cur.Kind == ledgerdiag.KindLiveCohort {
-			return fmt.Errorf("%w: a live_cohort judged other decisions and cannot be the current answer", ErrUnsupportedCandidateKind)
+			return unsupported(ReasonCohortAsCurrent)
 		}
 		if cur.Kind != ledgerdiag.KindLive {
 			if err := checkRef("current", cur, candidateKinds); err != nil {
@@ -130,10 +131,14 @@ func (r Request) Validate() error {
 	if r.Candidate.ledgerID() == cur.ledgerID() {
 		return errors.New("promotiondiag: candidate and current are the same")
 	}
-	lreq := r.ledgerRequest(cur)
-	if err := lreq.Validate(); err != nil {
+	if err := r.ledgerRequest(cur).Validate(); err != nil {
 		return err
 	}
+	return r.validateCommon()
+}
+
+// validateCommon checks the arguments every kind shares: the family size and the criteria.
+func (r Request) validateCommon() error {
 	if r.FamilySizeExtra < 0 || r.FamilySizeExtra > MaxFamilyExtra {
 		return fmt.Errorf("promotiondiag: family_size_extra must be 0..%d", MaxFamilyExtra)
 	}
@@ -147,8 +152,8 @@ func (r Request) Validate() error {
 }
 
 func checkRef(what string, ref Ref, kinds []string) error {
-	if slices.Contains(unsupportedKinds, ref.Kind) {
-		return fmt.Errorf("%w: %s kind %q is a set of settings, which cannot be compared on the same rows", ErrUnsupportedCandidateKind, what, ref.Kind)
+	if isSettingsSet(ref.Kind) { // a candidate of this kind never reaches here (Validate reads it from its experiment)
+		return unsupported(ReasonSettingsSetAsCurrent)
 	}
 	if !slices.Contains(kinds, ref.Kind) {
 		return fmt.Errorf("promotiondiag: %s kind %q is not one of %v", what, ref.Kind, kinds)

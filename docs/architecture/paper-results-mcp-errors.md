@@ -25,8 +25,9 @@
 | `proposal_not_found` | 404 | `order_proposal_get` / `order_proposal_cancel` の `proposal_id` の注文案が無い | その proposal_id の注文案はありません。 |
 | `not_cancellable` | 409 | `order_proposal_cancel` の注文案が、もう取り消せない状態（`filled` / `closed` / `rejected` / `expired` / `cancelled` / `failed`、またはアプリが処理中の `processing`） | この注文案はもう取り消せません（約定済み・終了済み、または処理中）。order_proposal_get で状態を確認してください。 |
 | `multiple_variables` | 422 | `experiment_create` の `changes` が 2 つ以上（同じ変数の 2 回も含む）。何も書かない（issue #871） | 1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。 |
-| `experiment_not_found` | 404 | `experiment_compare` / `experiment_close` の `experiment_id` の実験が無い | その experiment_id の実験はありません。experiments_list で確認してください。 |
+| `experiment_not_found` | 404 | `experiment_compare` / `experiment_close` の `experiment_id`、または `promotion_checklist` の `candidate`（`kind=experiment`）の実験 id の実験が無い | その experiment_id の実験はありません。experiments_list で確認してください。 |
 | `experiment_not_running` | 409 | `experiment_close` の実験が、もう終わっている（`closed` / `aborted`）。再び開けない。何も書かない | この実験はもう終わっています（再び開くことはできません）。 |
+| `unsupported_candidate_kind` | 422 | `promotion_checklist` が、候補の種類・組み合わせを比べられない（`invalid_argument` とは別のコード。未知の引数・形の誤り・候補と現行が同じ、などは `invalid_argument` のまま）。次の 4 つ: `current` に `experiment` / `setting` を指定した、`current` に `live_cohort` を指定した（別の判断を見ていて同じ行がない）、`candidate` が `experiment` / `setting` なのに `current` を指定した（前後比較の「前」で決まっている）、`candidate` が `setting` で `id` が MCP の設定ホワイトリスト（`key_not_allowed` と同じ）にないキー。`error.data.detail` に規則の固定文を付ける（引数の値・候補の id は引用しない）。何も適用せず、何も書かない（設計は `docs/architecture/research-tools/paper-results-mcp-promotion.md` §1・§6、API は `docs/api/endpoints/research-tools/paper-results-mcp-promotion.md` §3.44）。`candidate` の実験 id が無いときは `experiment_not_found`（404） | この候補の種類・組み合わせは昇格チェックリストでは比べられません。error.data.detail の理由とツールの説明を確認してください。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -67,3 +68,4 @@
 | 1.9 | 2026-11-14 | `invalid_argument` の条件のツール数を 31 → 35 に直し、内訳を実装（`paperresultsmcp.ToolNames()`）に合わせた（読み取り 16 = 期間指定 15 + `health_today`）。ずれは `mcptests` の `TestToolCountInDocsMatchesDispatchTable` が検出する。新しいコードは無い | issue #1070 |
 | 1.10 | 2026-11-15 | `invalid_argument` の条件のツール数を 35 → 37 に直した（`jev_evaluation` と `research_horizon_summary` の読み取り 2 つを足したため。読み取り 18 = 期間指定 17 + `health_today`） | issue #1073 / #1074（PR #1077 への main の取り込み） |
 | 1.11 | 2026-11-15 | `invalid_argument` の条件のツール数を 37 → 42 に直した（読み取り 22・書き出し 1 を足した） | issue #1089・#1090・#1091・#1094 |
+| 1.12 | 2026-11-19 | `promotion_checklist` 用のコード `unsupported_candidate_kind`（422）を追加。それまで `invalid_argument` に丸めていた、候補・現行の種類や組み合わせを比べられない拒否を分けた。`experiment` / `setting` は candidate にできるようになったので、拒否は current への指定・current との組み合わせ・ホワイトリスト外の設定キーに限る | issue #1122・#1125（親 #1091） |

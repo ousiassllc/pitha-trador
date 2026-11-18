@@ -3,19 +3,25 @@ package promotiondiag
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/ledgerdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
 // Check computes the checklist of req.Candidate over [r.From, r.To). It reads only.
-func Check(ctx context.Context, q query.Q, r query.Range, req Request) (*Result, error) {
+// A candidate of kind experiment / setting is read from its experiment instead (checkSettingsSet), and
+// r is not used for it. now ends the after period of an experiment that is still running.
+func Check(ctx context.Context, q query.Q, r query.Range, now time.Time, req Request) (*Result, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 	criteria, eff, err := effectiveCriteria(ctx, q, req)
 	if err != nil {
 		return nil, err
+	}
+	if isSettingsSet(req.Candidate.Kind) {
+		return checkSettingsSet(ctx, q, now, req, criteria, eff)
 	}
 	cur := req.current()
 	ledger, err := ledgerdiag.Compute(ctx, q, r, req.ledgerRequest(cur))
@@ -40,8 +46,10 @@ func Check(ctx context.Context, q query.Q, r query.Range, req Request) (*Result,
 	if entry == nil { // the ledger always lists an Include candidate; defensive
 		return nil, ledgerdiag.ErrUnsupportedReference
 	}
-	out.Items, out.KeyNumbers = evaluate(ledger, entry, eff, req)
-	out.KeyNumbers.FamilySizeExtra = req.FamilySizeExtra
+	var kn KeyNumbers
+	out.Items, kn = evaluate(ledger, entry, eff, req)
+	kn.FamilySizeExtra = req.FamilySizeExtra
+	out.KeyNumbers = &kn
 	out.EligibleAsEvidence = true
 	for _, it := range out.Items {
 		if it.Status != StatusPass {

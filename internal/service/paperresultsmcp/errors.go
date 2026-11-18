@@ -5,10 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strings"
 
-	"modernc.org/sqlite"
-
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
@@ -43,6 +41,8 @@ const (
 	CodeMultipleVariables    Code = "multiple_variables"
 	CodeExperimentNotFound   Code = "experiment_not_found"
 	CodeExperimentNotRunning Code = "experiment_not_running"
+	// promotion_checklist's code: a candidate / current kind or combination it cannot check (issue #1122).
+	CodeUnsupportedCandidateKind Code = "unsupported_candidate_kind"
 )
 
 type codeInfo struct {
@@ -73,6 +73,8 @@ var codeTable = map[Code]codeInfo{
 	CodeMultipleVariables:    {http.StatusUnprocessableEntity, "1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。"},
 	CodeExperimentNotFound:   {http.StatusNotFound, "その experiment_id の実験はありません。experiments_list で確認してください。"},
 	CodeExperimentNotRunning: {http.StatusConflict, "この実験はもう終わっています（再び開くことはできません）。"},
+
+	CodeUnsupportedCandidateKind: {http.StatusUnprocessableEntity, "この候補の種類・組み合わせは昇格チェックリストでは比べられません。error.data.detail の理由とツールの説明を確認してください。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.
@@ -83,7 +85,7 @@ type toolError struct {
 	// validator reason (it quotes the caller's own value and the accepted range;
 	// no whitelisted setting is secret), and the order-proposal tools'
 	// invalid_argument / limit_exceeded reasons (they name the argument and the
-	// rule, never a value).
+	// rule, never a value), and unsupported_candidate_kind's fixed reason.
 	detail string
 }
 
@@ -101,14 +103,29 @@ func fail(code Code) *toolError { return &toolError{code: code} }
 // failDetail is fail with a client-visible detail (see toolError.detail).
 func failDetail(code Code, detail string) *toolError { return &toolError{code: code, detail: detail} }
 
+// unsupportedKind is promotion_checklist's "this kind or combination cannot be checked" failure
+// (error.data.detail is its fixed reason, never the caller's value), or nil for any other error.
+func unsupportedKind(err error) *toolError {
+	var u interface{ UnsupportedKind() string }
+	if errors.As(err, &u) {
+		return failDetail(CodeUnsupportedCandidateKind, u.UnsupportedKind())
+	}
+	return nil
+}
+
 // classify maps any error from a tool run to its spec code. ctx is the
 // per-call context: its deadline decides query_timeout even when the driver
 // reports the interruption as a generic error.
 func classify(ctx context.Context, err error) *toolError {
 	var te *toolError
+	if ue := unsupportedKind(err); ue != nil {
+		return ue
+	}
 	switch {
 	case errors.As(err, &te):
 		return te
+	case errors.Is(err, experiment.ErrNotFound): // a promotion_checklist experiment candidate that was never recorded
+		return fail(CodeExperimentNotFound)
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return &toolError{code: CodeQueryTimeout, cause: err}
 	case errors.Is(err, query.ErrLimitExceeded):
@@ -117,35 +134,10 @@ func classify(ctx context.Context, err error) *toolError {
 		return &toolError{code: CodeInvalidArgument, cause: err}
 	case errors.Is(err, readdb.ErrUnavailable), errors.Is(err, mcpset.ErrUnavailable), errors.Is(err, sql.ErrConnDone):
 		return &toolError{code: CodeDBUnavailable, cause: err}
-	case isBusy(err):
+	case readdb.IsBusy(err):
 		return &toolError{code: CodeDBLocked, cause: err}
-	case isMissingSchema(err):
+	case readdb.IsMissingSchema(err):
 		return &toolError{code: CodeDBUnavailable, cause: err}
 	}
 	return &toolError{code: CodeInternal, cause: err}
-}
-
-// SQLite primary result codes (sqlite3.h).
-const (
-	sqliteBusy   = 5
-	sqliteLocked = 6
-)
-
-func isBusy(err error) bool {
-	if strings.Contains(err.Error(), "database is locked") {
-		return true
-	}
-	var se *sqlite.Error
-	if errors.As(err, &se) {
-		primary := se.Code() & 0xff
-		return primary == sqliteBusy || primary == sqliteLocked
-	}
-	return false
-}
-
-// isMissingSchema reports a table or column the tool needs that the file
-// lacks (an older schema).
-func isMissingSchema(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "no such table") || strings.Contains(msg, "no such column")
 }
