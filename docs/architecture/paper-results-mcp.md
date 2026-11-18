@@ -210,7 +210,7 @@ Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を 
 
 ### 7.1 ホワイトリスト
 
-MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 25 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
+MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 27 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -234,8 +234,8 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
 | `jev.shadow.enabled` | 文字列 | Jev のプロンプトのシャドー比較の有効（issue #929。Settings 画面の「シャドーを有効にする」）。既定は `false`。有効にしても費用の上限・失敗回数の上限・429/529 の停止はそのまま効く | `true` / `false`（`1` / `0` も可。JSON の数値 1 / 0 も可）。`true` にできるのは候補の版が保存済みのときだけ。`false` はいつでも可 |
-| `research.labels.enabled` | 文字列（`text`） | 研究用ホライズンラベル（30 分・60 分・引けまで保有したときのコスト前後の bps。#1074）の日次記録のオン・オフ（issue #1073。Settings 画面の「研究用ホライズンラベルの記録」）。既定は `0`（オフ）で、オフの間は日次タスクが何も書かない。記録は研究専用の表に書くだけで取引には使わない | `1`（オン）または `0`（オフ）。保持期間 `research.labels.retention_days` は書けない |
-| `research.eval.enabled` / `research.model.enabled` / `research.export.enabled` | 文字列（`text`） | 日次評価の記録（#1089）・研究用モデルの夜間学習（#1092）・学習用データセットの書き出し（#1094）のオン・オフ。1 / 0、既定 0（オフ）。オフの間は何も書かない。保持期間と昇格基準はこの API から変えられない | `1`（オン）または `0`（オフ） |
+| `research.labels.enabled` / `research.eval.enabled` / `research.model.enabled` / `research.export.enabled` | 文字列（`text`） | 研究用の記録・学習・書き出しのオン・オフ: ホライズンラベル（30 分・60 分・引けまで保有したときのコスト前後の bps。#1074）の日次記録（issue #1073。Settings 画面の「研究用ホライズンラベルの記録」）・日次評価の記録（#1089）・研究用モデルの夜間学習（#1092）・学習用データセットの書き出し（#1094）。1 / 0、既定 0（オフ）。オフの間は何も書かない（日次タスクも夜間タスクも書き出しも動かない）。記録は研究専用の表に書くだけで取引には使わない | `1`（オン）または `0`（オフ）。保持期間（`research.labels.retention_days` ほか）と昇格基準は書けない |
+| `research.tachibana_bars.enabled` / `research.tachibana_quotes.enabled` | 文字列（`text`） | 立花の研究用収集のオン・オフ: 日足を夜間に `daily_bars` へ記録する収集（ブローカーが kabu のままでも動く。issue #1082。`paper-results-mcp-research-bars.md`）・日中の時価を kabu と並べて研究用の別の表に記録するもの（最大 120 銘柄。issue #1083。`paper-results-mcp-research-quotes.md`）。既定は `0`（オフ）で、オフまたは認証情報が未設定の間は立花へ接続も要求もしない。記録だけで取引には使わない | `1`（オン）または `0`（オフ）。取得速度・時刻・市場区分・銘柄・接続回数・REST 間隔・保持期間は書けない（Settings 画面だけ） |
 | `jev.shadow.candidate_version` | 文字列 | シャドーが動かす候補の版（issue #929。Settings 画面の「シャドーの候補の版」）。既定は空（候補なし） | このビルドに登録済み（`jev_shadow_cost` の `registered_versions`）で、ライブの版と違う版 |
 
 入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない。Live の最低エントリー品質 `policy.long.min_entry_quality` / `policy.short.min_entry_quality`（既定 `strong`）も入れず、`key_not_allowed` で拒否する）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy（上の Paper の最低エントリー品質 2 キーを除く）・screener・ログ・バックアップ先など）。Jev のシャドーのキー（`jev.shadow.*`）で入るのは上の 2 つだけで、ライブの版 `jev.trader_prompt_version`（切り替えは昇格の専用ツール）・費用の上限 `jev.shadow.daily_cost_cap_usd`・失敗回数の上限・止めた記録 `jev.shadow.halt`・失敗回数 `jev.shadow.failures`・クールダウン `jev.shadow.throttle` は入れず、`key_not_allowed` で拒否する。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。

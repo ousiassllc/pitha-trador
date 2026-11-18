@@ -31,7 +31,7 @@
 | `shadow:<prompt_version>` | `jev_shadow_decisions`。方向は判断ごと（NONE は 0 bps）。費用は `request_cost`（USD。`cost_is_estimate=1` の行は推定として別に数える） |
 | `trial:<arm_id>` | `jev_trial_decisions`。`status='ok'` の行だけが答え。failed / refused / partial / 行なしは**欠測**。費用は `counted_cost_usd`、`cost_source` 別に数える |
 | `baseline:<arm>` | `random` / `momentum` / `contrarian` / `none` / `long_leg` / `short_leg`（`jev_evaluation` と同じ定義。費用 0） |
-| `research_model:<algorithm>:<30m\|60m\|close>` | `research_model_predictions` JOIN `research_model_runs`。予測方向（LONG / SHORT はその側のラベル、NONE は 0）。同じ判断に複数の run の予測があれば最新の run |
+| `research_model:<algorithm>:<30m\|60m\|close>` | `research_model_predictions` JOIN `research_model_runs`。`algorithm` は `ridge`（リッジ回帰）・`gbt`（勾配ブースティングの木）、時間軸はその run が学習したラベル（例 `research_model:ridge:30m`・`research_model:gbt:60m`・`research_model:gbt:close`）。予測方向（LONG / SHORT はその側のラベル、NONE は 0）。同じ判断に複数の run の予測があれば最新の run。`horizon` 引数を `60m` / `close` にすると、全候補の行の net bps がその時間軸のラベルになるので、同じ時間軸の `gbt:60m` などと Jev を同じ行で比べられる |
 
 候補の 1 行の net bps = **その候補の方向のラベル**（LONG は買いの net、SHORT は売りの net、NONE・取引なしは 0）。全候補が同じコスト控除後ラベルなので、そのまま比べられる。
 
