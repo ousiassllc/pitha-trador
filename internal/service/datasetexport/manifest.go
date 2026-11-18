@@ -3,12 +3,16 @@ package datasetexport
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"path"
+	"strconv"
 	"time"
 )
 
 // File is one file of the dataset in the manifest.
 type File struct {
-	Name   string `json:"name"`
+	Name string `json:"name"`
+	// Format is "csv" or "parquet".
+	Format string `json:"format"`
 	Rows   int    `json:"rows"`
 	Bytes  int    `json:"bytes"`
 	SHA256 string `json:"sha256"`
@@ -52,7 +56,7 @@ type CounterInfo struct {
 type Manifest struct {
 	SchemaVersion string `json:"schema_version"`
 	DatasetID     string `json:"dataset_id"`
-	// DatasetSHA256 is the hash of SchemaVersion and the file hashes (see DatasetHash).
+	// DatasetSHA256 is the hash of SchemaVersion, the period and split (Spec) and the files (see DatasetHash).
 	DatasetSHA256 string `json:"dataset_sha256"`
 	CreatedAt     string `json:"created_at"`
 	// From and To are the JST days of the period: from is included, to is not.
@@ -87,14 +91,43 @@ type Manifest struct {
 	Notice                string   `json:"notice"`
 }
 
-// DatasetHash is the overall hash: sha256 over "<schema_version>\n" followed by every file's hex
-// sha256 and "\n", in the order of Manifest.Files (dataset_train.csv, dataset_eval.csv, or
-// dataset.csv alone). manifest.json is not part of it (it holds created_at and the path).
-func DatasetHash(schemaVersion string, files []File) string {
+// Spec is what was asked of an export: the period and the split. It is part of the dataset hash,
+// so two exports that differ in any of it never share a dataset_id, even when their files hold the
+// same bytes.
+type Spec struct {
+	From, To    string // JST days, from included, to excluded
+	SplitAt     string // "" without a split
+	EmbargoDays int
+}
+
+// Spec is the period and split of the manifest.
+func (m Manifest) Spec() Spec {
+	s := Spec{From: m.From, To: m.To, EmbargoDays: m.EmbargoDays}
+	if m.SplitAt != nil {
+		s.SplitAt = *m.SplitAt
+	}
+	return s
+}
+
+// DatasetHash is the overall hash: sha256 over the lines
+//
+//	<schema_version>
+//	from=<from>, to=<to>, split_at=<split_at, empty without a split>, embargo_days=<n> (one line each)
+//	<file name> <hex sha256 of the file> (one line per file, in the order of Manifest.Files:
+//	  dataset.csv, dataset.parquet, or dataset_train.csv, dataset_train.parquet, dataset_eval.csv,
+//	  dataset_eval.parquet)
+//
+// each ended by "\n". manifest.json is not part of it (it holds created_at and the path).
+func DatasetHash(schemaVersion string, spec Spec, files []File) string {
 	h := sha256.New()
-	_, _ = h.Write([]byte(schemaVersion + "\n"))
+	write := func(line string) { _, _ = h.Write([]byte(line + "\n")) }
+	write(schemaVersion)
+	write("from=" + spec.From)
+	write("to=" + spec.To)
+	write("split_at=" + spec.SplitAt)
+	write("embargo_days=" + strconv.Itoa(spec.EmbargoDays))
 	for _, f := range files {
-		_, _ = h.Write([]byte(f.SHA256 + "\n"))
+		write(f.Name + " " + f.SHA256)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -105,7 +138,7 @@ func DatasetID(datasetSHA256 string) string { return "ds-" + datasetSHA256[:Data
 func dayRange(e encoded) *DayRange { return &DayRange{First: e.first, Last: e.last} }
 
 func fileOf(e encoded) File {
-	return File{Name: e.name, Rows: e.rows, Bytes: len(e.data), SHA256: e.sha256()}
+	return File{Name: e.name, Format: path.Ext(e.name)[1:], Rows: e.rows, Bytes: len(e.data), SHA256: e.sha256()}
 }
 
 func formatCreatedAt(now time.Time) string { return now.UTC().Format(time.RFC3339) }

@@ -89,7 +89,8 @@ func TestSplitSidesNeverOverlapAndEveryDecisionIsAccountedFor(t *testing.T) {
 				t.Errorf("train ends %s, eval starts %s", lastTrain, firstEval)
 			}
 			// The two files together hold exactly the rows they should: eval keeps its own rows, hashes verify.
-			if len(m.Files) != 2 || m.Files[0].Name != "dataset_train.csv" || m.Files[1].Name != "dataset_eval.csv" {
+			if len(m.Files) != 4 || m.Files[0].Name != "dataset_train.csv" || m.Files[1].Name != "dataset_train.parquet" ||
+				m.Files[2].Name != "dataset_eval.csv" || m.Files[3].Name != "dataset_eval.parquet" {
 				t.Fatalf("files %+v", m.Files)
 			}
 			for _, f := range m.Files {
@@ -97,7 +98,11 @@ func TestSplitSidesNeverOverlapAndEveryDecisionIsAccountedFor(t *testing.T) {
 					t.Errorf("%s does not hash to the manifest", f.Name)
 				}
 			}
-			if overall := sha([]byte("1\n" + m.Files[0].SHA256 + "\n" + m.Files[1].SHA256 + "\n")); m.DatasetSHA256 != overall {
+			var lines string
+			for _, f := range m.Files {
+				lines += f.Name + " " + f.SHA256 + "\n"
+			}
+			if overall := sha([]byte(specText("2", periodFrom, periodTo, "2026-10-08", c.embargo) + lines)); m.DatasetSHA256 != overall {
 				t.Errorf("dataset hash %s, want %s", m.DatasetSHA256, overall)
 			}
 		})

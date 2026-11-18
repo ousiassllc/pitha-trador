@@ -59,7 +59,7 @@ func Run(ctx context.Context, q query.Q, p Params) (Response, int, error) {
 	for i, f := range data.files {
 		m.Files[i] = fileOf(f)
 	}
-	m.DatasetSHA256 = DatasetHash(SchemaVersion, m.Files)
+	m.DatasetSHA256 = DatasetHash(m.SchemaVersion, m.Spec(), m.Files)
 	m.DatasetID = DatasetID(m.DatasetSHA256)
 	m.SaveDir = filepath.Join(base, m.DatasetID)
 
@@ -84,7 +84,7 @@ type collected struct {
 	files    []encoded
 }
 
-// collect reads every source of the period and returns the CSV files and the manifest without
+// collect reads every source of the period and returns the data files (CSV and Parquet) and the manifest without
 // the hashes, the id, the clock and the path.
 func collect(ctx context.Context, q query.Q, p Params) (collected, error) {
 	from, to := query.Range{From: p.From, To: p.To}.Bounds()
@@ -125,28 +125,29 @@ func collect(ctx context.Context, q query.Q, p Params) (collected, error) {
 		for _, r := range rows {
 			r.cells[cSplit] = SplitAll
 		}
-		all, err := encodeCSV(FileAll, rows)
+		files, err := encodeSide(FileAll, FileAllParquet, rows)
 		if err != nil {
 			return collected{}, err
 		}
-		m.Rows = all.rows
-		return collected{manifest: m, files: []encoded{all}}, nil
+		m.Rows = files[0].rows
+		return collected{manifest: m, files: files}, nil
 	}
 
 	train, eval, embargo, purged := splitRows(rows, p.SplitAt, p.EmbargoDays)
-	trainFile, err := encodeCSV(FileTrain, train)
+	trainFiles, err := encodeSide(FileTrain, FileTrainParquet, train)
 	if err != nil {
 		return collected{}, err
 	}
-	evalFile, err := encodeCSV(FileEval, eval)
+	evalFiles, err := encodeSide(FileEval, FileEvalParquet, eval)
 	if err != nil {
 		return collected{}, err
 	}
+	trainFile, evalFile := trainFiles[0], evalFiles[0]
 	split := p.SplitAt
 	m.SplitAt = &split
 	m.Rows, m.RowsTrain, m.RowsEval, m.RowsInEmbargo, m.RowsPurged = trainFile.rows+evalFile.rows, trainFile.rows, evalFile.rows, embargo, purged
 	m.TrainDays, m.EvalDays = dayRange(trainFile), dayRange(evalFile)
-	return collected{manifest: m, files: []encoded{trainFile, evalFile}}, nil
+	return collected{manifest: m, files: append(trainFiles, evalFiles...)}, nil
 }
 
 func nonNil(s []string) []string {

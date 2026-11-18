@@ -38,7 +38,7 @@ func TestExportWithoutSplitIsOneRowPerTraderDecision(t *testing.T) {
 
 	dir := singleDataset(t, srv, m.DatasetID)
 	files := datasetFiles(t, dir)
-	if len(files) != 2 || files["dataset.csv"] == nil || files["manifest.json"] == nil {
+	if len(files) != 3 || files["dataset.csv"] == nil || files["dataset.parquet"] == nil || files["manifest.json"] == nil {
 		t.Fatalf("files %v", slices.Collect(func(yield func(string) bool) {
 			for k := range files {
 				if !yield(k) {
@@ -61,11 +61,15 @@ func TestExportWithoutSplitIsOneRowPerTraderDecision(t *testing.T) {
 	}
 
 	// The hashes reproduce from the bytes on disk.
-	if len(m.Files) != 1 || m.Files[0].Name != "dataset.csv" || m.Files[0].SHA256 != sha(files["dataset.csv"]) ||
-		m.Files[0].Bytes != len(files["dataset.csv"]) || m.Files[0].Rows != len(want) {
-		t.Errorf("file entry %+v", m.Files)
+	if len(m.Files) != 2 || m.Files[0].Name != "dataset.csv" || m.Files[0].Format != "csv" || m.Files[1].Name != "dataset.parquet" || m.Files[1].Format != "parquet" {
+		t.Fatalf("file entries %+v", m.Files)
 	}
-	if overall := sha([]byte("1\n" + m.Files[0].SHA256 + "\n")); m.DatasetSHA256 != overall || m.DatasetID != "ds-"+overall[:12] {
+	for _, f := range m.Files {
+		if f.SHA256 != sha(files[f.Name]) || f.Bytes != len(files[f.Name]) || f.Rows != len(want) {
+			t.Errorf("file entry %+v", f)
+		}
+	}
+	if overall := sha([]byte(specText("2", periodFrom, periodTo, "", 0) + "dataset.csv " + m.Files[0].SHA256 + "\ndataset.parquet " + m.Files[1].SHA256 + "\n")); m.DatasetSHA256 != overall || m.DatasetID != "ds-"+overall[:12] {
 		t.Errorf("dataset hash %s id %s, want %s", m.DatasetSHA256, m.DatasetID, overall)
 	}
 	var onDisk datasetexport.Manifest
@@ -77,7 +81,7 @@ func TestExportWithoutSplitIsOneRowPerTraderDecision(t *testing.T) {
 	if string(a) != string(b) {
 		t.Errorf("manifest.json differs from the response:\n%s\n%s", a, b)
 	}
-	if m.SaveDir != dir || m.SchemaVersion != "1" || m.CreatedAt != "2026-10-18T03:00:00Z" || m.From != periodFrom || m.To != periodTo {
+	if m.SaveDir != dir || m.SchemaVersion != "2" || m.CreatedAt != "2026-10-18T03:00:00Z" || m.From != periodFrom || m.To != periodTo {
 		t.Errorf("manifest %+v", m)
 	}
 	assertModes(t, srv.exportsDir(), dir)
