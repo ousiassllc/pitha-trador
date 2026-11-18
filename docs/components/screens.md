@@ -72,6 +72,10 @@
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | OpenRouter | `/settings/integrations#modal-openrouter` | 「役割ごとのモデル」で OpenRouter を選んだ役割とモデル比較トライアルのアームが呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
+| J-Quants（日足・分足） | `/settings/integrations#modal-jquants` | J-Quants の API キー（任意。未設定のあいだは J-Quants へ何も送らない）を設定します。キーは起動時に 1 回読むため、保存したら再起動します。 | 外部連携・AI |
+| J-Quants（日足・分足の取り込み） | `/settings/integrations#modal-jquants-fetch` | 日足・分足の取り込みの有効化（既定オフ）・契約している種類・1 日の要求数の上限・埋め戻す日数・解約時の削除の依頼を設定します（研究専用・私的利用。取引には使いません）。 | 外部連携・AI |
+| EDINET（開示書類の一覧） | `/settings/integrations#modal-edinet` | EDINET API の API キー（任意。未設定のあいだは EDINET へ何も送らない）を設定します。 | 外部連携・AI |
+| 開示・ニュースの追加の情報源 | `/settings/integrations#modal-disclosure-src` | EDINET の書類一覧と立花ニュースの記録（研究専用・既定オフ）の有効化・1 日の要求数の上限・さかのぼる日数・保持期間を設定します。オンにできるのはこの画面だけです。記録は取引に使われません。立花ニュースは実機計測（#725）まで何も取得しません。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
 | MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開する MCP サーバーの接続設定が主役です。上から、状態と起動・停止・再起動、有効/無効と待受アドレス、API キー、接続 URL（Grok Bot に登録する値）、そのあとに MCP からの設定変更の許可（既定オン）・AIからの注文提案の受け付け（オンにできるのはこの画面だけ。MCP からはオフにだけできる）・設定変更の監査ログ（変更元＝MCP か Settings 画面か、を表示）が並びます。1280×800 の画面で、待受アドレス・API キー・接続 URL がスクロールなしで見えます。調整の実験はこのダイアログの外（次の行）です。 | 外部連携・AI |
@@ -128,3 +132,4 @@
 | 1.20 | 2026-11-15 | Settings「外部連携・AI」のモデル比較トライアルで、アームを JSON のテキストエリアから 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版・1 日の上限・定価・送り先の提供元・データの扱い・ZDR。追加・削除は htmx）に変更。画面の説明文を短くし、詳しい説明は「?」に移した。キーは設定の有無だけ | issue #1066 |
 | 1.21 | 2026-11-15 | Settings「外部連携・AI」の MCP ダイアログを接続設定中心の並びに変更（状態・起動停止 → 有効/無効と待受アドレス → API キー → 接続 URL → 設定変更の許可・注文提案の受け付け・監査ログ）。調整の実験（`#mcp-experiments`）を MCP ダイアログから外して別カード・別ダイアログ（`modal-mcp-experiments`、登録簿に追加）へ移し、一覧と判定を先に、手で記録するフォームを既定で閉じた `<details>`（「手で記録する」）の中に置いた。監査ログ・昇格の記録の列名を「変更元」にし、MCP と Settings 画面のどちらから変わったかを表示。Jev プロンプトのパネルは費用と昇格の記録を先、手で変える操作を後ろに、設定項目の行は既定値の表示を操作の前に並べ替えた。値・既定値・書き込みの許可・注文提案の受け付けの規則は変えていない | issue #1079 |
 | 1.22 | 2026-11-15 | Settings「証券会社・データ」に「立花 研究用の日足収集」（`modal-research-tachibana-bars`。issue #1082）と「立花 研究用の時価記録」（`modal-research-tachibana-quotes`。issue #1083）の 2 カードを追加（どちらも既定オフ・研究専用で、取引・監視銘柄には使わない） | issue #1082・#1083 |
+| 1.23 | 2026-11-15 | Settings「外部連携・AI」に J-Quants（日足・分足。API キー）と J-Quants（日足・分足の取り込み。有効化・契約・1 日の要求数の上限・解約時の削除）のカードを追加 | issue #1093 |

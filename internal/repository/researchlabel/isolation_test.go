@@ -27,7 +27,9 @@ func TestResearchHorizonLabelsAreReadOnlyByTheirRecorderAndTheResearchTool(t *te
 		"internal/repository/researchlabel/",                  // the record's own repository
 		"internal/service/researchlabel/",                     // the recorder
 		"internal/bootstrap/researchlabeljob/",                // wires the recorder into the maintenance task
+		"internal/bootstrap/jquantswire/",                     // J-Quants (#1093): re-labels research labels with J-Quants exits and deletes those rows on cancellation
 		"internal/bootstrap/services_build.go",                // registers that task (one line)
+		"internal/domain/jquants/",                            // J-Quants (#1093): its value types name the exit_source column
 		"internal/domain/researchlabel/",                      // the record's value types
 		"internal/service/paperresultsmcp/researchdiag/",      // the read-only MCP query
 		"internal/service/paperresultsmcp/jev_models_tool.go", // registers that tool (next to the other read-only diagnostic tools)

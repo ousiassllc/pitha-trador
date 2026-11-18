@@ -41,6 +41,8 @@ func armsMessage(err error) string {
 		return which + " の送り先は最大 " + strconv.Itoa(jevtrialsettings.MaxProviderOnly) + " 件の提供元名（英数字と . _ - / :）で入力してください"
 	case jevtrialsettings.ArmsErrDataCollection:
 		return which + " のデータの扱いは「学習に使わない提供元だけ」か「制限しない」を選んでください"
+	case jevtrialsettings.ArmsErrLLMCutoff:
+		return which + " の llm_cutoff は空（未確認）か YYYY-MM-DD の日付にしてください"
 	}
 	return "アームの設定が正しくありません"
 }

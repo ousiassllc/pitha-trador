@@ -10,6 +10,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -76,6 +78,10 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 			return researchlabelsettings.Text(researchlabelsettings.DefaultEnabled)
 		}
 		return strconv.Itoa(researchlabelsettings.DefaultRetentionDays)
+	case jquantssettings.IsKey(key):
+		return jquantssettings.DefaultText(key)
+	case disclosuresrcsettings.IsKey(key):
+		return disclosuresrcsettings.DefaultText(key)
 	case watchsettings.IsKey(key):
 		return watchDefaultText(key)
 	case regimesettings.IsKey(key):

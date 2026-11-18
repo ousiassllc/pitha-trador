@@ -62,3 +62,4 @@
 | 1.63 | 2026-11-15 | `setup/pc-migration.md`の除外設定に立花の接続先URL（`base_url`）を追加し、「確認の有効期限」の原因から事実と異なる「アプリの再起動」を改め、展開サイズの上限と、予約後にデータが増えた場合の失敗を追記 | issue #1075 |
 | 1.64 | 2026-11-15 | AI のプロバイダー（独自 API／OpenRouter）と役割ごとのモデルの設定手順`setup/ai-providers.md`を追加し、`setup.md`から参照 | issue #1080 |
 | 1.65 | 2026-11-15 | 環境変数`PITHA_CODEX_HOME`・`PITHA_CODEX_BIN`と、ChatGPT のサブスク（Codex CLI のログイン）をトライアルのアームに使う手順を`setup/ai-providers.md`に追加 | issue #1081 |
+| 1.66 | 2026-11-15 | 「J-Quants の取り込み」節と手順書`setup/jquants.md`を追加（API キー`JQUANTS_API_KEY`・契約の内容・1日の要求数の上限・解約時の削除）。環境変数の許可キー一覧に`JQUANTS_API_KEY`を追記 | issue #1093 |

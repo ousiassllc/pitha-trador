@@ -71,6 +71,7 @@ func (s *Services) Start(ctx context.Context) error {
 	go func() { defer s.wg.Done(); s.HealthAlerts.Run(ctx) }()
 	s.startWatchList(ctx)
 	jobfailurelog.Start(ctx, &s.wg, s.Jobs) // issue #803
+	s.researchExtra.Start(ctx, &s.wg)       // replay evaluation (issue #1085): off by default
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)
@@ -81,9 +82,7 @@ func (s *Services) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the Scheduler's worker pool and cron triggers (scheduler.Scheduler.Stop), cancels the Jev shadow calls in flight
-// (issue #872) and waits for the extra goroutines Start launched (tied to the ctx passed to Start: cancel it first, e.g. from
-// OnShutdown) and the Scheduler to exit.
+// Stop stops the Scheduler's worker pool and cron triggers (scheduler.Scheduler.Stop), cancels the Jev shadow calls in flight (issue #872) and waits for the extra goroutines Start launched (tied to the ctx passed to Start: cancel it first, e.g. from OnShutdown) and the Scheduler to exit.
 func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.Trader.Close()

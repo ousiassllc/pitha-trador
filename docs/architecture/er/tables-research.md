@@ -29,6 +29,7 @@
 | long_cost_bps / short_cost_bps | numeric | NULL 可 | 記録時の設定で既存のラベルがその側に置くコスト（`costsettings.LabelBarriers`: `calibration.barrier_cost_bps` を `cost.*` で動かした値。ライブのラベラーと同じ関数） |
 | long_net_bps / short_net_bps | numeric | NULL 可 | `gross - cost` |
 | label_version | integer | NOT NULL, CHECK (`= 1`) | 1 = この研究用の定義（固定ホライズンで決済。TP/SL バリアなし） |
+| exit_source | text | NOT NULL, 既定 'snapshot', CHECK IN ('snapshot','jquants') | 出口の足の出どころ（issue #1093、マイグレーション000062）。`snapshot`＝`market_snapshots` の足（この記録部品が書いた行と、既存の行）、`jquants`＝足の無かった窓を J-Quants の分足で埋めて付け直した行。解約時はこの値が `jquants` の行だけを削除する（`er/tables-jquants.md`） |
 | created_at | text | NOT NULL | 記録した時刻（UTC） |
 
 制約・索引: `UNIQUE (snapshot_id, horizon)`。各側の 3 列は全部 NULL か全部非 NULL（CHECK）。その側に執行できる気配（買いは ask、売りは bid）が無い足は、その側の 3 列が NULL。両側とも無い足には行を作らない（CHECK: どちらかは非 NULL）。`(day, horizon, sample_bucket)`（日×ホライズンの読み）、`(instrument_id, snapshot_at)`（判断との結合）。

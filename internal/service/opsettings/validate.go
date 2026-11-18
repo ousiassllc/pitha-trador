@@ -15,6 +15,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -241,6 +243,18 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			_, err = researchlabelsettings.ParseRetentionDays(encoded)
 		}
 		if err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case jquantssettings.IsKey(key):
+		// Each value stands alone: only its own value is checked.
+		if _, err := jquantssettings.Parse(key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case disclosuresrcsettings.IsKey(key):
+		// Each value stands alone: only its own value is checked.
+		if err := disclosuresrcsettings.Validate(key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

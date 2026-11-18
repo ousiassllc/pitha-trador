@@ -11,15 +11,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// periodTools are the tools taking the from/to period arguments (eighteen since metalabel_training_readiness
-// / jev_models #848 / #849, session_diagnostics #850, entry_quality_whatif #911, disclosure_skip_summary #935,
-// jev_trial_compare / jev_trial_cost #1060, jev_evaluation #1073, research_horizon_summary #1074,
-// research_quote_source_compare #1083); health_today (#808) takes none (healthToday).
+// periodTools are the tools taking the from/to period arguments (issues #848-#1096, twenty);
+// health_today (#808) takes none (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
 	"metalabel_training_readiness", "jev_models", "session_diagnostics", "entry_quality_whatif", "disclosure_skip_summary", "jev_trial_compare", "jev_trial_cost",
-	"jev_evaluation", "research_horizon_summary", "research_quote_source_compare",
+	"jev_evaluation", "research_horizon_summary", "research_quote_source_compare", "disclosure_sources_status", "jquants_status",
 }
 
 const healthToday = "health_today"
@@ -52,13 +50,15 @@ var experimentTools = []string{"experiment_create", "experiment_close", "experim
 var jevShadowTools = []string{"jev_shadow_compare", "jev_shadow_cost", "jev_prompt_promote"}
 var researchStatusTools = []string{"research_daily_bars_status"} // #1082: read-only, no period
 
+var replayTools = []string{"replay_estimate", "replay_start", "replay_stop", "replay_progress", "replay_results"} // #1085; two write, pinned in replaytests
+
 // writingTools are the tools that change state; every other tool is annotated
 // read-only.
 var writingTools = []string{
 	"settings_set", "settings_write_enable", "settings_write_disable",
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 	"experiment_create", "experiment_close",
-	"jev_prompt_promote",
+	"jev_prompt_promote", "replay_start", "replay_stop",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {
@@ -112,12 +112,12 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchStatusTools)
+	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchStatusTools, replayTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchStatusTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchStatusTools)+len(replayTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -132,7 +132,7 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) {
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) || slices.Contains(replayTools, name) {
 			continue // their reach is pinned in settingstests and proposaltests
 		}
 		if !slices.Contains(allTools, name) {
