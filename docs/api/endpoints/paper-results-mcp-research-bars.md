@@ -1,10 +1,10 @@
 # API 仕様: Paper 実績 MCP の立花の日足の研究用収集の状況ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.35 の分割章（行数上限のため別ファイル）。issue #1082。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。設計は `docs/architecture/paper-results-mcp-research-bars.md`、表は `docs/architecture/er/tables-research.md`。
+`docs/api/endpoints/paper-results-mcp.md` §3.36 の分割章（行数上限のため別ファイル）。issue #1082。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。設計は `docs/architecture/paper-results-mcp-research-bars.md`、表は `docs/architecture/er/tables-research.md`。
 
 ## 3. ツール
 
-### 3.35 `research_daily_bars_status`
+### 3.36 `research_daily_bars_status`
 
 ブローカーが kabu のままでも、夜間に立花証券 e支店の日足を `daily_bars` に記録し、過去分を埋め戻す**研究用の収集**（取引に使わない。Settings の `research.tachibana_bars.enabled`、既定オフ）の状況を返す。
 

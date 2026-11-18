@@ -3,7 +3,7 @@ package trialquery
 import "github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 
 // CostNotice is the fixed caveat jev_trial_cost returns.
-const CostNotice = "費用は出所別に分ける: reported（応答が報告した usage.cost）・list_price_estimate（定価×入力トークンの推定）・unknown（どちらも無い）。" +
+const CostNotice = "費用は出所別に分ける: reported（応答が報告した usage.cost）・list_price_estimate（定価×入力トークンの推定）・unknown（どちらも無い）・subscription（ChatGPT のサブスク。USD は発生しない: usd も counted_usd も無く、USD の上限・合計には 0 としても入らない。呼び出し数とトークン数で数え、止める上限は limits.codex の呼び出し回数・トークン数）。" +
 	"unknown の実費は分からない（actual_usd は null。0 円ではない）。unknown_counted_usd は 1 日の上限の判定に数えた額（最悪値側の単価で数えた上限の見積り。課金されない前提の 4xx・529 応答は 0 と数えるので、その件数を counted_as_zero_calls に出す）で、reported・list_price_estimate の合計には混ぜない。" +
 	"list_price_estimate の usd は定価での推定額で、上限には、処理先を固定していないアーム（provider_only なし）なら定価と最悪値側の単価の高い方で数えた額 counted_usd を数える（低い定価で上限が甘くならないため）。" +
 	"見送り（呼ばなかった比較。費用は無く、上の呼び出し数・額には入らない）の今日の件数は limits.skipped_today に理由別に出す（全体とアームごと）。" +
@@ -40,21 +40,26 @@ type UnknownCost struct {
 // CostBlock is calls and cost by source. Reported and ListPriceEstimate sum
 // cost_usd; Unknown is kept apart and never added to them.
 type CostBlock struct {
-	Calls             int         `json:"calls"`
-	Reported          SourceCost  `json:"reported"`
-	ListPriceEstimate SourceCost  `json:"list_price_estimate"`
-	Unknown           UnknownCost `json:"unknown"`
-	CountedTotalUSD   float64     `json:"counted_total_usd"`
+	Calls             int              `json:"calls"`
+	Reported          SourceCost       `json:"reported"`
+	ListPriceEstimate SourceCost       `json:"list_price_estimate"`
+	Unknown           UnknownCost      `json:"unknown"`
+	Subscription      SubscriptionCost `json:"subscription"`
+	CountedTotalUSD   float64          `json:"counted_total_usd"`
 }
 
 func newCostBlock() CostBlock { return CostBlock{Unknown: UnknownCost{Basis: UnknownBasis}} }
 
 // add counts calls rows of source: usd is their summed cost_usd (known sources
 // only), counted their summed counted_cost_usd, zeroCounted those counted as 0.
-func (b *CostBlock) add(source string, calls int, usd, counted float64, zeroCounted int) {
+func (b *CostBlock) add(source string, calls int, usd, counted float64, zeroCounted, inTokens, outTokens int) {
 	b.Calls += calls
 	b.CountedTotalUSD += counted
 	switch source {
+	case jevtrial.CostSubscription:
+		b.Subscription.Calls += calls
+		b.Subscription.InputTokens += inTokens
+		b.Subscription.OutputTokens += outTokens
 	case jevtrial.CostReported:
 		b.Reported.Calls += calls
 		b.Reported.USD += usd
@@ -135,7 +140,10 @@ type Limits struct {
 	ThrottleCooldownSeconds int            `json:"throttle_cooldown_seconds"`
 	MinCallIntervalSeconds  int            `json:"min_call_interval_seconds"`
 	WorstCaseUSDPerMtok     float64        `json:"worst_case_usd_per_mtok"`
-	Arms                    []ArmLimits    `json:"arms"`
+	// Codex is the ChatGPT subscription provider's switch, login, caps and stop
+	// (issue #1081).
+	Codex CodexLimits `json:"codex"`
+	Arms  []ArmLimits `json:"arms"`
 }
 
 // CostReport is jev_trial_cost's data.

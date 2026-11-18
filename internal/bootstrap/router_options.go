@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/trialview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -71,10 +72,12 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithActivitySource(services.Activity),
 		router.WithOrderProposalSource(proposalview.Reader{DB: state.DB}),
 		router.WithHomeSource(homeview.Reader{DB: state.DB}),
+		router.WithTrialResultsSource(trialview.Reader{DB: state.DB}),
 		router.WithSecretsStore(secretsRepo),
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithDefaultBackupDir(startup.DefaultBackupDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
 		router.WithJevPromptSettings(jevprompt.New(state.DB)),
+		router.WithAIRoleSettings(services.aiRoles.Settings(services.Settings, secretsRepo)),
 		router.WithJevTrialSettings(jevtrial.New(state.DB).WithKeyStore(secretsRepo)),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),
@@ -83,10 +86,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithDataExporter(dataexport.NewLocal(state.DB, services.ErrorLogs)),
 		router.WithUniverseImporter(universe.NewImporter(services.Instruments, nil)),
-		router.WithCandidateRefreshInterval(scanner.CandidateRefreshInterval{
-			Min: time.Duration(scan.CandidateRefreshIntervalSecondsMin) * time.Second,
-			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,
-		}),
+		router.WithCandidateRefreshInterval(scanner.CandidateRefreshInterval{Min: time.Duration(scan.CandidateRefreshIntervalSecondsMin) * time.Second, Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second}),
 	}
 	return append(opts, services.watchlistRouterOptions()...)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/airoleview"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/disclosureskipdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/entryqualitydiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/evaldiag"
@@ -15,7 +16,7 @@ import (
 )
 
 func init() {
-	tools = append(tools, jevModelsTool, entryQualityWhatIfTool, disclosureSkipSummaryTool, trialCompareTool, trialCostTool, jevEvaluationTool, researchHorizonSummaryTool)
+	tools = append(tools, jevModelsTool, entryQualityWhatIfTool, disclosureSkipSummaryTool, trialCompareTool, trialCostTool, jevEvaluationTool, researchHorizonSummaryTool, aiRolesTool)
 }
 
 // Read-only tools: jev_models (#849, API §3.24), entry_quality_whatif (#911, §3.30), disclosure_skip_summary (#935, §3.31), jev_trial_compare / jev_trial_cost (#1060, §3.32), jev_evaluation (#1073, §3.33), research_horizon_summary (#1074, §3.34).
@@ -49,4 +50,8 @@ var (
 	trialCostTool              = queryTool("jev_trial_cost", trialtool.CostDescription, trialtool.SchemaProperties(), trialtool.RunCost)
 	jevEvaluationTool          = queryTool("jev_evaluation", evaldiag.Description, evaldiag.SchemaProperties(), evaldiag.Run)
 	researchHorizonSummaryTool = queryTool("research_horizon_summary", researchdiag.Description, researchdiag.SchemaProperties(), researchdiag.Run)
+	aiRolesTool                = readTool("ai_roles", airoleview.Description, func(ctx context.Context, e toolEnv) (any, int, error) { // issue #1080, API §3.35
+		v, err := airoleview.Read(ctx, e.q)
+		return v, len(v.Roles), err
+	})
 )

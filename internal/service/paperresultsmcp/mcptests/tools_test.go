@@ -24,8 +24,8 @@ var periodTools = []string{
 
 const healthToday = "health_today"
 
-// allTools is every tool of the dispatch table.
-var allTools = append(slices.Clone(periodTools), healthToday)
+// allTools is every read tool of the dispatch table; ai_roles (#1080) takes no period either.
+var allTools = append(slices.Clone(periodTools), healthToday, "ai_roles")
 
 // settingsTools are the tools of issues #806 / #807: the read tools of the
 // whitelisted settings and the only tools that write (settings_set and the

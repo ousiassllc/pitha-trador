@@ -11,9 +11,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 )
 
-// Providers an arm can name. Stage 1 is OpenRouter only (Cloudflare directly,
-// Scout and Luna come later).
-const ProviderOpenRouter = "openrouter"
+// Providers an arm can name (the AI provider layer of issue #1080: the same
+// ids as internal/config/airole). OpenRouter is the default of the trial; the
+// custom provider is the 独自 API connection (the Jev connection's URL and
+// key), which does not know OpenRouter's routing preferences. The ChatGPT
+// subscription through the Codex CLI (ProviderCodexChatGPT, issue #1081) is an
+// arm provider only and is declared in codex.go.
+const (
+	ProviderOpenRouter = "openrouter"
+	ProviderCustom     = "custom"
+)
 
 // Values of Arm.DataCollection (OpenRouter's provider.data_collection).
 const (
@@ -53,7 +60,7 @@ type Arm struct {
 	// ID names the arm in jev_trial_decisions.arm_id and in the per-arm keys,
 	// e.g. "or-clef-flash-v3".
 	ID string `json:"id"`
-	// Provider is ProviderOpenRouter.
+	// Provider is ProviderOpenRouter, ProviderCustom or ProviderCodexChatGPT.
 	Provider string `json:"provider"`
 	// Model is the model id sent, e.g. "cloudflare/clef-flash".
 	Model string `json:"model"`
@@ -155,8 +162,14 @@ func (a Arm) Validate() error {
 	if !armID.MatchString(a.ID) {
 		return armsErr(ArmsErrID, a.ID, "arm id %q must be 1〜48 characters of a-z, 0-9, '.', '_' or '-'", a.ID)
 	}
-	if a.Provider != ProviderOpenRouter {
-		return armsErr(ArmsErrProvider, a.ID, "arm %q: provider must be %q", a.ID, ProviderOpenRouter)
+	if a.Provider != ProviderOpenRouter && a.Provider != ProviderCustom && a.Provider != ProviderCodexChatGPT {
+		return armsErr(ArmsErrProvider, a.ID, "arm %q: provider must be %q, %q or %q", a.ID, ProviderOpenRouter, ProviderCustom, ProviderCodexChatGPT)
+	}
+	if a.Provider != ProviderOpenRouter && (len(a.ProviderOnly) > 0 || a.DataCollection != "" || a.ZDR) {
+		return armsErr(ArmsErrProvider, a.ID, "arm %q: provider_only, data_collection and zdr are OpenRouter routing preferences and cannot be used with provider %q", a.ID, a.Provider)
+	}
+	if a.Provider == ProviderCodexChatGPT && (a.DailyCostCapUSD != 0 || a.ListPriceUSDPerMtok != 0) {
+		return armsErr(ArmsErrProvider, a.ID, "arm %q: a %q arm has no USD cost; daily_cost_cap_usd and list_price_usd_per_mtok cannot be used (the caps are the provider's call and token caps)", a.ID, ProviderCodexChatGPT)
 	}
 	if a.Model == "" || len(a.Model) > MaxModelLen {
 		return armsErr(ArmsErrModel, a.ID, "arm %q: model must be 1〜%d characters", a.ID, MaxModelLen)
@@ -200,20 +213,31 @@ func ParseArms(jsonValue string) ([]Arm, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return nil, armsErr(ArmsErrJSON, "", "%s must hold exactly one JSON array", KeyArms)
 	}
+	if err := ValidateArms(arms); err != nil {
+		return nil, err
+	}
+	return arms, nil
+}
+
+// ValidateArms checks a list of arms: at most MaxArms, each one valid (Arm.Validate)
+// and the ids distinct. It is the one rule set behind ParseArms (the stored JSON)
+// and the Settings form (rows built from the posted fields). The error is an
+// *ArmsError.
+func ValidateArms(arms []Arm) error {
 	if len(arms) > MaxArms {
-		return nil, armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
+		return armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
 	}
 	seen := map[string]bool{}
 	for _, a := range arms {
 		if err := a.Validate(); err != nil {
-			return nil, err
+			return err
 		}
 		if seen[a.ID] {
-			return nil, armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
+			return armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
 		}
 		seen[a.ID] = true
 	}
-	return arms, nil
+	return nil
 }
 
 // EncodeArms validates arms and renders them as the stored JSON array ("[]" for
@@ -222,12 +246,12 @@ func EncodeArms(arms []Arm) (string, error) {
 	if arms == nil {
 		arms = []Arm{}
 	}
+	if err := ValidateArms(arms); err != nil {
+		return "", err
+	}
 	b, err := json.Marshal(arms)
 	if err != nil {
 		return "", fmt.Errorf("jevtrialsettings: encode %s: %w", KeyArms, err)
-	}
-	if _, err := ParseArms(string(b)); err != nil {
-		return "", err
 	}
 	return string(b), nil
 }

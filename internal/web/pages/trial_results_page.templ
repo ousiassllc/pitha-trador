@@ -1,0 +1,23 @@
+package pages
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/trialresults"
+)
+
+// TrialResultsPage is the お試し tab of the 成績 menu entry: the read-only
+// results of the model-comparison trial (the same figures as the MCP's
+// jev_trial_compare and jev_trial_cost). `GET /performance/trial`
+// (internal/web/handler/trialresults.Handler.Page) renders it. It has no
+// form or button: the trial is switched on and configured on the Settings
+// screen only.
+templ TrialResultsPage(props trialresults.Props) {
+	@layout.Shell("成績", organisms.NavPerformance) {
+		<h1 class="text-3xl font-semibold text-ink">成績</h1>
+		@molecules.TabNav("成績のタブ", resultTabs(tabTrial))
+		<p class="mt-6 text-sm text-mute">お試しで別のモデルに聞いた答えの記録を集計した結果です。取引には使われません。</p>
+		@trialresults.Panel(props)
+	}
+}

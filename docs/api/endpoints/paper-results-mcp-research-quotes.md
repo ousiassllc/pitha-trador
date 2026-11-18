@@ -1,10 +1,10 @@
 # API 仕様: Paper 実績 MCP の立花・kabu 時価の比較ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.36 の分割章（行数上限のため別ファイル）。issue #1083。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。設計は `docs/architecture/paper-results-mcp-research-quotes.md`、表は `docs/architecture/er/tables-research.md`（`research_quote_samples`）。
+`docs/api/endpoints/paper-results-mcp.md` §3.37 の分割章（行数上限のため別ファイル）。issue #1083。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。設計は `docs/architecture/paper-results-mcp-research-quotes.md`、表は `docs/architecture/er/tables-research.md`（`research_quote_samples`）。
 
 ## 3. ツール
 
-### 3.36 `research_quote_source_compare`
+### 3.37 `research_quote_source_compare`
 
 kabu の `market_snapshots` と、立花の研究用の時価の記録（`research_quote_samples`。立会中 1 分に 1 回・銘柄ごと）を並べて、**どれだけ同じ値か・どちらが欠けるか**を返す。取引の入力ではなく、しきい値の判定・採用の推奨・優劣の結論は含まない。記録は Settings の「立花の時価の記録（研究用）」（`research.tachibana_quotes.enabled`、既定オフ）がオンのときだけ動くので、オフの間は `days` が空で `status.state` が `disabled` になる。
 

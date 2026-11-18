@@ -1,0 +1,55 @@
+package jevtrial
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// CodexProps is Codex's input: the ChatGPT subscription provider (the Codex CLI's
+// login, issue #1081). It carries no credential and no text of the CLI's output.
+type CodexProps struct {
+	Enabled bool
+	// CallCap and TokenCap are the daily caps as numbers text; the *IsDefault flags
+	// say that none was stored (the field is then empty and shows the default).
+	CallCap, TokenCap                 string
+	CallCapIsDefault, TokenCapIsDefault bool
+	CallsToday, TokensToday           int
+	// LoginNote says what the last login check found; StopNote says why the
+	// provider is stopped now ("" when it is not).
+	LoginNote string
+	StopNote  string
+}
+
+// Codex renders the provider's switch, its caps and its status inside the trial form.
+templ Codex(props CodexProps) {
+	<div class="flex flex-col gap-2" data-testid="jev-trial-codex">
+		<div class="flex items-center gap-2">
+			@atoms.Switch(atoms.SwitchProps{Name: "codex_enabled", Attrs: checkedAttrs(props.Enabled, "jev-trial-codex-enabled")}) {
+				ChatGPT サブスク（Codex）を有効にする
+			}
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-codex", Label: "ChatGPT サブスクの説明"}) {
+				アームの provider に codex_chatgpt を指定すると、公式の Codex CLI（あなたが専用の CODEX_HOME に自分でログインした ChatGPT の契約）でそのアームを動かします。pitha はログイン情報（auth.json）を読まず、トークンも API キーも持ちません。このスイッチは既定でオフで、オフの間はアームを保存できず、呼び出しもしません。費用は USD では数えず（USD の上限には 0 として入ります）、ここで決める 1 日の呼び出し回数とトークン数の上限で止めます。上限に届いたとき・失敗したときは、再試行せずにプロバイダー全体を、再開時刻が分かればその時刻まで、分からなければその日いっぱい止めます。追加クレジットや従量課金の API キーには切り替わりません（クレジットを使わない設定は ChatGPT のアカウント側で確認してください）。同時に動かす Codex の呼び出しは 1 本だけです。
+			}
+		</div>
+		<div class="flex flex-wrap items-center gap-3">
+			<label for="jev-trial-codex-calls" class="text-ink">1 日の呼び出し回数の上限</label>
+			@atoms.Input(atoms.InputProps{ID: "jev-trial-codex-calls", Name: "codex_call_cap", Class: "w-auto", Attrs: codexCapAttrs(props.CallCap, props.CallCapIsDefault, "jev-trial-codex-call-cap")})
+			<label for="jev-trial-codex-tokens" class="text-ink">トークン数の上限（入力＋出力）</label>
+			@atoms.Input(atoms.InputProps{ID: "jev-trial-codex-tokens", Name: "codex_token_cap", Class: "w-auto", Attrs: codexCapAttrs(props.TokenCap, props.TokenCapIsDefault, "jev-trial-codex-token-cap")})
+		</div>
+		<span class="text-sm text-mute" data-testid="jev-trial-codex-today">今日: <span class="font-mono tabular-nums text-ink">{ itoa(props.CallsToday) } 回・{ itoa(props.TokensToday) } トークン</span></span>
+		<span class="text-sm text-mute" data-testid="jev-trial-codex-login">ログイン: { props.LoginNote }</span>
+		if props.StopNote != "" {
+			<span class="text-warning" role="status" data-testid="jev-trial-codex-stop">{ props.StopNote }</span>
+		}
+	</div>
+}
+
+// codexCapAttrs is a cap input: while the default is in force the field is empty
+// and shows it as a placeholder, so saving without typing stores nothing.
+func codexCapAttrs(value string, isDefault bool, testID string) templ.Attributes {
+	attrs := templ.Attributes{"inputmode": "numeric", "autocomplete": "off", "data-testid": testID}
+	if isDefault {
+		attrs["placeholder"] = value + "（既定値）"
+	} else {
+		attrs["value"] = value
+	}
+	return attrs
+}

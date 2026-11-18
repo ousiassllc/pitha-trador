@@ -1,6 +1,6 @@
 // Package researchquote persists the research-only 時価 samples (issue #1083):
 // research_quote_samples, one row per (source, symbol, minute) of what 立花
-// quoted next to the kabu broker's market_snapshots (migration 000058).
+// quoted next to the kabu broker's market_snapshots (migration 000060).
 //
 // The record is for research only. Policy, Risk, order placement, the Paper
 // guard, Live, the Feature Engine, Scout, Trader and the Jev prompts never

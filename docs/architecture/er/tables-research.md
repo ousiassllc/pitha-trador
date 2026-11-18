@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（研究用の記録: ホライズンラベル・立花の日足の収集・立花の時価）
 
-`docs/architecture/er.md` から分割した章。対象: `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（マイグレーション `000056`。issue #1074）、`research_tachibana_status` / `research_daily_bar_runs` / `research_daily_bar_progress`（`000057`。立花の日足の研究用収集。issue #1082。下の §立花の日足の研究用収集）、`research_quote_samples`（`000058`。立花の時価の記録。issue #1083。末尾の節）。以下の「位置づけ」から「保持と量」までは研究用ホライズンラベルの 3 表の説明。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-research-labels.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-labels.md`。実装は `internal/repository/researchlabel`（表）・`internal/service/researchlabel`（記録部品）・`internal/bootstrap/researchlabeljob`（日次タスク）。
+`docs/architecture/er.md` から分割した章。対象: `research_horizon_labels` / `research_label_days` / `research_label_day_stats`（マイグレーション `000056`。issue #1074）、`research_tachibana_status` / `research_daily_bar_runs` / `research_daily_bar_progress`（`000059`。立花の日足の研究用収集。issue #1082。下の §立花の日足の研究用収集）、`research_quote_samples`（`000060`。立花の時価の記録。issue #1083。末尾の節）。以下の「位置づけ」から「保持と量」までは研究用ホライズンラベルの 3 表の説明。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-research-labels.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-labels.md`。実装は `internal/repository/researchlabel`（表）・`internal/service/researchlabel`（記録部品）・`internal/bootstrap/researchlabeljob`（日次タスク）。
 
 ## 位置づけ
 
@@ -69,7 +69,7 @@ JST の日ごとの「記録を終えた」印と件数。記録部品は、そ�
 
 ## 立花の日足の研究用収集（`research_tachibana_status` / `research_daily_bar_runs` / `research_daily_bar_progress`）
 
-マイグレーション `000057`（issue #1082）。ブローカーが kabu のままでも、夜間に立花の日足を `daily_bars` へ記録し過去分を埋め戻す**研究専用・既定オフ**（`research.tachibana_bars.enabled`）の収集の状態と記録。取引には使わない: Policy・Risk・発注・Paper ガード・Live・Jev・Feature Engine・Scout・Trader は読まない（`internal/repository/researchbars/isolation_test.go` が参照できるファイルを収集・配線・読み取り専用の MCP ツール `research_daily_bars_status` に固定する）。`daily_bars` と `daily_bar_runs`（立花がブローカーのときの夜間バッチの記録）には列も制約も足さず、夜間バッチの記録とは混ぜない。設計は `docs/architecture/paper-results-mcp-research-bars.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-bars.md`（§3.35）。実装は `internal/repository/researchbars`・`internal/repository/researchstatus`・`internal/bootstrap/dailybars`（`Research`）。
+マイグレーション `000059`（issue #1082）。ブローカーが kabu のままでも、夜間に立花の日足を `daily_bars` へ記録し過去分を埋め戻す**研究専用・既定オフ**（`research.tachibana_bars.enabled`）の収集の状態と記録。取引には使わない: Policy・Risk・発注・Paper ガード・Live・Jev・Feature Engine・Scout・Trader は読まない（`internal/repository/researchbars/isolation_test.go` が参照できるファイルを収集・配線・読み取り専用の MCP ツール `research_daily_bars_status` に固定する）。`daily_bars` と `daily_bar_runs`（立花がブローカーのときの夜間バッチの記録）には列も制約も足さず、夜間バッチの記録とは混ぜない。設計は `docs/architecture/paper-results-mcp-research-bars.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-bars.md`（§3.36）。実装は `internal/repository/researchbars`・`internal/repository/researchstatus`・`internal/bootstrap/dailybars`（`Research`）。
 
 ### research_tachibana_status
 
@@ -114,7 +114,7 @@ JST の日ごとの「記録を終えた」印と件数。記録部品は、そ�
 
 ## research_quote_samples
 
-立花 e支店の日中の時価を、kabu の `market_snapshots` と並べて比べるための**研究専用**の記録（マイグレーション `000058`。issue #1083）。ブローカーが kabu のまま、立花の EVENT 配信（足りない銘柄だけ REST の時価）から、立会中に 1 分に 1 回、計画した銘柄ごとに 1 行を書く。取引には使わない: Feature Engine・Scout・Trader・Paper・Policy・Risk・発注・Live・Jev のプロンプトは読まない（`internal/repository/researchquote/isolation_test.go` が、参照できるファイルを記録部品 `internal/bootstrap/researchquotes`・保持タスク `internal/bootstrap/researchquotejob`・退避 `internal/service/snapshotarchive`・読み取り専用の MCP ツール `research_quote_source_compare`・その登録と配線・マイグレーションだけに固定する）。`market_snapshots` には書かない（記録部品は `market_snapshots` の書き込み手段を持たない）。外部キーはない（保持で行を削除しても、退避ファイルが残る）。設計は `docs/architecture/paper-results-mcp-research-quotes.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-quotes.md`、要件は FR-META-11・FR-MCP-41。実装は `internal/repository/researchquote`。
+立花 e支店の日中の時価を、kabu の `market_snapshots` と並べて比べるための**研究専用**の記録（マイグレーション `000060`。issue #1083）。ブローカーが kabu のまま、立花の EVENT 配信（足りない銘柄だけ REST の時価）から、立会中に 1 分に 1 回、計画した銘柄ごとに 1 行を書く。取引には使わない: Feature Engine・Scout・Trader・Paper・Policy・Risk・発注・Live・Jev のプロンプトは読まない（`internal/repository/researchquote/isolation_test.go` が、参照できるファイルを記録部品 `internal/bootstrap/researchquotes`・保持タスク `internal/bootstrap/researchquotejob`・退避 `internal/service/snapshotarchive`・読み取り専用の MCP ツール `research_quote_source_compare`・その登録と配線・マイグレーションだけに固定する）。`market_snapshots` には書かない（記録部品は `market_snapshots` の書き込み手段を持たない）。外部キーはない（保持で行を削除しても、退避ファイルが残る）。設計は `docs/architecture/paper-results-mcp-research-quotes.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-quotes.md`、要件は FR-META-11・FR-MCP-42。実装は `internal/repository/researchquote`。
 
 | 列 | 型 | 制約 | 説明 |
 |----|----|------|------|

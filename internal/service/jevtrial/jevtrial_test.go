@@ -24,6 +24,17 @@ var now = time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC)
 
 const validArms = `[{"id":"or-clef-flash","provider":"openrouter","model":"cloudflare/clef-flash","prompt_version":"trader-v3","daily_cost_cap_usd":0.02},{"id":"or-clef","provider":"openrouter","model":"cloudflare/clef","prompt_version":"trader-v3"}]`
 
+// arms parses a JSON array of arms the way the stored setting is read, for the
+// tests that build a Form from a fixture.
+func arms(t *testing.T, raw string) []jevtrialsettings.Arm {
+	t.Helper()
+	parsed, err := jevtrialsettings.ParseArms(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
+}
+
 type env struct {
 	db       *sql.DB
 	settings *system.RuntimeSettingsRepository
@@ -63,7 +74,7 @@ func TestState_DefaultIsOffWithNoArmsAndTheDefaultCap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Enabled || len(st.Arms) != 0 || st.ArmsJSON != "[]" || !st.CapIsDefault || st.CapUSD != 0.10 || st.Halt != nil {
+	if st.Enabled || len(st.Arms) != 0 || !st.CapIsDefault || st.CapUSD != 0.10 || st.Halt != nil {
 		t.Errorf("default state = %+v", st)
 	}
 	if st.TodayDate != "2026-11-13" || st.Today.Calls != 0 || st.Total.Calls != 0 || st.KeyKnown {
@@ -74,7 +85,7 @@ func TestState_DefaultIsOffWithNoArmsAndTheDefaultCap(t *testing.T) {
 func TestSave_PersistsTheExactKeysAndValues(t *testing.T) {
 	e := newEnv(t)
 	capUSD := 0.5
-	if err := e.s.Save(context.Background(), svc.Form{Enabled: true, ArmsJSON: validArms, Cap: &capUSD}); err != nil {
+	if err := e.s.Save(context.Background(), svc.Form{Enabled: true, Arms: arms(t, validArms), Cap: &capUSD}); err != nil {
 		t.Fatal(err)
 	}
 	for key, want := range map[string]string{jevtrialsettings.KeyEnabled: "1", jevtrialsettings.KeyDailyCostCapUSD: "0.5"} {
@@ -83,8 +94,8 @@ func TestSave_PersistsTheExactKeysAndValues(t *testing.T) {
 		}
 	}
 	raw, ok := e.stored(t, jevtrialsettings.KeyArms)
-	arms, err := jevtrialsettings.ParseArms(raw)
-	if !ok || err != nil || len(arms) != 2 || arms[0].ID != "or-clef-flash" || arms[0].DailyCostCapUSD != 0.02 {
+	stored, err := jevtrialsettings.ParseArms(raw)
+	if !ok || err != nil || len(stored) != 2 || stored[0].ID != "or-clef-flash" || stored[0].DailyCostCapUSD != 0.02 {
 		t.Fatalf("stored arms = %q (%v) %v", raw, ok, err)
 	}
 	st, err := e.s.State(context.Background())
@@ -116,7 +127,7 @@ func TestSingleSetters(t *testing.T) {
 	if err := e.s.SetCap(ctx, 0.25); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.s.SetArms(ctx, validArms); err != nil {
+	if err := e.s.SetArms(ctx, arms(t, validArms)); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := e.stored(t, jevtrialsettings.KeyEnabled); v != "1" {
@@ -139,33 +150,8 @@ func TestSingleSetters(t *testing.T) {
 	}
 }
 
-func TestSave_RejectedInputSavesNothing(t *testing.T) {
-	bad := func(v float64) *float64 { return &v }
-	for name, form := range map[string]svc.Form{
-		"arms not JSON":              {Enabled: true, ArmsJSON: `not json`},
-		"arms not an array":          {Enabled: true, ArmsJSON: `{"id":"a"}`},
-		"unknown field":              {Enabled: true, ArmsJSON: `[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","modle":"x"}]`},
-		"unregistered prompt":        {Enabled: true, ArmsJSON: `[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v999"}]`},
-		"duplicate arm":              {Enabled: true, ArmsJSON: `[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3"},{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3"}]`},
-		"cap zero (with valid arms)": {Enabled: true, ArmsJSON: validArms, Cap: bad(0)},
-		"cap negative":               {Enabled: true, ArmsJSON: validArms, Cap: bad(-1)},
-		"cap huge":                   {Enabled: true, ArmsJSON: validArms, Cap: bad(1e9)},
-	} {
-		e := newEnv(t)
-		err := e.s.Save(context.Background(), form)
-		if !errors.Is(err, svc.ErrInvalidInput) {
-			t.Errorf("%s: error = %v, want ErrInvalidInput", name, err)
-		}
-		for _, key := range jevtrialsettings.Keys() {
-			if _, ok := e.stored(t, key); ok {
-				t.Errorf("%s: stored %s", name, key)
-			}
-		}
-	}
-}
-
 func TestSetArms_UnregisteredPromptVersionIsNamed(t *testing.T) {
-	err := newEnv(t).s.SetArms(context.Background(), `[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v999"}]`)
+	err := newEnv(t).s.SetArms(context.Background(), []jevtrialsettings.Arm{{ID: "a", Provider: "openrouter", Model: "m", PromptVersion: "trader-v999"}})
 	if !errors.Is(err, svc.ErrInvalidInput) || !strings.Contains(err.Error(), "trader-v999") {
 		t.Errorf("error = %v", err)
 	}

@@ -39,7 +39,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 39 個（読み取り 19（期間指定 18 + `health_today`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 40 個（読み取り 20（期間指定 18 + `health_today`・`ai_roles`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 

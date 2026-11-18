@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/airolewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
@@ -100,6 +101,7 @@ type Services struct {
 	Updater      *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
 	strategy           *config.StrategyConfig
+	aiRoles            airolewire.Roles // each AI role's connection, resolved at start-up (issue #1080)
 	wg                 sync.WaitGroup
 	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 
@@ -198,7 +200,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
-	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
+	svc.buildExternalClients(state.DB, secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)

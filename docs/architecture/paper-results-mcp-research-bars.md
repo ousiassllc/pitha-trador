@@ -1,6 +1,6 @@
 # 設計: 立花の日足の研究用収集と状況ツール（Paper 実績 MCP の分割章）
 
-`docs/architecture/paper-results-mcp.md` §5 の分割章。issue #1082。API は `docs/api/endpoints/paper-results-mcp-research-bars.md`（§3.35）、表は `docs/architecture/er/tables-research.md`（`research_tachibana_status` / `research_daily_bar_runs` / `research_daily_bar_progress`。マイグレーション `000057`）。
+`docs/architecture/paper-results-mcp.md` §5 の分割章。issue #1082。API は `docs/api/endpoints/paper-results-mcp-research-bars.md`（§3.36）、表は `docs/architecture/er/tables-research.md`（`research_tachibana_status` / `research_daily_bar_runs` / `research_daily_bar_progress`。マイグレーション `000059`）。
 
 ## 1. 目的
 
