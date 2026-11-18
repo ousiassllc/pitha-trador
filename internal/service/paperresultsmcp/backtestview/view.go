@@ -1,5 +1,5 @@
 // Package backtestview renders the rows of backtest_runs as the output of the
-// research-backtest tools (issue #1086; docs/api/endpoints/paper-results-mcp-backtest.md).
+// research-backtest tools (issue #1086; docs/api/endpoints/research-tools/paper-results-mcp-backtest.md).
 package backtestview
 
 import (

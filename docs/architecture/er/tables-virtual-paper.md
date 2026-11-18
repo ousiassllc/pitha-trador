@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（仮想 Paper）
 
-`docs/architecture/er.md` から分割した章。対象: `virtual_paper_profiles` / `virtual_paper_days` / `virtual_paper_trades`（マイグレーション `000058`。issue #1087）。型・規約は `er.md` §型・規約に従う（時刻は UTC の RFC3339・小数 9 桁固定）。
+`docs/architecture/er.md` から分割した章。対象: `virtual_paper_profiles` / `virtual_paper_days` / `virtual_paper_trades`（マイグレーション `000066`。issue #1087）。型・規約は `er.md` §型・規約に従う（時刻は UTC の RFC3339・小数 9 桁固定）。
 
 ## 位置づけ
 

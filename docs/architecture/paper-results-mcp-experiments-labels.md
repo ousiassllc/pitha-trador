@@ -1,6 +1,6 @@
 # Paper 実績 MCP: 取引ゼロでも判定できる実験の比較（ラベルによる前後比較）と、変更の記録漏れの検出（issue #1088）
 
-`docs/architecture/paper-results-mcp-experiments.md`（調整の実験。issue #871）の追加章（行数上限のため別ファイル）。ツールの引数と出力は `docs/api/endpoints/paper-results-mcp-experiments-labels.md`。
+`docs/architecture/paper-results-mcp-experiments.md`（調整の実験。issue #871）の追加章（行数上限のため別ファイル）。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-experiments-labels.md`。
 
 ## 1. 目的と決めたこと
 

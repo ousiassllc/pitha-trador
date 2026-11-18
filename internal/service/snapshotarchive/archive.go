@@ -15,6 +15,9 @@
 // (timestamp, id). The vector index (market_snapshot_vectors) is derived
 // from the rows and is not archived.
 //
+// The research 時価 samples (research_quote_samples, issue #1083) are archived
+// by the same code into their own folder, research_quote_samples/ (NewResearchQuotes).
+//
 // The files stay on this PC: nothing here sends data anywhere, and the
 // directory is neither served by the application's web/MCP endpoints nor
 // part of the database backup (the broker's terms forbid third-party
@@ -33,12 +36,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 const (
-	// Table is the archived table's name and the archive's folder name.
+	// Table is the default archived table's name and the archive's folder name.
 	Table = "market_snapshots"
+	// ResearchQuoteTable is research_quote_samples (issue #1083), archived the
+	// same way into its own folder under the archive directory.
+	ResearchQuoteTable = "research_quote_samples"
 
 	dirMode  os.FileMode = 0o700
 	fileMode os.FileMode = 0o600
@@ -58,18 +65,38 @@ func DefaultDir(dbPath string) string {
 	return filepath.Join(filepath.Dir(dbPath), "snapshot_archive")
 }
 
-// Archiver archives market_snapshots days of one database into dir.
+// Archiver archives the days of one table (market_snapshots, or
+// research_quote_samples) of one database into dir.
 type Archiver struct {
 	db       *sql.DB
 	dir      string
+	table    string
 	pageSize int
 	now      func() time.Time
 }
 
-// New returns an Archiver writing under dir (created with mode 0700 when
-// missing).
-func New(db *sql.DB, dir string) *Archiver {
-	return &Archiver{db: db, dir: dir, pageSize: defaultPageSize, now: time.Now}
+// New returns an Archiver of market_snapshots writing under dir (created with
+// mode 0700 when missing).
+func New(db *sql.DB, dir string) *Archiver { return newTableArchiver(db, dir, Table) }
+
+// NewResearchQuotes returns an Archiver of research_quote_samples (issue
+// #1083) writing under dir/research_quote_samples/, next to market_snapshots'
+// own folder. Any table with id and timestamp columns could be archived this
+// way; the table name goes into SQL text, so only the two tables of this
+// package have a constructor.
+func NewResearchQuotes(db *sql.DB, dir string) *Archiver {
+	return newTableArchiver(db, dir, ResearchQuoteTable)
+}
+
+// forTable is the SQL text of the archiver's table: every statement is written
+// for market_snapshots and its table name is replaced by the archiver's, which
+// is one of the package's own constants, never an outside value.
+func (a *Archiver) forTable(sqlText string) string {
+	return strings.ReplaceAll(sqlText, Table, a.table)
+}
+
+func newTableArchiver(db *sql.DB, dir, table string) *Archiver {
+	return &Archiver{db: db, dir: dir, table: table, pageSize: defaultPageSize, now: time.Now}
 }
 
 // Dir returns the archive directory.
@@ -81,7 +108,7 @@ type Result struct {
 	// timestamps whose rows may be deleted: the start of the cutoff's date,
 	// so a date is only ever deleted whole.
 	DeleteBefore string
-	// MaxID is the largest market_snapshots.id that was part of the
+	// MaxID is the largest id of the archived table that was part of the
 	// archived state. Only rows with id <= MaxID may be deleted: a row
 	// inserted after the archive was read (a late writer) gets a larger id
 	// and is left for the next run, which archives it first.
@@ -98,7 +125,7 @@ type Result struct {
 func (a *Archiver) ArchiveBefore(ctx context.Context, cutoff time.Time) (Result, error) {
 	res := Result{DeleteBefore: cutoff.UTC().Format(time.DateOnly)}
 	if err := a.db.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(id), 0) FROM market_snapshots`).Scan(&res.MaxID); err != nil {
+		a.forTable(`SELECT COALESCE(MAX(id), 0) FROM market_snapshots`)).Scan(&res.MaxID); err != nil {
 		return Result{}, fmt.Errorf("snapshotarchive: read max id: %w", err)
 	}
 	dates, err := a.expiredDates(ctx, res.DeleteBefore, res.MaxID)
@@ -120,11 +147,11 @@ func (a *Archiver) ArchiveBefore(ctx context.Context, cutoff time.Time) (Result,
 
 // expiredDates lists the distinct UTC dates before deleteBefore that have
 // rows with id <= maxID, oldest first (an index range scan over
-// market_snapshots_timestamp_idx).
+// the table's timestamp index).
 func (a *Archiver) expiredDates(ctx context.Context, deleteBefore string, maxID int64) ([]string, error) {
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT DISTINCT substr(timestamp, 1, 10) FROM market_snapshots
-		 WHERE timestamp < ? AND id <= ? ORDER BY 1`, deleteBefore, maxID)
+		a.forTable(`SELECT DISTINCT substr(timestamp, 1, 10) FROM market_snapshots
+		 WHERE timestamp < ? AND id <= ? ORDER BY 1`), deleteBefore, maxID)
 	if err != nil {
 		return nil, fmt.Errorf("snapshotarchive: list expired dates: %w", err)
 	}
@@ -144,9 +171,9 @@ func (a *Archiver) expiredDates(ctx context.Context, deleteBefore string, maxID 
 }
 
 // tableDir is the folder of the archived table.
-func (a *Archiver) tableDir() string { return filepath.Join(a.dir, Table) }
+func (a *Archiver) tableDir() string { return filepath.Join(a.dir, a.table) }
 
 // filePath is the final path of the file of date ("YYYY-MM-DD").
 func (a *Archiver) filePath(date string) string {
-	return filepath.Join(a.tableDir(), date[:4], fmt.Sprintf("%s-%s.csv.gz", Table, date))
+	return filepath.Join(a.tableDir(), date[:4], fmt.Sprintf("%s-%s.csv.gz", a.table, date))
 }

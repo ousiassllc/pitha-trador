@@ -177,8 +177,8 @@ func TestTableRefusesInconsistentRows(t *testing.T) {
 	}
 }
 
-// Migration 57 creates backtest_runs and nothing else; stepping back removes it.
-func TestMigration000057_UpAndDown(t *testing.T) {
+// Migration 65 creates backtest_runs and nothing else; stepping back removes it.
+func TestMigration000065_UpAndDown(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatal(err)
@@ -203,19 +203,19 @@ func TestMigration000057_UpAndDown(t *testing.T) {
 		}
 		return n == 2
 	}
-	if err := m.Migrate(56); err != nil {
-		t.Fatalf("migrate to 56: %v", err)
+	if err := m.Migrate(64); err != nil {
+		t.Fatalf("migrate to 64: %v", err)
 	}
 	if exists() {
-		t.Fatal("backtest_runs exists before migration 57")
+		t.Fatal("backtest_runs exists before migration 65")
 	}
-	if err := m.Migrate(57); err != nil {
+	if err := m.Migrate(65); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	if !exists() {
-		t.Fatal("backtest_runs or its index is missing after migration 57")
+		t.Fatal("backtest_runs or its index is missing after migration 65")
 	}
-	if err := m.Migrate(56); err != nil {
+	if err := m.Migrate(64); err != nil {
 		t.Fatalf("migrate down: %v", err)
 	}
 	if exists() {

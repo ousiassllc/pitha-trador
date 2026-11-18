@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（研究用バックテストの記録）
 
-`docs/architecture/er.md` から分割した章。対象: `backtest_runs`（マイグレーション `000057`。issue #1086）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-backtest.md`、ツールは `docs/api/endpoints/paper-results-mcp-backtest.md`。実装は `internal/repository/backtestrun`（表）・`internal/service/backtestlab`（再生）・`internal/service/paperresultsmcp/backtestjob`（実行）・`mcpset/researchwrite/backtest.go`（書き込み）。
+`docs/architecture/er.md` から分割した章。対象: `backtest_runs`（マイグレーション `000065`。issue #1086）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/paper-results-mcp-backtest.md`、ツールは `docs/api/endpoints/research-tools/paper-results-mcp-backtest.md`。実装は `internal/repository/backtestrun`（表）・`internal/service/backtestlab`（再生）・`internal/service/paperresultsmcp/backtestjob`（実行）・`mcpset/researchwrite/backtest.go`（書き込み）。
 
 ## 位置づけ
 

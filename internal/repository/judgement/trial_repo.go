@@ -88,6 +88,28 @@ WHERE created_at >= ? AND created_at < ? AND (? = '' OR arm_id = ?)`,
 	return s, nil
 }
 
+// ProviderUsage is the calls and the tokens (input + output) of one provider's
+// rows, for a provider whose cost is not USD (the Codex subscription). A row
+// without token counts (a failed call) is a call and adds no tokens.
+type ProviderUsage struct {
+	Calls  int
+	Tokens int
+}
+
+// UsageByProviderBetween sums the calls and the tokens of the rows of provider
+// created in [from, to).
+func (r *TrialRepository) UsageByProviderBetween(ctx context.Context, provider string, from, to time.Time) (ProviderUsage, error) {
+	var u ProviderUsage
+	err := r.db.QueryRowContext(ctx, `
+SELECT COUNT(*), COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0) FROM jev_trial_decisions
+WHERE provider = ? AND created_at >= ? AND created_at < ?`,
+		provider, sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&u.Calls, &u.Tokens)
+	if err != nil {
+		return ProviderUsage{}, fmt.Errorf("repository: sum jev trial usage of provider %s: %w", provider, err)
+	}
+	return u, nil
+}
+
 // Get returns the trial row with the given id (tests and diagnostics).
 func (r *TrialRepository) Get(ctx context.Context, id int64) (jevtrial.Decision, error) {
 	var (

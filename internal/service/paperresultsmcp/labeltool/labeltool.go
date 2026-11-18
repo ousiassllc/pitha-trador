@@ -1,5 +1,5 @@
 // Package labeltool holds the additions of issue #1088 to the experiment tools
-// (docs/api/endpoints/paper-results-mcp-experiments-labels.md):
+// (docs/api/endpoints/research-tools/paper-results-mcp-experiments-labels.md):
 //   - experiment_compare returns a label_based member next to the trade-based
 //     fields (labelcompare), which never changes verdict / judged;
 //   - settings_set takes an optional hypothesis and then records the experiment

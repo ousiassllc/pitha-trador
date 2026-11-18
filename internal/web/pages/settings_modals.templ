@@ -1,0 +1,46 @@
+package pages
+
+import "github.com/ousiassllc/pitha-trador/internal/web/molecules"
+
+// mcpModals are the MCP dialog and the adjustment experiments dialog
+// (modal-mcp, modal-mcp-experiments). Each fills in its slot on load.
+templ mcpModals(props SettingsProps) {
+		if props.MCP && props.Has("modal-mcp") {
+			@molecules.Modal("modal-mcp", "MCP") {
+				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
+				// on load, so the reachability probe never slows the page;
+				// the panel's forms swap this element's content in place.
+				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
+			}
+			<script type="module" src="/static/dist/js/copy-button/pitha-copy-button.js"></script>
+		}
+		if props.MCP && props.MCPExperiments && props.Has("modal-mcp-experiments") {
+			@molecules.Modal("modal-mcp-experiments", "調整の実験（前後比較）") {
+				// Filled in by `GET /settings/mcp/experiments`
+				// (internal/web/organisms/mcp, Experiments) on load; its forms and
+				// buttons swap this element's content in place.
+				<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-target="this" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
+			}
+		}
+}
+
+// jevModals are the Jev prompt and model-comparison trial dialogs
+// (modal-jev-prompt, modal-jev-trial). Each fills in its slot on load.
+templ jevModals(props SettingsProps) {
+		if props.JevPrompt && props.Has("modal-jev-prompt") {
+			@molecules.Modal("modal-jev-prompt", "Jev プロンプトの版とシャドー比較") {
+				// Filled in by `GET /settings/jev-prompt-panel`
+				// (internal/web/organisms/jevprompt) on load; its forms swap this
+				// element's content in place.
+				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+			}
+		}
+		if props.JevTrial && props.Has("modal-jev-trial") {
+			@molecules.Modal("modal-jev-trial", "モデル比較トライアル") {
+				// Filled in by `GET /settings/jev-trial-panel`
+				// (internal/web/organisms/jevtrial) on load; its form swaps this
+				// element's content in place.
+				<div id="jev-trial-panel" hx-get="/settings/jev-trial-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+			}
+		}
+}

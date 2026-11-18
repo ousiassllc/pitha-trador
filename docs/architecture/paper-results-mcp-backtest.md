@@ -1,6 +1,6 @@
 # 設計: MCP から起動する研究用バックテスト（backtest_start / backtest_get / backtest_list）
 
-`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1086。ツールの引数と出力は `docs/api/endpoints/paper-results-mcp-backtest.md`、表は `docs/architecture/er/tables-backtest.md`。
+`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1086。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-backtest.md`、表は `docs/architecture/er/tables-backtest.md`。
 
 ## 1. 目的と位置づけ
 
@@ -20,7 +20,7 @@ Grok Bot（あおい）が、期間と売買の条件（エントリーの規則
 | 部品 | 場所 | 役割 |
 |---|---|---|
 | ラボ | `internal/service/backtestlab` | `ConfigSource`（入力の IF）、要求の検査と既定値（`Normalize`）、1 回の実行（`Run`）、組ごとの結果の集計（コスト込みの期待値・最大 DD・日別・クラスター区間・感度）、参考印。DB も設定も書かない |
-| 記録 | `internal/repository/backtestrun` | `backtest_runs` の行（INSERT 1・UPDATE 3 種）と読み（`Get` / `List`）。マイグレーション `000057` |
+| 記録 | `internal/repository/backtestrun` | `backtest_runs` の行（INSERT 1・UPDATE 3 種）と読み（`Get` / `List`）。マイグレーション `000065` |
 | ジョブ | `internal/service/paperresultsmcp/backtestjob` | 同時 1 件・時間の上限・状態の遷移・再起動で残った行の掃除。入力の元（`SourceFactory`）と書き込み（`Store`）は注入 |
 | 書き込み | `internal/service/paperresultsmcp/mcpset/researchwrite/backtest.go` | `Writer` の 4 つのトランザクション（作成・開始・終了・掃除）。作成だけ書き込みスイッチを見る |
 | ツール | `internal/service/paperresultsmcp/backtesttool`（出力の形は `backtestview`） | `backtest_start`（`writes`）/ `backtest_get` / `backtest_list` |

@@ -4,7 +4,7 @@
 // virtual_paper_trades (the virtual entries and exits a profile would have made
 // on the same stored market_snapshots and jev_decisions) and virtual_paper_days
 // (the per-(profile, JST day) mark that a day is fully recorded; migration
-// 000058).
+// 000066).
 //
 // The record is for research only. Policy, Risk, order placement, execution, the
 // Paper guard, Live, Jev and self-improvement never read it, and it never writes

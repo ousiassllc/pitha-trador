@@ -1,6 +1,6 @@
 # 設計: 仮想 Paper（プロファイルの並走と比較。記録専用）
 
-`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1087。API は `docs/api/endpoints/paper-results-mcp-virtual-paper.md`、表は `docs/architecture/er/tables-virtual-paper.md`。
+`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1087。API は `docs/api/endpoints/research-tools/paper-results-mcp-virtual-paper.md`、表は `docs/architecture/er/tables-virtual-paper.md`。
 
 ## 1. 目的と位置づけ
 

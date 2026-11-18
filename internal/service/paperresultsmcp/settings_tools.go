@@ -36,22 +36,18 @@ func noArgs(raw json.RawMessage) *toolError {
 	return strictDecode(raw, &a)
 }
 
+// readTool is a read-only tool without arguments and without a period.
+func readTool(name, description string, run runFunc) tool {
+	return tool{name: name, description: description, schema: objectSchema(map[string]any{}), noPeriod: true,
+		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) { return periodArgs{}, run, noArgs(raw) }}
+}
+
 var settingsTools = []tool{
-	{
-		name:        "settings_get",
-		description: "MCP から変更できる基本設定（ホワイトリスト）の現在値の一覧。値・単位・出どころ（stored / default）・許容範囲・書き込み許可・スナップショット ID・LLM cutoff の状態コード llm_cutoff_status（placeholder / unverified / confirmed）を返す（秘密はマスク。読み取り専用）",
-		schema:      objectSchema(map[string]any{}),
-		noPeriod:    true,
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			if err := noArgs(raw); err != nil {
-				return periodArgs{}, nil, err
-			}
-			return periodArgs{}, func(ctx context.Context, e toolEnv) (any, int, error) {
-				st, err := mcpset.Current(ctx, e.q, e.paperLimits)
-				return st, len(st.Items), err
-			}, nil
-		},
-	},
+	readTool("settings_get", "MCP から変更できる基本設定（ホワイトリスト）の現在値の一覧。値・単位・出どころ（stored / default）・許容範囲・書き込み許可・スナップショット ID・LLM cutoff の状態コード llm_cutoff_status（placeholder / unverified / confirmed）を返す（秘密はマスク。読み取り専用）",
+		func(ctx context.Context, e toolEnv) (any, int, error) {
+			st, err := mcpset.Current(ctx, e.q, e.paperLimits)
+			return st, len(st.Items), err
+		}),
 	{
 		name: "settings_set",
 		description: "ホワイトリストの設定を 1 つ変更する（Settings 画面と同じ保存先・同じ検証。書き込み許可がオフのときは拒否。変更は監査ログに残る）。" +

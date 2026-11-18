@@ -15,6 +15,9 @@ type ArmRow struct {
 	FailureCap    int
 	// Status is "" while the arm runs, else why it is stopped today.
 	Status string
+	// Subscription is true for an arm of the ChatGPT subscription: it has no USD
+	// cost or cap (the provider's call and token caps are shown with it).
+	Subscription bool
 }
 
 // PanelProps is Panel's input.
@@ -26,9 +29,9 @@ type PanelProps struct {
 	// (not a value stored on this screen).
 	CapUSD       string
 	CapIsDefault bool
-	// ArmsJSON is the arms the form edits; ArmsError says why the stored arms
-	// are ignored ("" when they parse).
-	ArmsJSON  string
+	// Editor is the arm form (one row per arm); ArmsError says why the stored
+	// arms are ignored ("" when they parse).
+	Editor    ArmEditorProps
 	ArmsError string
 	// KeyKnown and KeySet: whether OPENROUTER_API_KEY is set (never its value).
 	KeyKnown bool
@@ -41,6 +44,8 @@ type PanelProps struct {
 	TotalUSD   string
 	// HaltNote is why the whole trial is stopped today ("" when it is not).
 	HaltNote string
+	// Codex is the ChatGPT subscription provider (codex.templ).
+	Codex CodexProps
 	Arms     []ArmRow
 	// Notice is the outcome of the action that produced this fragment.
 	Notice string
@@ -59,12 +64,12 @@ templ Panel(props PanelProps) {
 		if !props.TrialRuns {
 			<p class="text-warning" role="status" data-testid="jev-trial-not-paper">この動作モードは Paper ではないため、トライアルは動きません。</p>
 		} else {
-			<p class="text-mute" data-testid="jev-trial-paper-only">トライアルは Paper でだけ動きます。</p>
+			<p class="text-mute" data-testid="jev-trial-paper-only">Paper でだけ動きます。</p>
 		}
 		<form class="flex flex-col gap-3" hx-post="/settings/jev-trial" hx-target="#jev-trial-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-trial-form">
 			<div class="flex items-center gap-2">
 				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: checkedAttrs(props.Enabled, "jev-trial-enabled")}) {
-					トライアルを有効にする（Paper のみ）
+					トライアルを有効にする
 				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-enabled", Label: "トライアルの説明"}) {
 					トライアルは、ライブの判断ごとに同じ入力を別のモデル（アーム）にも送り、答えをライブの判断とは別の記録として保存して比べるものです。アームの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも、ライブの判断の記録にも一切使いません。アームどうしも互いの答えを見ません。Paper だけで動き、Live では動きません。既定はオフで、オンにできるのはこの画面だけです（MCP からは変えられません）。オンにすると、ライブの判断ごとにアームの数だけ外部の API 呼び出しが増え、費用が発生します。無効にするのはいつでもできます。
@@ -72,16 +77,14 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
-					<label for="jev-trial-arms" class="text-ink">アーム（JSON）</label>
+					<span class="text-ink">アーム</span>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-arms", Label: "アームの説明"}) {
-						アームは比べるモデル 1 つの設定で、JSON の配列で書きます（空の配列 [] ならアームなし）。項目は id（英小文字・数字・. _ - の 1〜48 文字）・provider（openrouter）・model・prompt_version（このビルドに登録された trader の版）が必須で、daily_cost_cap_usd（アームごとの 1 日の上限。省略は 0.05 USD）・list_price_usd_per_mtok（応答が費用を返さないときの見積りに使う、入力 100 万トークンあたりの定価）・provider_only・data_collection・zdr は任意です。data_collection の既定は deny（学習に使わない提供元だけに送る）で、送り先が減るぶん応答が失敗しやすくなることがあります。allow にすると送り先は増えますが、入力が提供元の学習に使われ得ます。アームは最大 8 つで、保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは OPENROUTER_API_KEY（外部連携・AI の「OpenRouter」）に設定します。
+						アームは比べるモデル 1 つの設定です。1 行が 1 つのアームで、最大 8 つまで追加できます（0 件ならトライアルは何も呼びません）。アーム名は英小文字・数字・. _ - の 1〜48 文字で、アームごとに別の名前にします。提供元は OpenRouter・独自 API（custom）・ChatGPT サブスク（codex_chatgpt）から選び、モデルはその提供元のモデル id、プロンプトの版はこのビルドに登録された trader の版から選びます。この 4 つは必須です。1 日の上限（USD）は、そのアームだけの 1 日の上限で、空にすると 0.05 USD です。定価は、応答が費用を返さないときの見積りに使う入力 100 万トークンあたりの定価で、空なら不明として扱います。送り先の提供元は、指定すると OpenRouter がその提供元だけに送り（ほかへ切り替えません）、カンマ区切りで最大 8 件です。データの扱いの既定は「学習に使わない提供元だけ」で、送り先が減るぶん応答が失敗しやすくなることがあります。「制限しない」にすると送り先は増えますが、入力が提供元の学習に使われ得ます。ZDR は、データを保持しない提供元だけに送ります。送り先・データの扱い・ZDR は OpenRouter のアームだけで使えます。ChatGPT サブスクのアームは USD で数えないため、1 日の上限と定価も使えません（上限は下の「ChatGPT サブスク」の呼び出し回数とトークン数です）。保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは、外部連携・AI の「OpenRouter」で設定します。
 					}
 				</div>
-				@atoms.Textarea(atoms.TextareaProps{ID: "jev-trial-arms", Name: "arms", Class: "w-full font-mono text-xs", Attrs: templ.Attributes{"rows": "10", "spellcheck": "false", "autocomplete": "off", "data-testid": "jev-trial-arms"}}) {
-					{ props.ArmsJSON }
-				}
+				@ArmEditor(props.Editor)
 				if props.ArmsError != "" {
-					<span class="text-warning" role="status" data-testid="jev-trial-arms-error">保存されているアームの設定が不正なため、アームなしとして扱っています。</span>
+					<span class="text-warning" role="status" data-testid="jev-trial-arms-error">保存されているアームの設定が不正なため、アームなしとして扱っています。保存すると置き換わります。</span>
 				}
 				if props.KeyKnown {
 					<span class="text-sm text-mute" data-testid="jev-trial-key">
@@ -96,20 +99,21 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
-					<label for="jev-trial-cap" class="text-ink">全体の 1 日あたりの費用上限（USD。日本時間の日）</label>
+					<label for="jev-trial-cap" class="text-ink">全体の 1 日の費用上限（USD）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-cap", Label: "費用上限の説明"}) {
-						全アームの費用の合計がこの上限に達すると、その日のトライアル全体を止めます（ライブの判断は止まりません。翌日に再開します）。アームごとの上限（アームの daily_cost_cap_usd）にも別に達するとそのアームだけ止まります。欄を空のまま保存すると既定値が使われ、保存した値を消して既定値に戻すときも欄を空にして保存します。費用は、応答が返した費用（reported）を最優先で数え、無ければ定価×入力トークンの見積り、どちらも無ければ「不明」とし、不明の呼び出しは 0 USD とは数えず、最も高い単価で数えます（上限をすり抜けないため）。請求書とは突き合わせていません。支払い不足（402）・権限なし（403）の応答はその日のうちに即停止し、レート制限・過負荷（429/529）は一定時間止めます。失敗した呼び出しの回数にも 1 日の上限があり、この回数は固定です。
+						1 日は日本時間の日です。全アームの費用の合計がこの上限に達すると、その日のトライアル全体を止めます（ライブの判断は止まりません。翌日に再開します）。アームごとの 1 日の上限にも別に達するとそのアームだけ止まります。欄を空のまま保存すると既定値が使われ、保存した値を消して既定値に戻すときも欄を空にして保存します。費用は、応答が返した費用（reported）を最優先で数え、無ければ定価×入力トークンの見積り、どちらも無ければ「不明」とし、不明の呼び出しは 0 USD とは数えず、最も高い単価で数えます（上限をすり抜けないため）。請求書とは突き合わせていません。支払い不足（402）・権限なし（403）の応答はその日のうちに即停止し、レート制限・過負荷（429/529）は一定時間止めます。失敗した呼び出しの回数にも 1 日の上限があり、この回数は固定です。
 					}
 				</div>
 				@atoms.Input(atoms.InputProps{ID: "jev-trial-cap", Name: "cap", Class: "w-auto", Attrs: capAttrs(props)})
 				<span class="text-sm text-mute" data-testid="jev-trial-cap-note">
 					if props.CapIsDefault {
-						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-trial-cap-effective">{ props.CapUSD } USD</span>（既定値）。
+						今の上限: <span class="font-mono tabular-nums text-ink" data-testid="jev-trial-cap-effective">{ props.CapUSD } USD</span>（既定値）
 					} else {
-						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-trial-cap-effective">{ props.CapUSD } USD</span>（保存した値）。
+						今の上限: <span class="font-mono tabular-nums text-ink" data-testid="jev-trial-cap-effective">{ props.CapUSD } USD</span>（保存した値）
 					}
 				</span>
 			</div>
+			@Codex(props.Codex)
 			<div id="jev-trial-error" data-testid="jev-trial-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-trial-save"}}) {
@@ -140,7 +144,13 @@ templ Panel(props PanelProps) {
 							<tr data-testid="jev-trial-arm-row">
 								<td class="px-2 py-1.5"><code>{ a.ID }</code><br/><span class="text-mute">{ a.Model }・{ a.PromptVersion }</span></td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(a.TodayCalls) }</td>
-								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">{ a.TodayUSD } / { a.CapUSD }</td>
+								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">
+									if a.Subscription {
+										サブスク（USD なし）
+									} else {
+										{ a.TodayUSD } / { a.CapUSD }
+									}
+								</td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-failures">{ itoa(a.FailuresToday) } / { itoa(a.FailureCap) }</td>
 								<td class="px-2 py-1.5" data-testid="jev-trial-arm-status">
 									if a.Status == "" {

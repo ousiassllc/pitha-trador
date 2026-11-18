@@ -170,6 +170,8 @@ var dialogs = []Dialog{
 	{PageResults, "modal-regime", nil},
 	{PageResults, "modal-orderflow", nil},
 	{PageResults, "modal-research-labels", nil},
+	{PageResults, "modal-research-jobs", nil},
+	{PageResults, "modal-research-promotion", nil},
 
 	// 証券会社・データ
 	{PageBroker, "modal-broker", nil},
@@ -180,16 +182,24 @@ var dialogs = []Dialog{
 	{PageBroker, "modal-tachibana-nightly", nil},
 	{PageBroker, "modal-tachibana-intraday", nil},
 	{PageBroker, "modal-tachibana-screen", nil},
+	{PageBroker, "modal-research-tachibana-bars", nil},
+	{PageBroker, "modal-research-tachibana-quotes", nil},
 
 	// 外部連携・AI
+	{PageIntegrations, "modal-ai-roles", nil},
 	{PageIntegrations, "modal-jev", nil},
 	{PageIntegrations, "modal-luna", nil},
 	{PageIntegrations, "modal-sol", nil},
 	{PageIntegrations, "modal-opus", nil},
 	{PageIntegrations, "modal-openrouter", nil},
+	{PageIntegrations, "modal-jquants", nil},
+	{PageIntegrations, "modal-jquants-fetch", nil},
+	{PageIntegrations, "modal-edinet", nil},
+	{PageIntegrations, "modal-disclosure-src", nil},
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
+	{PageIntegrations, "modal-mcp-experiments", nil},
 	{PageIntegrations, "modal-jev-prompt", nil},
 	{PageIntegrations, "modal-jev-trial", nil},
 

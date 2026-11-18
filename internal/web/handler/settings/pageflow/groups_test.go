@@ -62,6 +62,8 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 		"sol":        {config.KeySolAPIKey, config.KeySolBaseURL},
 		"opus":       {config.KeyOpusAPIKey, config.KeyOpusBaseURL},
 		"openrouter": {config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL},
+		"jquants":    {config.KeyJQuantsAPIKey},
+		"edinet":     {config.KeyEdinetAPIKey},
 		"tachibana":  {config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword},
 	}
 	var all []string
@@ -99,7 +101,7 @@ func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 
 	body := allPagesBody(t, engine)
 
-	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default", "openrouter": "unset"} {
+	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default", "openrouter": "unset", "jquants": "unset", "edinet": "unset"} {
 		if want := `data-testid="connection-status-` + id + `"`; !strings.Contains(body, want) {
 			t.Fatalf("no status for %s", id)
 		}
@@ -148,7 +150,7 @@ func TestSettingsHandler_UnsetOptionalKeys_DoesNotNagAboutDefaultedKeys(t *testi
 	for _, key := range []string{
 		config.KeyJevBaseURL, config.KeyJevModel,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
-		config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
+		config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL, config.KeyJQuantsAPIKey,
 		config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	} {
 		if slices.Contains(got, key) {

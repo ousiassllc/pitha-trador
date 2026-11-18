@@ -28,7 +28,7 @@ type ConfigSource interface {
 }
 
 // Limits of one run. They bound the work a single MCP call can ask for; the
-// MCP documents them (docs/api/endpoints/paper-results-mcp-backtest.md).
+// MCP documents them (docs/api/endpoints/research-tools/paper-results-mcp-backtest.md).
 const (
 	// MaxVariants is the most parameter sets one run explores.
 	MaxVariants = 12

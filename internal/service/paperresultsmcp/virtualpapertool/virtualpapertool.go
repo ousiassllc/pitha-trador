@@ -17,7 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/virtualpaper"
 )
 
-// The virtual Paper tools (issue #1087; docs/api/endpoints/paper-results-mcp-virtual-paper.md):
+// The virtual Paper tools (issue #1087; docs/api/endpoints/research-tools/paper-results-mcp-virtual-paper.md):
 // virtual_paper_profile_create (also the clone) and virtual_paper_profile_stop
 // write one virtual_paper_profiles row each (mcpset.Writer, behind the write
 // switch); virtual_paper_compare only reads. The virtual trades are recorded by

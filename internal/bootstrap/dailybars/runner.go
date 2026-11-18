@@ -79,6 +79,12 @@ func (r *Runner) Run(ctx context.Context) {
 	safego.Loop(ctx, "tachibana nightly daily bars", func() time.Duration { return pollInterval }, r.RunDue)
 }
 
+// batch is the walk over the night's universe, resuming after the run's cursor.
+func (r *Runner) batch() *batch {
+	return &batch{name: "nightly", source: r.cfg.Source, bars: r.cfg.Bars, runs: r.cfg.Runs,
+		settings: r.cfg.Settings, clock: r.clock, remaining: afterCursor}
+}
+
 // NightOf is the 立会日 key (YYYY-MM-DD) of the night now belongs to: the JST
 // date of the evening it started in, so 00:00〜07:59 is still the previous
 // date's night.
@@ -104,11 +110,14 @@ func startAt(night string, runTime string) time.Time {
 // due reports whether the batch of the night now belongs to may be started at
 // now: the configured time has come and now is outside 8:00〜15:30 JST. This
 // is the time guard: the batch is never started in the daytime.
-func (r *Runner) due(now time.Time) bool {
+func (r *Runner) due(now time.Time) bool { return dueAt(now, r.cfg.Settings.RunTime) }
+
+// dueAt is due for the run time "HH:MM".
+func dueAt(now time.Time, runTime string) bool {
 	if tachibana.InDaytime(now) {
 		return false
 	}
-	return !now.Before(startAt(NightOf(now), r.cfg.Settings.RunTime))
+	return !now.Before(startAt(NightOf(now), runTime))
 }
 
 // RunDue starts or resumes tonight's batch if it is due: the time has come,
@@ -130,7 +139,7 @@ func (r *Runner) RunDue(ctx context.Context) error {
 	if !found {
 		prev = domain.DailyBarRun{RunDate: night}
 	}
-	run := r.night(ctx, prev)
+	run := r.batch().night(ctx, prev)
 	if run.Status != domain.DailyBarRunSucceeded && ctx.Err() == nil {
 		r.retryAfter = r.clock.Now().Add(retryBackoff)
 	}

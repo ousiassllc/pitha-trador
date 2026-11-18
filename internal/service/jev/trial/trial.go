@@ -56,6 +56,9 @@ type Results interface {
 	Insert(ctx context.Context, d jevtrial.Decision) (jevtrial.Decision, error)
 	SpentBetween(ctx context.Context, from, to time.Time) (judgement.TrialSpend, error)
 	SpentByArmBetween(ctx context.Context, arm string, from, to time.Time) (judgement.TrialSpend, error)
+	// UsageByProviderBetween counts the calls and tokens of one provider's rows,
+	// for a provider whose cost is not USD (the Codex subscription).
+	UsageByProviderBetween(ctx context.Context, provider string, from, to time.Time) (judgement.ProviderUsage, error)
 	// InsertSkip records that an arm was not asked about a live decision
 	// (jev_trial_skips). It is a count of decisions the comparison did not cover,
 	// never a result row.
@@ -75,6 +78,17 @@ type Settings interface {
 type Caller interface {
 	Configured() bool
 	Trader(ctx context.Context, req jev.TraderRequest) (trialwire.Response, time.Duration, int, error)
+}
+
+// SubscriptionCaller is the Caller of an arm of the ChatGPT subscription
+// (jevtrialsettings.ProviderCodexChatGPT; *codexwire.Client implements it). It
+// is also asked whether the CLI is logged in, and an arm whose Caller is not one
+// is never called.
+type SubscriptionCaller interface {
+	Caller
+	// Login is the state of the CLI's login (a jevtrialsettings.CodexLogin*
+	// constant) and when it was checked.
+	Login(ctx context.Context) (state string, checkedAt time.Time)
 }
 
 // Trial is the model-comparison runner. It implements jev.ShadowSubmitter.
@@ -105,6 +119,12 @@ type Trial struct {
 	// its record cannot be written (the cost caps are re-derived from stored
 	// rows, these two are not).
 	halted map[string]string
+	// codexUntil is the end of the Codex provider's stop (codex.go), kept in memory
+	// so it holds even when the stop record cannot be written; codexBusy is the
+	// one running Codex call (a provider runs one call at a time).
+	codexUntil  time.Time
+	codexReason string
+	codexBusy   chan struct{}
 	// resMu guards the reservations of the calls that are allowed but whose rows
 	// are not stored yet (reserve.go): over all arms and per arm.
 	resMu         sync.Mutex
@@ -129,7 +149,7 @@ func New(results Results, settings Settings, callers func(jevtrialsettings.Arm) 
 	t := &Trial{results: results, settings: settings, callers: callers, mode: mode, now: now,
 		slots: make(chan struct{}, maxInFlight), base: base, cancel: cancel,
 		minInterval: jevtrialsettings.MinCallInterval, pace: time.Now,
-		reservedArm: map[string]float64{}, lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}, halted: map[string]string{}}
+		codexBusy: make(chan struct{}, 1), reservedArm: map[string]float64{}, lastCall: map[string]time.Time{}, throttledUntil: map[string]time.Time{}, halted: map[string]string{}}
 	for _, opt := range opts {
 		opt(t)
 	}
@@ -175,18 +195,42 @@ func (t *Trial) Submit(live domain.JevDecision, state jev.ScoutState, ragContext
 			}
 			return
 		}
+		var codexArms []jevtrialsettings.Arm
 		for _, arm := range cfg.Arms {
-			select {
-			case t.slots <- struct{}{}:
-			default:
-				slog.Warn("jev trial: queue full, skipping the comparison", "decision_id", live.ID, "arm", arm.ID)
-				t.recordSkip(live.ID, arm.ID, jevtrial.SkipConcurrencyFull)
+			if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
+				codexArms = append(codexArms, arm)
+				continue
+			}
+			if !t.takeSlot(live.ID, arm.ID) {
 				continue
 			}
 			t.wg.Add(1)
 			go t.runArm(cfg, arm, live, state, ragContext)
 		}
+		// The Codex arms of one live decision share one slot and run one after
+		// the other (the provider runs one call at a time, codex.go).
+		if len(codexArms) > 0 && t.takeSlot(live.ID, codexArms[0].ID, codexArms[1:]...) {
+			t.wg.Add(1)
+			go t.runCodexArms(cfg, codexArms, live, state, ragContext)
+		}
 	}()
+}
+
+// takeSlot takes one of the trial's in-flight slots without waiting. When the
+// queue is full the comparison of every named arm is dropped (logged and
+// recorded as a skip).
+func (t *Trial) takeSlot(decisionID int64, first string, more ...jevtrialsettings.Arm) bool {
+	select {
+	case t.slots <- struct{}{}:
+		return true
+	default:
+	}
+	slog.Warn("jev trial: queue full, skipping the comparison", "decision_id", decisionID, "arm", first)
+	t.recordSkip(decisionID, first, jevtrial.SkipConcurrencyFull)
+	for _, arm := range more {
+		t.recordSkip(decisionID, arm.ID, jevtrial.SkipConcurrencyFull)
+	}
+	return false
 }
 
 // runArm is one arm's goroutine: panics are recovered (the live decision is

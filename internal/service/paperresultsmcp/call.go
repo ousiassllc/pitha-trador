@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jsonrpc"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -18,7 +19,7 @@ type callParams struct {
 
 // handleToolCall validates the call, takes a concurrency slot and runs the
 // tool in one read-only transaction under the 3 s budget.
-func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest) {
+func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req jsonrpc.Request) {
 	start := s.now()
 	toolName := ""
 	var rng query.Range
@@ -85,7 +86,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcR
 		writeError(w, req.ID, CodeInternal)
 		return
 	}
-	writeResult(w, req.ID, map[string]any{
+	jsonrpc.WriteResult(w, req.ID, map[string]any{
 		"content":           []map[string]any{{"type": "text", "text": string(text)}},
 		"structuredContent": body,
 		"isError":           false,

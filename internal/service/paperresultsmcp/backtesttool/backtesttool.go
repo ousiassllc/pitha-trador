@@ -22,7 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/tooldef"
 )
 
-// The research-backtest tools (issue #1086; docs/api/endpoints/paper-results-mcp-backtest.md):
+// The research-backtest tools (issue #1086; docs/api/endpoints/research-tools/paper-results-mcp-backtest.md):
 // backtest_start records one run in backtest_runs (mcpset.Writer, behind the
 // write switch) and replays it in the background; backtest_get / backtest_list
 // only read. A run reads stored market data and decisions, changes no setting
