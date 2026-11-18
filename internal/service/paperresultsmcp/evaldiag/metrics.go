@@ -3,6 +3,7 @@ package evaldiag
 import (
 	"math"
 	"slices"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/stats"
 )
@@ -22,11 +23,14 @@ const (
 // evalRow is one evaluated decision: its JST day, its own direction, the net
 // return (bps) of every arm on it, whether it entered, and the stored label.
 type evalRow struct {
+	id      int64
+	at      time.Time
 	day     string
 	dir     string
 	net     [numArms]float64
 	entered bool
 	stored  *float64
+	attrs   Attrs
 }
 
 // dayAgg is one JST day's sum, count and wins of a series.

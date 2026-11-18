@@ -110,59 +110,38 @@ func limitProp(maxLimit int) map[string]any {
 // the settings tools (settings_tools.go) and the order-proposal tools
 // (order_proposal_tools.go).
 var tools = []tool{
-	{
-		name:        "paper_performance_summary",
-		description: "期間内にクローズした Paper 取引の件数・勝率・期待値・ドローダウン（読み取り専用）",
-		schema:      periodSchema(nil),
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a periodArgs
-			if err := strictDecode(raw, &a); err != nil {
-				return a, nil, err
+	diagTool("paper_performance_summary", "期間内にクローズした Paper 取引の件数・勝率・期待値・ドローダウン（読み取り専用）", nil,
+		func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
+			capital, err := e.paperCapital(ctx)
+			if err != nil {
+				return nil, 0, err
 			}
-			return a, func(ctx context.Context, e toolEnv) (any, int, error) {
-				capital, err := e.paperCapital(ctx)
-				if err != nil {
-					return nil, 0, err
-				}
-				p, pnls, err := query.PerformanceSummary(ctx, e.q, e.r, capital)
-				return p, len(pnls), err
-			}, nil
-		},
-	},
+			p, pnls, err := query.PerformanceSummary(ctx, e.q, e.r, capital)
+			return p, len(pnls), err
+		}),
 	diagTool("paper_daily_pnl", "JST の決済日ごとの Paper 損益と件数（読み取り専用）", nil, func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
 		days, err := query.DailyPnL(ctx, e.q, e.r)
 		return map[string]any{"days": days}, len(days), err
 	}),
-	{
-		name:        "paper_trades",
-		description: "クローズ済み Paper 取引の一覧（ホワイトリスト列のみ。新しい順）",
-		schema: periodSchema(map[string]any{
-			"limit":  limitProp(maxListLimit),
-			"cursor": map[string]any{"type": "string", "description": "前回応答の next_cursor"},
-		}),
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a struct {
-				periodArgs
-				Limit  *int   `json:"limit"`
-				Cursor string `json:"cursor"`
-			}
-			if err := strictDecode(raw, &a); err != nil {
-				return a.periodArgs, nil, err
-			}
-			limit, err := resolveLimit(a.Limit, maxListLimit)
-			if err != nil {
-				return a.periodArgs, nil, err
-			}
-			return a.periodArgs, func(ctx context.Context, e toolEnv) (any, int, error) {
-				trades, next, err := query.Trades(ctx, e.q, e.r, limit, a.Cursor)
-				var nextCursor *string
-				if next != "" {
-					nextCursor = &next
-				}
-				return map[string]any{"trades": trades, "next_cursor": nextCursor}, len(trades), err
-			}, nil
-		},
-	},
+	diagTool("paper_trades", "クローズ済み Paper 取引の一覧（ホワイトリスト列のみ。新しい順）", map[string]any{
+		"limit":  limitProp(maxListLimit),
+		"cursor": map[string]any{"type": "string", "description": "前回応答の next_cursor"},
+	}, func(ctx context.Context, e toolEnv, a struct {
+		periodArgs
+		Limit  *int   `json:"limit"`
+		Cursor string `json:"cursor"`
+	}) (any, int, error) {
+		limit, terr := resolveLimit(a.Limit, maxListLimit)
+		if terr != nil {
+			return nil, 0, terr
+		}
+		trades, next, err := query.Trades(ctx, e.q, e.r, limit, a.Cursor)
+		var nextCursor *string
+		if next != "" {
+			nextCursor = &next
+		}
+		return map[string]any{"trades": trades, "next_cursor": nextCursor}, len(trades), err
+	}),
 	{
 		name: "jev_calibration",
 		description: "Jev 判断の件数と、ラベル版・horizon 別の的中率・Brier・信頼度帯（読み取り専用）。" +

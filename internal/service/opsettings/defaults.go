@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchonlysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -78,6 +79,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 			return researchlabelsettings.Text(researchlabelsettings.DefaultEnabled)
 		}
 		return strconv.Itoa(researchlabelsettings.DefaultRetentionDays)
+	case researchonlysettings.IsKey(key):
+		return researchonlysettings.DefaultText(key)
 	case jquantssettings.IsKey(key):
 		return jquantssettings.DefaultText(key)
 	case disclosuresrcsettings.IsKey(key):

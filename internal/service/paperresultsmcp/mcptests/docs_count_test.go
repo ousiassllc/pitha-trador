@@ -11,11 +11,11 @@ import (
 
 // The docs spell out the tool count; it went stale once (issue #1070). Pin it.
 func TestToolCountInDocsMatchesDispatchTable(t *testing.T) {
-	n := []int{len(allTools), len(settingsTools), len(proposalTools), len(experimentTools), len(jevShadowTools), len(researchStatusTools), len(replayTools)}
+	n := []int{len(allTools), len(settingsTools), len(proposalTools), len(experimentTools), len(jevShadowTools), len(researchStatusTools), len(replayTools), len(exportTools)}
 	total := len(paperresultsmcp.ToolNames())
 	want := map[string]string{
-		"architecture/paper-results-mcp-errors.md": fmt.Sprintf("§3 の %d 個（読み取り %d（期間指定 %d + `health_today`・`ai_roles`）、設定 %d、注文案 %d、実験 %d、Jev のプロンプト %d、研究用の状況 %d、リプレイ %d）", total, n[0], len(periodTools), n[1], n[2], n[3], n[4], n[5], n[6]),
-		"components/paper-results-mcp.md":          fmt.Sprintf("（読み取り %d つ、設定 %d つ、注文案 %d つ、調整の実験 %d つ、Jev のプロンプト %d つ、研究用の状況 %d つ、リプレイ %d つ）", n[0], n[1], n[2], n[3], n[4], n[5], n[6]),
+		"architecture/paper-results-mcp-errors.md": fmt.Sprintf("§3 の %d 個（読み取り %d（期間指定 %d + `health_today`・`ai_roles` + `promotion_checklist`）、設定 %d、注文案 %d、実験 %d、Jev のプロンプト %d、研究用の状況 %d、リプレイ %d、書き出し %d）", total, n[0], len(periodTools), n[1], n[2], n[3], n[4], n[5], n[6], n[7]),
+		"components/paper-results-mcp.md":          fmt.Sprintf("（読み取り %d つ、設定 %d つ、注文案 %d つ、調整の実験 %d つ、Jev のプロンプト %d つ、研究用の状況 %d つ、リプレイ %d つ、データセットの書き出し %d つ）", n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7]),
 		"api/endpoints/paper-results-mcp.md":       fmt.Sprintf("読み取りの %d つ（", n[0]),
 	}
 	for file, s := range want {
