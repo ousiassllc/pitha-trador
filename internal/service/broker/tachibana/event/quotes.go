@@ -24,11 +24,13 @@ var ErrStale = errors.New("tachibana: value is stale and the REST refill interva
 type symbolState struct {
 	fields  map[string]string
 	updated time.Time
+	// rest: the last merge was a REST 時価 refill (false: an EVENT difference).
+	rest bool
 }
 
-// merge folds items (EVENT differences or a REST row) into symbol's latest
-// values. Empty values carry no information and never overwrite.
-func (f *Feed) merge(symbol string, items map[string]string, now time.Time) {
+// merge folds items (EVENT differences or, with rest, a REST row) into
+// symbol's latest values. Empty values carry no information and never overwrite.
+func (f *Feed) merge(symbol string, items map[string]string, now time.Time, rest bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	st := f.states[symbol]
@@ -41,7 +43,37 @@ func (f *Feed) merge(symbol string, items map[string]string, now time.Time) {
 			st.fields[k] = v
 		}
 	}
-	st.updated = now
+	st.updated, st.rest = now, rest
+}
+
+// Peek returns symbol's latest merged value whatever its age, and when it was
+// last updated; ok is false without a value (or without a positive 現在値). It
+// never requests anything: the research 時価 recording (issue #1083) reads it
+// each minute and asks Latest only for what is missing or stale.
+func (f *Feed) Peek(symbol string) (q broker.Quote, updatedAt time.Time, ok bool) {
+	f.mu.Lock()
+	st := f.states[symbol]
+	if st == nil {
+		f.mu.Unlock()
+		return broker.Quote{}, time.Time{}, false
+	}
+	fields := make(map[string]string, len(st.fields))
+	for k, v := range st.fields {
+		fields[k] = v
+	}
+	updatedAt = st.updated
+	f.mu.Unlock()
+	q, ok = market.QuoteFromFields(symbol, fields)
+	return q, updatedAt, ok
+}
+
+// ViaREST reports whether symbol's latest value was last updated by a REST
+// 時価 refill rather than an EVENT notification.
+func (f *Feed) ViaREST(symbol string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	st := f.states[symbol]
+	return st != nil && st.rest
 }
 
 // fresh returns symbol's quote when its latest values are at most MaxEventAge old.
@@ -84,7 +116,7 @@ func (f *Feed) Latest(ctx context.Context, symbol string) (broker.Quote, error) 
 	rows, err := market.FetchFields(ctx, f.client, tachibana.PriorityWatchQuote, batch)
 	for code, fields := range rows {
 		if _, ok := market.QuoteFromFields(code, fields); ok {
-			f.merge(code, fields, f.clock.Now())
+			f.merge(code, fields, f.clock.Now(), true)
 		}
 	}
 	slog.Debug("tachibana: REST quote refill", "symbols", len(batch), "answered", len(rows))

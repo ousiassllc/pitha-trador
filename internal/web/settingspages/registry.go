@@ -180,6 +180,8 @@ var dialogs = []Dialog{
 	{PageBroker, "modal-tachibana-nightly", nil},
 	{PageBroker, "modal-tachibana-intraday", nil},
 	{PageBroker, "modal-tachibana-screen", nil},
+	{PageBroker, "modal-research-tachibana-bars", nil},
+	{PageBroker, "modal-research-tachibana-quotes", nil},
 
 	// 外部連携・AI
 	{PageIntegrations, "modal-ai-roles", nil},

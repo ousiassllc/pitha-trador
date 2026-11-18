@@ -139,7 +139,8 @@ func TestServicesBuildOnlyRegistersTheResearchMaintenanceTask(t *testing.T) {
 			continue
 		}
 		switch {
-		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`:
+		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`,
+			strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchquotejob"`: // #1083's own task (its isolation test pins it)
 		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task())"):
 			calls++
 		default:

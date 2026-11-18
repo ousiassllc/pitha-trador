@@ -42,13 +42,16 @@ type Manifest struct {
 	Days    []Day  `json:"days"`
 }
 
-// ReadManifest reads the manifest of the archive in dir. A missing manifest
-// is an empty one; an unparsable one is an error.
-func ReadManifest(dir string) (Manifest, error) {
-	path := filepath.Join(dir, Table, manifestName)
+// ReadManifest reads the manifest of the market_snapshots archive in dir. A
+// missing manifest is an empty one; an unparsable one is an error.
+func ReadManifest(dir string) (Manifest, error) { return ReadTableManifest(dir, Table) }
+
+// ReadTableManifest is ReadManifest of the archive of table.
+func ReadTableManifest(dir, table string) (Manifest, error) {
+	path := filepath.Join(dir, table, manifestName)
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Manifest{Version: manifestVersion, Table: Table}, nil
+		return Manifest{Version: manifestVersion, Table: table}, nil
 	}
 	if err != nil {
 		return Manifest{}, fmt.Errorf("snapshotarchive: read manifest: %w", err)

@@ -64,6 +64,8 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
+| 立花 研究用の日足収集 | `/settings/broker#modal-research-tachibana-bars` | kabu のままでも立花の日足を夜間に記録し、過去分（最大 20 年）を銘柄ごとに 1 回で埋め戻す研究用の収集のオン・オフを編集します（既定はオフ。取得速度・開始時刻・市場区分・除外銘柄は「立花 夜間日足バッチ」を使う。取引・監視銘柄には使わない）。 | 証券会社・データ |
+| 立花 研究用の時価記録 | `/settings/broker#modal-research-tachibana-quotes` | kabu で見ている銘柄に手動指定または前日のスクリーニング上位を足し（合計 120 銘柄まで）、立花の日中の時価を 1 分ごとに研究用の別テーブルへ記録するスイッチと、追加銘柄・上限・EVENT 接続の予算・REST 時価の最短間隔・保持期間を編集します（既定はオフ。取引には使わない）。 | 証券会社・データ |
 | 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
 | 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
@@ -125,3 +127,4 @@
 | 1.19 | 2026-11-15 | 成績に4つ目のタブ「お試し」（`GET /performance/trial`、`organisms/trialresults`・`handler/trialresults`・`bootstrap/trialview`）を追加。モデル比較のお試しの欠測率・見送り・費用の出どころ別（不明は件数のみ）・NONE と反実仮想（参考値・proxy）を読み取り専用で表示。勝者・多数決・昇格は出さず、書き込みルートなし | issue #1067 |
 | 1.20 | 2026-11-15 | Settings「外部連携・AI」のモデル比較トライアルで、アームを JSON のテキストエリアから 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版・1 日の上限・定価・送り先の提供元・データの扱い・ZDR。追加・削除は htmx）に変更。画面の説明文を短くし、詳しい説明は「?」に移した。キーは設定の有無だけ | issue #1066 |
 | 1.21 | 2026-11-15 | Settings「外部連携・AI」の MCP ダイアログを接続設定中心の並びに変更（状態・起動停止 → 有効/無効と待受アドレス → API キー → 接続 URL → 設定変更の許可・注文提案の受け付け・監査ログ）。調整の実験（`#mcp-experiments`）を MCP ダイアログから外して別カード・別ダイアログ（`modal-mcp-experiments`、登録簿に追加）へ移し、一覧と判定を先に、手で記録するフォームを既定で閉じた `<details>`（「手で記録する」）の中に置いた。監査ログ・昇格の記録の列名を「変更元」にし、MCP と Settings 画面のどちらから変わったかを表示。Jev プロンプトのパネルは費用と昇格の記録を先、手で変える操作を後ろに、設定項目の行は既定値の表示を操作の前に並べ替えた。値・既定値・書き込みの許可・注文提案の受け付けの規則は変えていない | issue #1079 |
+| 1.22 | 2026-11-15 | Settings「証券会社・データ」に「立花 研究用の日足収集」（`modal-research-tachibana-bars`。issue #1082）と「立花 研究用の時価記録」（`modal-research-tachibana-quotes`。issue #1083）の 2 カードを追加（どちらも既定オフ・研究専用で、取引・監視銘柄には使わない） | issue #1082・#1083 |

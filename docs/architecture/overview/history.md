@@ -148,3 +148,5 @@
 | 1.141 | 2026-11-15 | §4 の Retention の行を、研究用ホライズンラベルの行を日次タスク`research_labels`が Settings の保持期間（既定90日）で自分で削除する形に直し、記録は`research.labels.enabled`（既定オフ）である旨を追記。メンテナンスランナーは`ErrMore`のチャンクのあいだ mutex を放す（`maintenance.ErrMore`） | issue #1073 / #1074（PR #1077 の直し） |
 | 1.142 | 2026-11-15 | §6 に AI のプロバイダー設定（役割ごとにプロバイダーとモデルを選ぶ層）を追加し、詳細を分割章`overview/integrations-ai-providers.md`に新設 | issue #1080 |
 | 1.143 | 2026-11-15 | §6 のトライアルに ChatGPT のサブスク（公式 Codex CLI のログイン）のアームを追加し、調べた結果と設計を分割章`overview/integrations-codex-chatgpt.md`に新設 | issue #1081 |
+| 1.144 | 2026-11-15 | §3 のディレクトリ構成に`repository/researchbars`・`repository/researchstatus`・`bootstrap/dailybars`の`Research`（ブローカーが kabu のままでも夜間に立花の日足を記録して埋め戻す、研究専用・既定オフの収集。`research.tachibana_bars.enabled`）を追加。Live・Risk・発注・ブローカーの選択・監視銘柄の選び方は変えない | issue #1082 |
+| 1.145 | 2026-11-15 | §3 のディレクトリ構成に`repository/researchquote`を追加し、`service/snapshotarchive`を表名つき（`market_snapshots`と`research_quote_samples`）に直した。§4 に Research Quotes（ブローカーが kabu のままでも立会中に立花の時価を 1 分に 1 回記録し、kabu の`market_snapshots`と比べる、研究専用・既定オフの記録。`research.tachibana_quotes.enabled`）を追加。Live・Risk・発注・ブローカーの選択・監視銘柄の選び方・`market_snapshots`の書き込みは変えない | issue #1083 |

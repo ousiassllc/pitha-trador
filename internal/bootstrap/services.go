@@ -23,6 +23,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -116,6 +117,7 @@ type Services struct {
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
+	research         *researchwire.Wire     // the 立花 research-only collections, off by default
 	proposalExec     proposalexec.Processor // the Paper results MCP's order proposals (issue #828)
 }
 
@@ -208,6 +210,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
 	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker, svc.Settings)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
+	svc.research = researchwire.Build(researchwire.Deps{DB: state.DB, Settings: svc.Settings, Secrets: secrets, Broker: cfg.brokerSettings, DailyBars: svc.DailyBars, Watchlist: svc.watchlist, InSession: marketcalendarOpen})
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
@@ -217,3 +220,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 
 	return svc
 }
+
+// NewsIngestEnabled reports whether Start launches the News Ingest polling
+// loop: the feed is not switched off and Luna (Jev or LUNA_*) is available.
+func (s *Services) NewsIngestEnabled() bool { return s.newsEnabled }

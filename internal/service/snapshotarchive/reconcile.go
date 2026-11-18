@@ -24,6 +24,7 @@ const (
 // Reconciliation compares the archive file of one UTC date with the
 // database.
 type Reconciliation struct {
+	Table              string
 	Date               string
 	Status             string
 	ArchiveRows        int
@@ -43,7 +44,7 @@ type Reconciliation struct {
 func (r Reconciliation) String() string {
 	s := fmt.Sprintf(
 		"%s %s: status=%s\n  archive: rows=%d first=%s last=%s sha256=%s\n  database: rows=%d first=%s last=%s\n  missing_from_archive=%d manifest_match=%t",
-		Table, r.Date, r.Status, r.ArchiveRows, r.ArchiveFirst, r.ArchiveLast, r.SHA256,
+		r.Table, r.Date, r.Status, r.ArchiveRows, r.ArchiveFirst, r.ArchiveLast, r.SHA256,
 		r.DBRows, r.DBFirst, r.DBLast, r.MissingFromArchive, r.ManifestMatch)
 	if r.Problem != "" {
 		s += "\n  problem: " + r.Problem
@@ -57,7 +58,7 @@ func (r Reconciliation) String() string {
 // StatusMismatch with Problem set, not as an error; an error means the
 // comparison itself could not run.
 func (a *Archiver) Reconcile(ctx context.Context, date string) (Reconciliation, error) {
-	r := Reconciliation{Date: date, Status: StatusMismatch}
+	r := Reconciliation{Table: a.table, Date: date, Status: StatusMismatch}
 	dbd, err := a.readDBDay(ctx, date, math.MaxInt64)
 	if err != nil {
 		return r, fmt.Errorf("snapshotarchive: read database day %s: %w", date, err)
@@ -77,7 +78,7 @@ func (a *Archiver) Reconcile(ctx context.Context, date string) (Reconciliation, 
 	r.ArchiveRows, r.ArchiveFirst, r.ArchiveLast, r.SHA256 = info.Rows, info.FirstTimestamp, info.LastTimestamp, info.SHA256
 	r.MissingFromArchive, _ = compareIDs(dbd.IDs, info.IDs)
 
-	m, err := ReadManifest(a.dir)
+	m, err := ReadTableManifest(a.dir, a.table)
 	if err != nil {
 		return r, err
 	}
