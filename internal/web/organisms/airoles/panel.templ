@@ -1,0 +1,179 @@
+package airoles
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// ProviderOption is one choice of the provider select.
+type ProviderOption struct {
+	ID   string
+	Name string
+}
+
+// ProviderRow is a provider and whether its key is set (KeyKnown false: unknown).
+type ProviderRow struct {
+	Name     string
+	KeyKnown bool
+	KeySet   bool
+}
+
+// RoleRow is one role's form.
+type RoleRow struct {
+	ID          string
+	Name        string
+	Description string
+	// Live marks the role that decides what is traded.
+	Live bool
+	// Provider and Model are the form's current values (the setting in force
+	// after a restart).
+	Provider string
+	Model    string
+	// Stored is true when they are a saved value rather than the default.
+	Stored bool
+	// Damaged says why a stored value is ignored ("" when fine).
+	Damaged string
+	// ModelHint is what an empty model means for this role.
+	ModelHint string
+	// Running is "provider / model" the role has run on since the last start
+	// ("" when no start is recorded yet).
+	Running string
+	// Notice is the outcome of the action on this role ("" for none).
+	Notice string
+}
+
+// HistoryRow is one recent change or start record.
+type HistoryRow struct {
+	At     string
+	Role   string
+	Detail string
+}
+
+// PanelProps is Panel's input.
+type PanelProps struct {
+	Providers    []ProviderOption
+	ProviderRows []ProviderRow
+	Roles        []RoleRow
+	History      []HistoryRow
+	Notice       string
+}
+
+// Panel renders the section (`#ai-roles-panel`'s content): each role's provider
+// and model. The connection (URL and key) of a provider is kept once, in the
+// provider cards above this section on the Settings page.
+templ Panel(props PanelProps) {
+	<section class="flex flex-col gap-4 text-sm text-ink" data-testid="ai-roles-panel">
+		<h3 class="sr-only">役割ごとのプロバイダーとモデル</h3>
+		<p class="text-mute">
+			役割ごとに、どのプロバイダーのどのモデルで AI を呼ぶかを選びます。接続先 URL と API キーはプロバイダーごとに 1 か所で持つので、役割ごとに別のキーを入れる必要はありません。
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-ai-roles", Label: "役割ごとのモデルの説明"}) {
+				保存しなければ、どの役割も今までと同じ接続先・キー・モデルで呼びます（Jev は独自 API の接続、Sol・Opus・Luna は役割ごとの上書き、なければ Jev）。OpenRouter を選んだ役割は、OpenRouter の API キーと、ここで入れたモデル名（例: provider/model）で呼びます。保存や既定に戻した内容の反映にはアプリの再起動が必要です。変更は履歴に残ります。Jev の売買判断のプロバイダーとモデルは、この画面でだけ変えられます（MCP からは変えられません）。モデル比較トライアルのアームは、トライアルの設定でアームごとに選びます。
+			}
+		</p>
+		if props.Notice != "" {
+			<p class="text-success" role="status" data-testid="ai-roles-notice">{ props.Notice }</p>
+		}
+		<ul class="flex flex-wrap gap-x-6 gap-y-1 text-mute" data-testid="ai-roles-providers">
+			for _, p := range props.ProviderRows {
+				<li>
+					{ p.Name } の API キー:
+					if !p.KeyKnown {
+						確認できません
+					} else if p.KeySet {
+						設定済み
+					} else {
+						未設定
+					}
+				</li>
+			}
+		</ul>
+		for _, r := range props.Roles {
+			@roleForm(r, props.Providers)
+		}
+		<div class="flex flex-col gap-1" data-testid="ai-roles-history">
+			<span class="flex items-center gap-2 text-ink">
+				最近の変更
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-ai-roles-history", Label: "最近の変更の説明"}) {
+					この画面で役割の設定を保存した記録と、アプリの起動時に実際に使い始めた組の記録です（API キーや接続先 URL は記録しません）。調整の実験の交絡の確認に使います。
+				}
+			</span>
+			if len(props.History) == 0 {
+				<span class="text-mute" data-testid="ai-roles-history-empty">記録はまだありません。</span>
+			} else {
+				<table class="w-full text-left text-sm" aria-label="役割の設定の履歴">
+					<thead>
+						<tr class="border-b border-border text-mute">
+							<th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th>
+							<th scope="col" class="px-2 py-1.5 text-xs font-semibold">役割</th>
+							<th scope="col" class="px-2 py-1.5 text-xs font-semibold">内容</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, h := range props.History {
+							<tr data-testid="ai-roles-history-row">
+								<td class="px-2 py-1.5 font-mono tabular-nums">{ h.At }</td>
+								<td class="px-2 py-1.5">{ h.Role }</td>
+								<td class="px-2 py-1.5">{ h.Detail }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</section>
+}
+
+templ roleForm(r RoleRow, providers []ProviderOption) {
+	<form class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4" hx-post={ "/settings/ai-roles/" + r.ID } hx-target="#ai-roles-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid={ "ai-role-" + r.ID }>
+		<div class="flex flex-wrap items-center gap-2">
+			<span class="font-semibold text-ink">{ r.Name }</span>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-ai-role-" + r.ID, Label: r.Name + "の説明"}) {
+				{ r.Description }
+				if r.Live {
+					この役割のプロバイダーとモデルは、この画面でだけ変えられます。MCP からは変えられません。変えると記録が残り、調整の実験の交絡として検出されます。
+				}
+			}
+			if r.Live {
+				<span class="text-xs text-warning" data-testid={ "ai-role-live-" + r.ID }>取引に使われる役割（この画面でだけ変更）</span>
+			}
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<label for={ "ai-role-provider-" + r.ID } class="text-mute">プロバイダー</label>
+			@atoms.Select(atoms.SelectProps{ID: "ai-role-provider-" + r.ID, Name: "provider", Class: "w-auto", Attrs: templ.Attributes{"data-testid": "ai-role-provider-" + r.ID}}) {
+				for _, p := range providers {
+					<option value={ p.ID } selected?={ p.ID == r.Provider }>{ p.Name }</option>
+				}
+			}
+			<label for={ "ai-role-model-" + r.ID } class="text-mute">モデル</label>
+			@atoms.Input(atoms.InputProps{ID: "ai-role-model-" + r.ID, Name: "model", Class: "w-64", Attrs: templ.Attributes{
+				"autocomplete": "off", "spellcheck": "false", "value": r.Model, "placeholder": r.ModelHint,
+				"data-testid": "ai-role-model-" + r.ID,
+			}})
+			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "ai-role-save-" + r.ID}}) {
+				保存
+			}
+			if r.Stored {
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{
+					"hx-delete": "/settings/ai-roles/" + r.ID, "hx-params": "none", "hx-target": "#ai-roles-panel", "hx-swap": "innerHTML",
+					"hx-confirm": r.Name + " の設定を既定に戻しますか？", "data-testid": "ai-role-reset-" + r.ID,
+				}}) {
+					既定に戻す
+				}
+			}
+		</div>
+		<div class="flex flex-col gap-1 text-sm text-mute">
+			if r.Stored {
+				<span data-testid={ "ai-role-state-" + r.ID }>保存した設定です。</span>
+			} else {
+				<span data-testid={ "ai-role-state-" + r.ID }>既定です（今までと同じ接続先・キー・モデル）。</span>
+			}
+			if r.Running != "" {
+				<span data-testid={ "ai-role-running-" + r.ID }>今動いている組（最後の起動時）: { r.Running }</span>
+			}
+			if r.Damaged != "" {
+				<span class="text-warning" role="status" data-testid={ "ai-role-damaged-" + r.ID }>{ r.Damaged }</span>
+			}
+			if r.Notice != "" {
+				<span class="text-success" role="status" data-testid={ "ai-role-notice-" + r.ID }>{ r.Notice }</span>
+			}
+		</div>
+		<div id={ "ai-role-error-" + r.ID } class="empty:hidden" data-testid={ "ai-role-error-" + r.ID }></div>
+	</form>
+}

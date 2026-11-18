@@ -14,18 +14,6 @@ import (
 // the replay switch (jev.replay.enabled is the Settings screen's), no request, no key.
 func init() { tools = append(tools, replayTools...) }
 
-// runIDArgs is {"run_id": n}.
-type runIDArgs struct {
-	RunID *int64 `json:"run_id"`
-}
-
-func (a runIDArgs) valid(required bool) error {
-	if (required && a.RunID == nil) || (a.RunID != nil && *a.RunID < 1) {
-		return fail(CodeInvalidArgument)
-	}
-	return nil
-}
-
 var replayTools = []tool{
 	replayTool("replay_estimate", replaytool.EstimateDescription, periodSchema(replaytool.PlanProperties()), false,
 		func(ctx context.Context, e toolEnv, a struct {
@@ -57,8 +45,8 @@ var replayTools = []tool{
 			return run, 1, err
 		}),
 	replayTool("replay_stop", replaytool.StopDescription, objectSchema(map[string]any{"run_id": replaytool.RunIDProperty()}, "run_id"), true,
-		func(ctx context.Context, e toolEnv, a runIDArgs) (any, int, error) {
-			if err := a.valid(true); err != nil {
+		func(ctx context.Context, e toolEnv, a replaytool.RunIDArgs) (any, int, error) {
+			if err := a.Validate(true); err != nil {
 				return nil, 0, err
 			}
 			w, err := e.writer()
@@ -72,10 +60,10 @@ var replayTools = []tool{
 		"run_id": replaytool.RunIDProperty(),
 		"limit":  map[string]any{"type": "integer", "minimum": 1, "maximum": replaytool.MaxListLimit, "default": replaytool.DefaultListLimit, "description": "run_id を省略したときの件数"},
 	}), false, func(ctx context.Context, e toolEnv, a struct {
-		runIDArgs
+		replaytool.RunIDArgs
 		Limit *int `json:"limit"`
 	}) (any, int, error) {
-		if err := a.valid(false); err != nil {
+		if err := a.Validate(false); err != nil {
 			return nil, 0, err
 		}
 		limit := replaytool.DefaultListLimit
@@ -90,10 +78,10 @@ var replayTools = []tool{
 	}),
 	replayTool("replay_results", replaytool.ResultsDescription, objectSchema(map[string]any{"run_id": replaytool.RunIDProperty(), "arms": replaytool.ArmsProperty()}, "run_id"), false,
 		func(ctx context.Context, e toolEnv, a struct {
-			runIDArgs
+			replaytool.RunIDArgs
 			Arms []string `json:"arms"`
 		}) (any, int, error) {
-			if err := a.valid(true); err != nil {
+			if err := a.Validate(true); err != nil {
 				return nil, 0, err
 			}
 			v, err := replaytool.Results(ctx, e.q, *a.RunID, a.Arms)

@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -61,15 +62,23 @@ func TestCandidateTabs_ScannerAndWatchlistMarkTheirOwnTab(t *testing.T) {
 	}
 }
 
-// The 成績 tabs are 実績, バックテスト and 予測の精度 (the Calibration page).
-func TestResultTabs_CalibrationMarksItsOwnTab(t *testing.T) {
-	current, all := currentTab(t, renderPage(t, pages.CalibrationPage()), "成績のタブ")
-	if current != "/calibration" || strings.Join(all, " ") != "/performance /performance?tab=backtest /calibration" {
-		t.Errorf("calibration: current tab %q of %v", current, all)
-	}
-	current, _ = currentTab(t, renderPerformancePage(t, pages.PerformanceProps{}), "成績のタブ")
-	if current != "/performance" {
-		t.Errorf("performance: current tab %q, want /performance", current)
+// The 成績 tabs are 実績, バックテスト, 予測の精度 (the Calibration page) and お試し
+// (the model-comparison trial's results).
+func TestResultTabs_EachPageMarksItsOwnTab(t *testing.T) {
+	const all = "/performance /performance?tab=backtest /calibration /performance/trial"
+	for name, tc := range map[string]struct{ body, want string }{
+		"calibration": {renderPage(t, pages.CalibrationPage()), "/calibration"},
+		"performance": {renderPerformancePage(t, pages.PerformanceProps{}), "/performance"},
+		"backtest":    {renderPerformancePage(t, pages.PerformanceProps{BacktestTab: true}), "/performance?tab=backtest"},
+		"trial":       {renderPage(t, pages.TrialResultsPage(trialresults.Props{Empty: true})), "/performance/trial"},
+	} {
+		current, got := currentTab(t, tc.body, "成績のタブ")
+		if current != tc.want || strings.Join(got, " ") != all {
+			t.Errorf("%s: current tab %q of %v, want %q of [%s]", name, current, got, tc.want, all)
+		}
+		if !strings.Contains(tc.body, ">お試し</a>") {
+			t.Errorf("%s lacks the お試し tab", name)
+		}
 	}
 }
 

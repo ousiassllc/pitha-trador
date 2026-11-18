@@ -22,6 +22,7 @@ var trialRunnerDirs = []struct {
 }{
 	{"internal/service/jev/trial", false},
 	{"internal/service/jev/trialwire", false},
+	{"internal/service/jev/codexwire", false},
 	{"internal/service/jev/trialflow", true},
 }
 
@@ -39,7 +40,7 @@ func TestTrialIsNotReferencedByTradingRAGCalibrationOrTraining(t *testing.T) {
 		"internal/repository/trading", "internal/repository/decisiontrade", "internal/repository/decisionsnapshot",
 	}
 	trialSymbols := []string{
-		"jev_trial_decisions", "TrialRepository", "jevtrialsettings", "service/jev/trial", "domain/jevtrial", "jevtrial", "trialwire",
+		"jev_trial_decisions", "TrialRepository", "jevtrialsettings", "service/jev/trial", "domain/jevtrial", "jevtrial", "trialwire", "codexwire",
 	}
 	for _, dir := range consumers {
 		walkGoSources(t, dir, false, func(path string, src []byte) {

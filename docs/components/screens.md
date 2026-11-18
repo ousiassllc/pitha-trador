@@ -4,8 +4,8 @@
 
 ## 1. ナビゲーション構造
 
-- メインナビ（`organisms.MainNav`）は左から ホーム（`/`）／候補銘柄（`/scanner`）／AIの注文提案（`/order-proposals`）／成績（`/performance`）／（区切り）／**設定（`/settings`）**（issue #895。ラベルはすべて日本語）。各ページは自分のナビ項目（`organisms.NavItem`）を `layout.Shell` に渡し、その項目だけに `aria-current="page"` が付く: ホーム = `/`（`NavHome`）／候補銘柄 = `/scanner`・`/watchlist`・`/symbols/:symbol`（`NavScanner`）／AIの注文提案 = `/order-proposals(/:id)`／成績 = `/performance`（実績・バックテスト）・`/calibration`（予測の精度）（`NavPerformance`）／設定 = `/settings`・`/settings/<page>`・`/activity`（稼働ログ。`NavSettings`）。`NavHome` はホーム項目を表す。`/` はこの版では従来どおり `/scanner` へ 302 でリダイレクトする（ホーム画面は別 Issue）ため、いまは「ホーム」が強調されるページはない。区切りは「設定」の直前の1か所。
-- **タブ**: 複数ページにまたがるメニュー項目は、ページ上部のタブ（`molecules.TabNav`。各タブは独立した URL へのリンク）で行き来する。候補銘柄 = 「候補」（`/scanner`）・「監視リスト」（`/watchlist`）、成績 = 「実績」（`/performance`）・「バックテスト」（`/performance?tab=backtest`）・「予測の精度」（`/calibration`）。現在のタブに `aria-current="page"` が付く。旧ブックマーク `/performance#backtest` は URL のハッシュがサーバーに届かないため、実績タブの `pitha-performance-tabs` が `/performance?tab=backtest` へ転送する。
+- メインナビ（`organisms.MainNav`）は左から ホーム（`/`）／候補銘柄（`/scanner`）／AIの注文提案（`/order-proposals`）／成績（`/performance`）／（区切り）／**設定（`/settings`）**（issue #895。ラベルはすべて日本語）。各ページは自分のナビ項目（`organisms.NavItem`）を `layout.Shell` に渡し、その項目だけに `aria-current="page"` が付く: ホーム = `/`（`NavHome`）／候補銘柄 = `/scanner`・`/watchlist`・`/symbols/:symbol`（`NavScanner`）／AIの注文提案 = `/order-proposals(/:id)`／成績 = `/performance`（実績・バックテスト）・`/calibration`（予測の精度）・`/performance/trial`（お試し）（`NavPerformance`）／設定 = `/settings`・`/settings/<page>`・`/activity`（稼働ログ。`NavSettings`）。`NavHome` はホーム項目を表す。`/` はこの版では従来どおり `/scanner` へ 302 でリダイレクトする（ホーム画面は別 Issue）ため、いまは「ホーム」が強調されるページはない。区切りは「設定」の直前の1か所。
+- **タブ**: 複数ページにまたがるメニュー項目は、ページ上部のタブ（`molecules.TabNav`。各タブは独立した URL へのリンク）で行き来する。候補銘柄 = 「候補」（`/scanner`）・「監視リスト」（`/watchlist`）、成績 = 「実績」（`/performance`）・「バックテスト」（`/performance?tab=backtest`）・「予測の精度」（`/calibration`）・「お試し」（`/performance/trial`）。現在のタブに `aria-current="page"` が付く。旧ブックマーク `/performance#backtest` は URL のハッシュがサーバーに届かないため、実績タブの `pitha-performance-tabs` が `/performance?tab=backtest` へ転送する。
 - **Settings の階層**: `/settings`（ページ一覧と、メインメニューにない画面（稼働ログ・初回セットアップ）へのリンク。`pages.SettingsHubPage`）→ `/settings/<page id>`（詳細設定のページ。`pages.SettingsPage`）→ 各カードのダイアログ（`molecules.Modal`）。一覧の各行（`molecules.SettingsLinkCard`）は、ページ名・要約・「開く」リンクを持つ。詳細ページは、パンくず（設定 / ページ名）・そのページに属する接続先カード・設定項目カード・システムカード・関連画面へのリンク（`settingspages.LinksOf`。メインメニューと重複する画面は置かず、稼働ログ・初回セットアップ・Swagger だけ）を並べる。カードの「開く」「設定する」ボタンでダイアログが開き、ダイアログの中で項目ごとに保存・削除する。
 - ページ（この名前・順序で固定。`settingspages.Pages()`。ID は旧ページの URL を引き継ぐ）: 取引ルール `/settings/operations`（スキャン・ポジション、候補を絞るしきい値、売買判断の基準）／リスク・資金 `/settings/risk`（Paper の運用資金・建玉上限・資産ごとの予算枠（株・債券ETF。旧「資産ごとの予算枠」ページを統合）、損失上限・利益確保・売買コストの想定）／予測モデル `/settings/results`（判断のラベル・メタラベリング・相場状態・板情報）／証券会社・データ `/settings/broker`（kabu・立花の接続と監視銘柄）／外部連携・AI `/settings/integrations`（Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP。MCP のスイッチは「AIからの注文提案を受け付ける（Paper のみ）」）／システム `/settings/maintenance`（稼働ログへのリンク・アップデート・エラーログ・データエクスポート・バックアップ・ログ設定・スリープ防止）。
 - **戻り導線の規則**: `layout.Shell` を使う全ページはヘッダーのメインナビに「設定」を持つため、どの画面からも1操作で Settings のページ一覧へ戻れる。詳細ページはパンくずからも一覧へ戻れる。例外は `/setup`（`SetupShell`。ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。ダイアログを開いたままでもヘッダーは隠れない。
@@ -26,9 +26,10 @@
 | 候補銘柄 ＞ 監視リスト | `/watchlist` | 立花の監視リスト（どの銘柄をどう選んだか）を確認します。見出しの下の本文にある設定リンク（ヘルプマークの外）は「設定 ＞ 証券会社・データ」（`/settings/broker`）です。 | 候補銘柄 |
 | 銘柄詳細 | `/symbols/:symbol` | 銘柄のチャート・Jev の判断・Risk・保有ポジション（決済）を確認します。候補銘柄の候補から遷移するパラメータ付きの画面で、Settings のページにはリンクを置きません。 | 候補銘柄 |
 | AIの注文提案 | `/order-proposals`（詳細は `/order-proposals/:id`、画面上は「注文提案 n 番」・戻るリンク「← 注文提案の一覧」） | MCP の AI クライアントが出した Paper の注文提案を、期間・状態・枠で絞って一覧し、1 件ずつ理由・損切りと手じまいの計画・最大損失（AIの見込み・アプリの見積もり・実際の損失）・情報源・状態の時系列・紐づく注文とポジションの損益を確認します（読み取り専用。承認・作成・取消の操作は無い）。理由は内部コードではなく日本語名で示します。詳細のトレードシグナルは、Risk Engine が拒否した案は「リスク判定: 拒否」と「拒否の理由」、リスク判定を通ったが後段（数量・最大損失・Execution）で拒否された案は「リスク判定は通過・後段で拒否」と「理由」を示します。 | AIの注文提案 |
-| 成績 ＞ 実績 | `/performance` | 決済済みポジションの実績（Paper）と評価指標（累計損益・勝率・最大ドローダウンなど。指標名は日本語だけで、英語名は出さない）を確認します。タブ「実績」「バックテスト」「予測の精度」を持ちます。 | 成績 |
+| 成績 ＞ 実績 | `/performance` | 決済済みポジションの実績（Paper）と評価指標（累計損益・勝率・最大ドローダウンなど。指標名は日本語だけで、英語名は出さない）を確認します。タブ「実績」「バックテスト」「予測の精度」「お試し」を持ちます。 | 成績 |
 | 成績 ＞ バックテスト | `/performance?tab=backtest`（旧 `/performance#backtest` は `pitha-performance-tabs` がこの URL へ転送。`from` 付きの検索も同じタブ） | 期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します。この版でフォームと結果は実績とは別のタブに置きます（実績は読みません）。 | 成績 |
 | 成績 ＞ 予測の精度 | `/calibration` | Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。 | 成績 |
+| 成績 ＞ お試し | `/performance/trial`（`?days=7` `30` `90`。既定30日。JST の直近日数） | モデル比較のお試しの記録を、読み取り専用で確認します。アームごとの呼び出し数・欠測率・見送り（理由別）、費用の出どころ別（報告された費用・定価からの推定・不明）、NONE と反実仮想（参考値・proxy）を出します。数値は MCP の `jev_trial_compare` / `jev_trial_cost` と同じ集計（`trialquery`）で、定義は変えません。不明の費用は 0 円ではなく「不明（n 件）」と件数だけを出し、他の合計に混ぜません。NONE と反実仮想のラベルは実際の結果ではなく参考値（proxy）で、当たり外れの指標には混ぜません。勝者・多数決・順位・昇格は出さず、フォーム・ボタン・書き込みルートも持ちません（お試しをオンにするのも設定を変えるのも、Settings の外部連携・AI のカードだけ）。記録が無いときは「お試しの記録はまだありません。」。説明は項目名の横の「?」に置きます。 | 成績 |
 | 設定 | `/settings`（旧 `/admin` は 301） | 設定の6ページ（取引ルール／リスク・資金／予測モデル／証券会社・データ／外部連携・AI／システム）の一覧と、メインメニューにない画面（稼働ログ・初回セットアップ）へのリンクです。 | 設定 |
 | 設定 ＞ システム ＞ 稼働ログ | `/activity` | システムの稼働ログとキューの状況（ジョブの状況・最近の動き・最近の Kill Switch）を確認します。 | 設定 |
 | Kill Switch | ヘッダー右上（専用 URL なし）。ホームでは取引の状態カード内 | ホーム以外の全ページのヘッダー右上のパネル（ホームでは取引の状態カードの中の同じパネル）で、新規エントリーを停止・再開、全決済して停止を操作します。状態は「稼働中／新規停止中／全停止（Kill）」のバッジ1つで示し、パネルは状態の文字列を重ねて表示しません。 | — |
@@ -63,19 +64,23 @@
 | 立花 夜間日足バッチ | `/settings/broker#modal-tachibana-nightly` | 引け後に全銘柄の日足を取得する夜間バッチの設定を編集します。 | 証券会社・データ |
 | 立花 日中の EVENT 接続・REST 時価補助 | `/settings/broker#modal-tachibana-intraday` | 日中の EVENT 接続と REST 時価補助の設定を編集します。 | 証券会社・データ |
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
-| Jev | `/settings/integrations#modal-jev` | 売買判断を行う AI（Jev）の API キー・接続先・モデルを設定します。 | 外部連携・AI |
+| 立花 研究用の日足収集 | `/settings/broker#modal-research-tachibana-bars` | kabu のままでも立花の日足を夜間に記録し、過去分（最大 20 年）を銘柄ごとに 1 回で埋め戻す研究用の収集のオン・オフを編集します（既定はオフ。取得速度・開始時刻・市場区分・除外銘柄は「立花 夜間日足バッチ」を使う。取引・監視銘柄には使わない）。 | 証券会社・データ |
+| 立花 研究用の時価記録 | `/settings/broker#modal-research-tachibana-quotes` | kabu で見ている銘柄に手動指定または前日のスクリーニング上位を足し（合計 120 銘柄まで）、立花の日中の時価を 1 分ごとに研究用の別テーブルへ記録するスイッチと、追加銘柄・上限・EVENT 接続の予算・REST 時価の最短間隔・保持期間を編集します（既定はオフ。取引には使わない）。 | 証券会社・データ |
+| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
+| 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携・AI |
-| OpenRouter（モデル比較） | `/settings/integrations#modal-openrouter` | モデル比較トライアルが比較対象のモデルを呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
+| OpenRouter | `/settings/integrations#modal-openrouter` | 「役割ごとのモデル」で OpenRouter を選んだ役割とモデル比較トライアルのアームが呼ぶための OpenRouter の API キー・接続先（任意。未設定でもアプリは通常どおり動く）を設定します。 | 外部連携・AI |
 | J-Quants（日足・分足） | `/settings/integrations#modal-jquants` | J-Quants の API キー（任意。未設定のあいだは J-Quants へ何も送らない）を設定します。キーは起動時に 1 回読むため、保存したら再起動します。 | 外部連携・AI |
 | J-Quants（日足・分足の取り込み） | `/settings/integrations#modal-jquants-fetch` | 日足・分足の取り込みの有効化（既定オフ）・契約している種類・1 日の要求数の上限・埋め戻す日数・解約時の削除の依頼を設定します（研究専用・私的利用。取引には使いません）。 | 外部連携・AI |
 | EDINET（開示書類の一覧） | `/settings/integrations#modal-edinet` | EDINET API の API キー（任意。未設定のあいだは EDINET へ何も送らない）を設定します。 | 外部連携・AI |
 | 開示・ニュースの追加の情報源 | `/settings/integrations#modal-disclosure-src` | EDINET の書類一覧と立花ニュースの記録（研究専用・既定オフ）の有効化・1 日の要求数の上限・さかのぼる日数・保持期間を設定します。オンにできるのはこの画面だけです。記録は取引に使われません。立花ニュースは実機計測（#725）まで何も取得しません。 | 外部連携・AI |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携・AI |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携・AI |
-| MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開し、許可した基本設定だけを変更できる MCP サーバーの有効化・API キーの設定と、起動・停止・再起動、MCP からの設定変更の許可（既定オン）と監査ログの確認ができます。 | 外部連携・AI |
-| モデル比較トライアル | `/settings/integrations#modal-jev-trial` | ライブの判断と同じ入力を別のモデル（アーム）にも送って答えを比べる試験（Paper のみ・既定オフ）の有効化・アーム（JSON）・全体の 1 日の費用上限・状態（今日と累計の費用、アームごとの費用と上限・失敗回数・停止の理由）を確認・設定します。オンにできるのはこの画面だけです。アームの答えは取引にも学習にも使われません。 | 外部連携・AI |
+| MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開する MCP サーバーの接続設定が主役です。上から、状態と起動・停止・再起動、有効/無効と待受アドレス、API キー、接続 URL（Grok Bot に登録する値）、そのあとに MCP からの設定変更の許可（既定オン）・AIからの注文提案の受け付け（オンにできるのはこの画面だけ。MCP からはオフにだけできる）・設定変更の監査ログ（変更元＝MCP か Settings 画面か、を表示）が並びます。1280×800 の画面で、待受アドレス・API キー・接続 URL がスクロールなしで見えます。調整の実験はこのダイアログの外（次の行）です。 | 外部連携・AI |
+| 調整の実験（前後比較） | `/settings/integrations#modal-mcp-experiments` | 設定などを変える前と後の成績を比べた実験の一覧と判定（改善・悪化・どちらとも言えない・判定なしなど）を見ます。「比較」で前後の指標を開き、実行中の実験は「終了」「中止」にできます。実験は ふだん MCP から記録される前提で、画面から記録するフォームは「手で記録する」を開いたときだけ出ます（既定は閉じています）。書き込みの許可（監査ログ）を配線したときだけ表示されます。 | 外部連携・AI |
+| モデル比較トライアル | `/settings/integrations#modal-jev-trial` | ライブの判断と同じ入力を別のモデル（アーム）にも送って答えを比べる試験（Paper のみ・既定オフ）の有効化・アーム（1 アーム 1 カードのフォームで、追加・編集・削除できる）・全体の 1 日の費用上限・状態（今日と累計の費用、アームごとの費用と上限・失敗回数・停止の理由）を確認・設定します。オンにできるのはこの画面だけです。アームの答えは取引にも学習にも使われません。 | 外部連携・AI |
 | API ドキュメント（Swagger） | `/swagger` | JSON API の仕様を確認します（SWAGGER_ENABLED=true のときだけ表示されます）。 | 外部連携・AI (SWAGGER_ENABLED=true のときのみ) |
 | アップデート | `/settings/maintenance#modal-update` | 現在のバージョンと最終確認結果を確認し、新しいバージョンを確認します。 | システム |
 | エラーログ | `/settings/maintenance#modal-error-log` | 調査・共有のためにエラーログをダウンロードします。 | システム |
@@ -122,4 +127,9 @@
 | 1.15 | 2026-11-13 | Settings「外部連携・AI」に OpenRouter（モデル比較）の接続とモデル比較トライアルのカードを追加。トライアルをオンにできるのはこのカードだけ | issue #1059 |
 | 1.16 | 2026-11-14 | 「バックアップ先」カードの説明に、未設定時は同じPC内の既定フォルダへ保存すること・同一ディスクでディスク故障に耐えないこと・外部パスを指定できることを追記（既定の表示とカード内の警告） | issue #890 |
 | 1.17 | 2026-11-14 | Settings「システム」に「PC 移行」カード（`organisms.MigrationPanel`、`#migration-panel`）を追加。書き出し（GETフォーム）と、取り込み（ファイルを選ぶ→内容を確認→テーブルごとの行数の比較表→置き換えの同意チェック→予約→確認ダイアログ→再起動で入れ替わる案内）。部品は既存の`Input`/`Button`/`Checkbox`/`HelpMark`/`InlineAlert`と`pitha-confirm`、振る舞いは`static/src/components/migration/pitha-migration.ts`（Litではない。ファイルを`lib/api.ts`の`post`で素の本文として`POST /api/v1/migration/preview`へ送り、`<template>`から確認表を描く。HTML文字列は組み立てない）。秘密を含めるオプションは置かない | issue #1075 |
-| 1.18 | 2026-11-15 | Settings「外部連携・AI」に J-Quants（日足・分足。API キー）と J-Quants（日足・分足の取り込み。有効化・契約・1 日の要求数の上限・解約時の削除）のカードを追加 | issue #1093 |
+| 1.18 | 2026-11-15 | Settings「外部連携・AI」に「役割ごとのプロバイダーとモデル」のカードを追加し、並びを「AI のプロバイダー（独自 API・OpenRouter）→ 役割ごとのモデル → そのほかの接続先」にした。Jev の接続カードを「独自 API（Jev）」、OpenRouter のカードを「OpenRouter」に改めた | issue #1080 |
+| 1.19 | 2026-11-15 | 成績に4つ目のタブ「お試し」（`GET /performance/trial`、`organisms/trialresults`・`handler/trialresults`・`bootstrap/trialview`）を追加。モデル比較のお試しの欠測率・見送り・費用の出どころ別（不明は件数のみ）・NONE と反実仮想（参考値・proxy）を読み取り専用で表示。勝者・多数決・昇格は出さず、書き込みルートなし | issue #1067 |
+| 1.20 | 2026-11-15 | Settings「外部連携・AI」のモデル比較トライアルで、アームを JSON のテキストエリアから 1 アーム 1 カードのフォーム（アーム名・提供元・モデル・プロンプトの版・1 日の上限・定価・送り先の提供元・データの扱い・ZDR。追加・削除は htmx）に変更。画面の説明文を短くし、詳しい説明は「?」に移した。キーは設定の有無だけ | issue #1066 |
+| 1.21 | 2026-11-15 | Settings「外部連携・AI」の MCP ダイアログを接続設定中心の並びに変更（状態・起動停止 → 有効/無効と待受アドレス → API キー → 接続 URL → 設定変更の許可・注文提案の受け付け・監査ログ）。調整の実験（`#mcp-experiments`）を MCP ダイアログから外して別カード・別ダイアログ（`modal-mcp-experiments`、登録簿に追加）へ移し、一覧と判定を先に、手で記録するフォームを既定で閉じた `<details>`（「手で記録する」）の中に置いた。監査ログ・昇格の記録の列名を「変更元」にし、MCP と Settings 画面のどちらから変わったかを表示。Jev プロンプトのパネルは費用と昇格の記録を先、手で変える操作を後ろに、設定項目の行は既定値の表示を操作の前に並べ替えた。値・既定値・書き込みの許可・注文提案の受け付けの規則は変えていない | issue #1079 |
+| 1.22 | 2026-11-15 | Settings「証券会社・データ」に「立花 研究用の日足収集」（`modal-research-tachibana-bars`。issue #1082）と「立花 研究用の時価記録」（`modal-research-tachibana-quotes`。issue #1083）の 2 カードを追加（どちらも既定オフ・研究専用で、取引・監視銘柄には使わない） | issue #1082・#1083 |
+| 1.23 | 2026-11-15 | Settings「外部連携・AI」に J-Quants（日足・分足。API キー）と J-Quants（日足・分足の取り込み。有効化・契約・1 日の要求数の上限・解約時の削除）のカードを追加 | issue #1093 |

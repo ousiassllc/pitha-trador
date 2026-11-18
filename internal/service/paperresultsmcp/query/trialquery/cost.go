@@ -58,7 +58,8 @@ func Cost(ctx context.Context, q query.Q, r query.Range, now time.Time, arms []s
 	}
 	rows, err := q.QueryContext(ctx, `
 SELECT substr(datetime(created_at, '+9 hours'), 1, 10) AS day, arm_id, cost_source, COUNT(*),
-	COALESCE(SUM(cost_usd), 0), COALESCE(SUM(counted_cost_usd), 0), COALESCE(SUM(counted_cost_usd = 0), 0)
+	COALESCE(SUM(cost_usd), 0), COALESCE(SUM(counted_cost_usd), 0), COALESCE(SUM(counted_cost_usd = 0), 0),
+	COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
 FROM jev_trial_decisions WHERE created_at >= ? AND created_at < ?`+filter+`
 GROUP BY day, arm_id, cost_source ORDER BY day, arm_id, cost_source`, args...)
 	if err != nil {
@@ -72,9 +73,10 @@ GROUP BY day, arm_id, cost_source ORDER BY day, arm_id, cost_source`, args...)
 		var (
 			day, arm, source string
 			calls, zero      int
+			inTok, outTok    int
 			usd, counted     float64
 		)
-		if err := rows.Scan(&day, &arm, &source, &calls, &usd, &counted, &zero); err != nil {
+		if err := rows.Scan(&day, &arm, &source, &calls, &usd, &counted, &zero, &inTok, &outTok); err != nil {
 			return CostReport{}, fmt.Errorf("query: scan jev trial cost: %w", err)
 		}
 		if len(report.Daily) == 0 || report.Daily[len(report.Daily)-1].Date != day {
@@ -84,14 +86,14 @@ GROUP BY day, arm_id, cost_source ORDER BY day, arm_id, cost_source`, args...)
 		if len(d.Arms) == 0 || d.Arms[len(d.Arms)-1].ArmID != arm {
 			d.Arms = append(d.Arms, ArmCost{ArmID: arm, CostBlock: newCostBlock()})
 		}
-		d.Arms[len(d.Arms)-1].add(source, calls, usd, counted, zero)
-		d.Overall.add(source, calls, usd, counted, zero)
-		report.Total.add(source, calls, usd, counted, zero)
+		d.Arms[len(d.Arms)-1].add(source, calls, usd, counted, zero, inTok, outTok)
+		d.Overall.add(source, calls, usd, counted, zero, inTok, outTok)
+		report.Total.add(source, calls, usd, counted, zero, inTok, outTok)
 		if perArm[arm] == nil {
 			b := newCostBlock()
 			perArm[arm] = &b
 		}
-		perArm[arm].add(source, calls, usd, counted, zero)
+		perArm[arm].add(source, calls, usd, counted, zero, inTok, outTok)
 	}
 	if err := rows.Err(); err != nil {
 		return CostReport{}, fmt.Errorf("query: jev trial cost: %w", err)
@@ -151,6 +153,9 @@ SELECT arm_id, COALESCE(SUM(counted_cost_usd), 0) FROM jev_trial_decisions WHERE
 	}
 	if err := rows.Err(); err != nil {
 		return Limits{}, fmt.Errorf("query: today's jev trial cost: %w", err)
+	}
+	if l.Codex, err = readCodexLimits(ctx, q, cfg.Codex, from, to, now); err != nil {
+		return Limits{}, err
 	}
 	skipped, err := skippedToday(ctx, q, from, to)
 	if err != nil {

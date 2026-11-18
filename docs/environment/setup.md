@@ -103,6 +103,8 @@ make dev
 
 `JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`OPENROUTER_API_KEY`/`OPENROUTER_BASE_URL`/`EDINET_API_KEY`/`JQUANTS_API_KEY`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`/`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。`OPENROUTER_*`はモデル比較トライアル（issue #1059。`architecture/overview/integrations-jev-trial.md`）専用の任意キーで、未入力でも起動は失敗せず、必須キーにも入らない（Setup Guard は求めない）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
+AI のプロバイダー（独自 API／OpenRouter）と、役割ごとのモデルの設定手順は`setup/ai-providers.md`（issue #1080）。
+
 ### 環境変数
 
 アプリ本体は`.env`を自動では読み込まない。以下はプロセス環境変数として設定する（一覧の雛形は`.env.example`）。API/Secret系（上記のJev/kabu/Slack/Luna/Sol/Opus/News）とバックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値（下記「Settings画面で設定する運用項目」）はSettings画面で入力するため対象外。

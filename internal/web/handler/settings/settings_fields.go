@@ -36,12 +36,12 @@ type connection struct {
 var settingsConnections = []connection{
 	{
 		id:          "jev",
-		name:        "Jev",
-		description: "売買判断を行う AI（Jev）への接続です。API キーは必須です。接続先 URL とモデル名は未設定なら既定値を使います。",
+		name:        "独自 API（Jev）",
+		description: "独自 API（URL とキー）への接続で、売買判断を行う AI（Jev）が使います。API キーは必須です。接続先 URL とモデル名は未設定なら既定値を使います。役割ごとに別のプロバイダーを選んでいても、独自 API を選んだ役割はこの接続を使います。",
 		fields: []settingsField{
 			{config.KeyJevAPIKey, "API キー"},
 			{config.KeyJevBaseURL, "接続先 URL（任意）"},
-			{config.KeyJevModel, "モデル名（任意）"},
+			{config.KeyJevModel, "Jev のモデル名（任意。「役割ごとのモデル」で指定がなければこれを使います）"},
 		},
 	},
 	{
@@ -113,8 +113,8 @@ var settingsConnections = []connection{
 	},
 	{
 		id:          "openrouter",
-		name:        "OpenRouter（モデル比較）",
-		description: "モデル比較トライアルが、比較対象のモデルを呼び出すための OpenRouter への接続です（任意）。入力しなくてもアプリは通常どおり動きます。売買判断を行う Jev の接続とは別です。",
+		name:        "OpenRouter",
+		description: "OpenRouter への接続です（任意）。「役割ごとのモデル」で OpenRouter を選んだ役割と、モデル比較トライアルのアームがこの 1 つのキーで呼びます。入力しなくてもアプリは通常どおり動きます。独自 API（Jev）の接続とは別です。",
 		fields: []settingsField{
 			{config.KeyOpenRouterAPIKey, "API キー（任意）"},
 			{config.KeyOpenRouterBaseURL, "接続先 URL（任意）"},

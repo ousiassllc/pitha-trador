@@ -4,7 +4,7 @@
 // subscription is cancelled.
 //
 // Rows it writes carry research_horizon_labels.exit_source = 'jquants' (migration
-// 000058); every row the recorder of issue #1074 wrote is 'snapshot'. It writes
+// 000062); every row the recorder of issue #1074 wrote is 'snapshot'. It writes
 // only the research label tables (isolation_test.go in the parent package pins
 // that) and reads market_snapshots only through the parent Repository and one
 // symbol listing. It is never a trading input.

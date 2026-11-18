@@ -1,8 +1,8 @@
-# API 仕様: Paper 実績 MCP — 開示・ニュースの追加の情報源（§3.35）
+# API 仕様: Paper 実績 MCP — 開示・ニュースの追加の情報源（§3.38）
 
-`docs/api/endpoints/paper-results-mcp.md` §3.35 の分割章（行数上限のため別ファイル）。issue #1096。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。表は `docs/architecture/er/tables-disclosure-sources.md`、設計は `docs/architecture/overview/integrations-disclosure-sources.md`。
+`docs/api/endpoints/paper-results-mcp.md` §3.38 の分割章（行数上限のため別ファイル）。issue #1096。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。表は `docs/architecture/er/tables-disclosure-sources.md`、設計は `docs/architecture/overview/integrations-disclosure-sources.md`。
 
-## §3.35 `disclosure_sources_status`
+## §3.38 `disclosure_sources_status`
 
 EDINET の書類一覧の記録と、立花ニュースの記録の、状況を返す。件数・最終取得時刻・失敗件数だけで、取引の判断・Policy・Risk・発注・既存の開示見送りルールには使われない。
 

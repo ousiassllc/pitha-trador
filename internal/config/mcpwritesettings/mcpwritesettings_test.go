@@ -19,10 +19,11 @@ func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 		"risk.daily_loss_limit_jpy", "risk.profit_lock.trigger_jpy",
 		"metalabel.llm_cutoff", "metalabel.llm_cutoff_model", "metalabel.llm_cutoff_confirmed_on", "metalabel.llm_cutoff_source",
 		"jev.shadow.enabled", "jev.shadow.candidate_version", // #929: only these two of the jev.shadow.* keys; the cost cap, halt, failures, throttle and the live version are not here
-		"research.labels.enabled", // #1073: only the recording switch of the research labels (default off); research.labels.retention_days is not here
+		"research.labels.enabled",                                              // #1073: only the recording switch of the research labels (default off); research.labels.retention_days is not here
+		"research.tachibana_bars.enabled", "research.tachibana_quotes.enabled", // #1082, #1083: only the two switches of the 立花 research collections (default off); their other keys are Settings-screen only
 	}
-	if len(want) != 22 {
-		t.Fatalf("the test lists %d keys, issue #1073 makes the whitelist 22", len(want))
+	if len(want) != 24 {
+		t.Fatalf("the test lists %d keys, issues #1073, #1082 and #1083 make the whitelist 24", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)

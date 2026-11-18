@@ -1,8 +1,8 @@
-# API 仕様: Paper 実績 MCP — J-Quants の取り込み状況（§3.36）
+# API 仕様: Paper 実績 MCP — J-Quants の取り込み状況（§3.39）
 
-`docs/api/endpoints/paper-results-mcp.md` §3.36 の分割章（行数上限のため別ファイル）。issue #1093。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md`。設計は `docs/architecture/overview/integrations-jquants.md`、運用は `docs/environment/setup/jquants.md`。
+`docs/api/endpoints/paper-results-mcp.md` §3.39 の分割章（行数上限のため別ファイル）。issue #1093。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md`。設計は `docs/architecture/overview/integrations-jquants.md`、運用は `docs/environment/setup/jquants.md`。
 
-## §3.36 `jquants_status`
+## §3.39 `jquants_status`
 
 J-Quants 読み取りアダプタの記録状況を返す。件数・日数・日付・固定コードだけで、取引の判断・Policy・Risk・発注・Jev には使われない。J-Quants の利用条件（私的利用・外部へ送らない）のため、価格・銘柄・キーは返さない。
 

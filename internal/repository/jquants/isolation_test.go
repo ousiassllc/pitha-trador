@@ -50,9 +50,9 @@ func TestTradingAndModelPackagesNeverReferenceJQuants(t *testing.T) {
 	}
 }
 
-// The composition root names the adapter only in researchwire, where it registers
+// The composition root names the adapter only in researchextrawire, where it registers
 // the maintenance task and holds the key: services*.go do not mention J-Quants, and
-// every line of researchwire.go that does is the package comment, the import, the key
+// every line of researchextrawire.go that does is the package comment, the import, the key
 // field or the one task registration.
 func TestCompositionRootOnlyRegistersTheMaintenanceTaskAndHoldsTheKey(t *testing.T) {
 	bootstrap := filepath.Join("..", "..", "bootstrap")
@@ -62,7 +62,7 @@ func TestCompositionRootOnlyRegistersTheMaintenanceTaskAndHoldsTheKey(t *testing
 			t.Fatal(err)
 		}
 		if strings.Contains(strings.ToLower(string(src)), "jquants") {
-			t.Errorf("%s mentions J-Quants: only researchwire wires it", name)
+			t.Errorf("%s mentions J-Quants: only researchextrawire wires it", name)
 		}
 	}
 	allowed := []string{
@@ -70,7 +70,7 @@ func TestCompositionRootOnlyRegistersTheMaintenanceTaskAndHoldsTheKey(t *testing
 		"jquants  string", "scheduler.WithMaintenanceTask(jquantswire.New(w.db, w.settings, w.jquants).Task())(s)",
 		"jquants: secrets.JQuantsAPIKey",
 	}
-	src, err := os.ReadFile(filepath.Join(bootstrap, "researchwire", "researchwire.go"))
+	src, err := os.ReadFile(filepath.Join(bootstrap, "researchextrawire", "researchextrawire.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestCompositionRootOnlyRegistersTheMaintenanceTaskAndHoldsTheKey(t *testing
 			ok = ok || strings.Contains(line, a)
 		}
 		if !ok {
-			t.Errorf("researchwire.go mentions J-Quants outside the task registration and the key: %q", strings.TrimSpace(line))
+			t.Errorf("researchextrawire.go mentions J-Quants outside the task registration and the key: %q", strings.TrimSpace(line))
 		}
 	}
 }

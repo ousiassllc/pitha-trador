@@ -19,7 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
-// Description is the tool's description (docs/api/endpoints/paper-results-mcp-jquants.md §3.36).
+// Description is the tool's description (docs/api/endpoints/paper-results-mcp-jquants.md §3.39).
 const Description = "J-Quants 読み取りアダプタの記録状況の読み取り専用の集計（研究用の記録だけで、取引・Policy・Risk・発注・Jev には使っていない）: " +
 	"取り込みのオン・オフ（enabled。設定画面だけで変えられる）、契約のフラグ（plan_daily / plan_minute）、1 日の要求数の上限（daily_request_cap）と今日（JST）の要求数（requests_today）、" +
 	"表ごとの行数の合計（rows。symbols / daily_bars / minute_bars / coverage）、期間内の日足・分足の日数（daily_days_in_period / minute_days_in_period）、" +

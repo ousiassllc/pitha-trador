@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,13 +31,34 @@ import (
 
 var csrfMeta = regexp.MustCompile(`<meta name="csrf-token" content="([^"]+)"`)
 
+// keyValue is a recognisable secret: it must never appear in any HTML.
+const keyValue = "sk-or-v1-SECRETVALUE0123456789"
+
 type fullSecrets struct{}
 
-func (fullSecrets) Get(context.Context, string) (string, bool, error) { return "x", true, nil }
+func (fullSecrets) Get(context.Context, string) (string, bool, error) { return keyValue, true, nil }
 func (fullSecrets) Set(context.Context, string, string) error         { return nil }
 func (fullSecrets) Delete(context.Context, string) error              { return nil }
 
-const validArms = `[{"id":"or-clef-flash","provider":"openrouter","model":"cloudflare/clef-flash","prompt_version":"trader-v3"}]`
+// armRow is the posted fields of one valid arm row.
+func armRow(n int, id, model string) url.Values {
+	p := "arm-" + strconv.Itoa(n) + "-"
+	return url.Values{
+		p + "id": {id}, p + "provider": {"openrouter"}, p + "model": {model}, p + "prompt_version": {"trader-v3"},
+		p + "daily_cost_cap_usd": {""}, p + "list_price_usd_per_mtok": {""}, p + "provider_only": {""}, p + "data_collection": {"deny"},
+	}
+}
+
+func join(base url.Values, more ...url.Values) url.Values {
+	for _, m := range more {
+		for k, v := range m {
+			base[k] = v
+		}
+	}
+	return base
+}
+
+var validRows = armRow(0, "or-clef-flash", "cloudflare/clef-flash")
 
 type app struct {
 	t        *testing.T
@@ -47,7 +69,10 @@ type app struct {
 	csrf     string
 }
 
-func newApp(t *testing.T) *app {
+func newApp(t *testing.T) *app { return newAppWithKeys(t, nil) }
+
+// newAppWithKeys wires keys as the store the panel asks whether the key is set.
+func newAppWithKeys(t *testing.T, keys jevtrial.KeyStore) *app {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
@@ -56,6 +81,9 @@ func newApp(t *testing.T) *app {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	svc := jevtrial.New(db)
+	if keys != nil {
+		svc.WithKeyStore(keys)
+	}
 	svc.SetClock(func() time.Time { return time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC) })
 	a := &app{t: t, db: db, settings: system.NewRuntimeSettingsRepository(db)}
 	a.engine = router.New(router.WithSecretsStore(fullSecrets{}), router.WithJevTrialSettings(svc))
@@ -121,7 +149,7 @@ func TestCardAndPanelShowTheDefaults(t *testing.T) {
 	}
 	body := a.get("/settings/jev-trial-panel").Body.String()
 	for _, want := range []string{
-		`data-testid="jev-trial-enabled"`, `data-testid="jev-trial-arms"`, `data-testid="jev-trial-paper-only"`,
+		`data-testid="jev-trial-enabled"`, `id="jev-trial-arm-editor"`, `data-testid="jev-trial-arm-add"`, `data-testid="jev-trial-paper-only"`,
 		`data-testid="jev-trial-cap-effective">0.1 USD</span>（既定値）`, `placeholder="0.1（既定値）"`,
 		`data-testid="jev-trial-cost-today">0 USD`, `data-testid="jev-trial-arms-empty"`, "2026-11-13",
 	} {
@@ -139,7 +167,7 @@ func TestCardAndPanelShowTheDefaults(t *testing.T) {
 
 func TestSavingTheForm(t *testing.T) {
 	a := newApp(t)
-	form := url.Values{"enabled": {"on"}, "arms": {validArms}, "cap": {"0.5"}}
+	form := join(url.Values{"enabled": {"on"}, "cap": {"0.5"}}, validRows)
 	// No CSRF token: refused, nothing stored.
 	if rec := a.post("/settings/jev-trial", form, false); rec.Code == http.StatusOK {
 		t.Fatalf("POST without CSRF = %d", rec.Code)
@@ -159,14 +187,14 @@ func TestSavingTheForm(t *testing.T) {
 		t.Errorf("cap = %q", v)
 	}
 	body := a.get("/settings/jev-trial-panel").Body.String()
-	for _, want := range []string{`data-testid="jev-trial-cap-effective">0.5 USD</span>（保存した値）`, `data-testid="jev-trial-arm-row"`, "or-clef-flash", "cloudflare/clef-flash", "動作中"} {
+	for _, want := range []string{`data-testid="jev-trial-cap-effective">0.5 USD</span>（保存した値）`, `data-testid="jev-trial-arm-row"`, `data-testid="jev-trial-arm-field-row"`, `value="or-clef-flash"`, `value="cloudflare/clef-flash"`, "動作中"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("panel after save lacks %q\n%s", want, body)
 		}
 	}
 
 	// Unchecked = off (always allowed); a blank cap restores the default.
-	if rec := a.post("/settings/jev-trial", url.Values{"arms": {validArms}, "cap": {""}}, true); rec.Code != http.StatusOK {
+	if rec := a.post("/settings/jev-trial", join(url.Values{"cap": {""}}, validRows), true); rec.Code != http.StatusOK {
 		t.Fatalf("disable = %d", rec.Code)
 	}
 	if v, _ := a.stored(jevtrialsettings.KeyEnabled); v != "0" {
@@ -179,15 +207,24 @@ func TestSavingTheForm(t *testing.T) {
 
 func TestInvalidInputIsRejectedAndSavesNothing(t *testing.T) {
 	a := newApp(t)
+	badRow := func(field, value string) url.Values {
+		return join(armRow(0, "a", "m"), url.Values{"arm-0-" + field: {value}})
+	}
+	good := func(extra url.Values) url.Values { return join(url.Values{"enabled": {"on"}}, validRows, extra) }
 	for name, form := range map[string]url.Values{
-		"arms not JSON":       {"enabled": {"on"}, "arms": {"nope"}, "cap": {"1"}},
-		"unregistered prompt": {"enabled": {"on"}, "arms": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v999"}]`}},
-		"unknown field":       {"enabled": {"on"}, "arms": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","x":1}]`}},
-		"cap zero":            {"enabled": {"on"}, "arms": {validArms}, "cap": {"0"}},
-		"cap negative":        {"enabled": {"on"}, "arms": {validArms}, "cap": {"-1"}},
-		"cap huge":            {"enabled": {"on"}, "arms": {validArms}, "cap": {"1000000"}},
-		"cap text":            {"enabled": {"on"}, "arms": {validArms}, "cap": {"abc"}},
-		"cap NaN":             {"enabled": {"on"}, "arms": {validArms}, "cap": {"NaN"}},
+		"unregistered prompt": good(badRow("prompt_version", "trader-v999")),
+		"empty prompt":        good(badRow("prompt_version", "")),
+		"empty id":            join(good(nil), url.Values{"arm-1-id": {""}, "arm-1-provider": {"openrouter"}, "arm-1-model": {"m"}, "arm-1-prompt_version": {"trader-v3"}}),
+		"bad id":              join(good(nil), armRow(1, "A b", "m")),
+		"duplicate id":        join(good(nil), armRow(1, "or-clef-flash", "m")),
+		"bad number":          join(good(nil), badRow("daily_cost_cap_usd", "abc")),
+		"negative arm cap":    join(good(nil), armRow(1, "b", "m"), url.Values{"arm-1-daily_cost_cap_usd": {"-1"}}),
+		"unknown field":       join(good(nil), url.Values{"arm-0-endpoint": {"x"}}),
+		"cap zero":            good(url.Values{"cap": {"0"}}),
+		"cap negative":        good(url.Values{"cap": {"-1"}}),
+		"cap huge":            good(url.Values{"cap": {"1000000"}}),
+		"cap text":            good(url.Values{"cap": {"abc"}}),
+		"cap NaN":             good(url.Values{"cap": {"NaN"}}),
 	} {
 		rec := a.post("/settings/jev-trial", form, true)
 		if rec.Code != http.StatusUnprocessableEntity {
@@ -210,7 +247,7 @@ func TestInvalidInputIsRejectedAndSavesNothing(t *testing.T) {
 // The panel never shows an Issue / PR number or a development note.
 func TestPanelShowsNoIssueReferences(t *testing.T) {
 	a := newApp(t)
-	a.post("/settings/jev-trial", url.Values{"enabled": {"on"}, "arms": {validArms}}, true)
+	a.post("/settings/jev-trial", join(url.Values{"enabled": {"on"}}, validRows), true)
 	devNote := regexp.MustCompile(`(?i)\b(?:issue|pr)\s*#?\d+|\bFR-[A-Z]+-\d+|#\d+`)
 	tags := regexp.MustCompile(`(?s)<[^>]*>`)
 	for _, path := range []string{"/settings/jev-trial-panel", "/settings/integrations"} {

@@ -2,7 +2,7 @@
 // #1096: research_edinet_documents and research_edinet_fetch_days (the EDINET
 // document list, metadata only), research_tachibana_news (the 立花 e支店 news)
 // and research_disclosure_source_status (per source: requests, failures, last
-// fetch), migration 000059.
+// fetch), migration 000063.
 //
 // The record is for research only. Policy, Risk, order placement, Jev, the
 // gates and the existing disclosure skip rules never read it; it writes only

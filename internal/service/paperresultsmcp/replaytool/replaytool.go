@@ -64,6 +64,19 @@ type PlanArgs struct {
 	Arms []string `json:"arms"`
 }
 
+// RunIDArgs is {"run_id": n} (required or optional by the tool).
+type RunIDArgs struct {
+	RunID *int64 `json:"run_id"`
+}
+
+// Validate checks run_id: present when required, 1 or more when given.
+func (a RunIDArgs) Validate(required bool) error {
+	if (required && a.RunID == nil) || (a.RunID != nil && *a.RunID < 1) {
+		return fmt.Errorf("%w: run_id must be 1 or more", jevreplay.ErrInvalidRequest)
+	}
+	return nil
+}
+
 // Validate checks the arguments that need no database.
 func (a PlanArgs) Validate() error {
 	invalid := func(format string, args ...any) error {

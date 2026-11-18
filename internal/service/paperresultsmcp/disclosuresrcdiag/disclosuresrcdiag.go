@@ -21,7 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
-// Description is the tool's description (docs/api/endpoints/paper-results-mcp-disclosure-sources.md §3.35).
+// Description is the tool's description (docs/api/endpoints/paper-results-mcp-disclosure-sources.md §3.38).
 const Description = "開示・ニュースの追加の情報源（EDINET の書類一覧、立花 e支店のニュース）の記録状況の読み取り専用の集計（記録だけで、取引・Policy・Risk・発注・既存の開示見送りルールには使っていない）: " +
 	"情報源ごとに、記録のオン・オフ（enabled。設定画面だけで変えられる）、記録した行数の合計（recorded_total）と期間内の行数（recorded_in_period。期間は記録した書類・ニュースの時刻）、" +
 	"最古・最新の記録の時刻、最後に要求を出した時刻・成功した時刻・失敗した時刻（last_fetched_at / last_success_at / last_failure_at）、要求数の累計（request_count）と失敗数の累計（failure_count）、" +

@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jobfailurelog"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 // Start launches every background goroutine this build's composition root owns: the broker session
@@ -26,6 +27,7 @@ func (s *Services) Start(ctx context.Context) error {
 
 	dailyguardseed.Run(ctx, s.Settings, time.Now())
 	paperrisk.Seed(ctx, s.Settings, s.Risk, time.Now())
+	s.aiRoles.Record(ctx) // which provider/model each AI role runs on since this start (issue #1080)
 	s.syncUniverse(ctx)
 
 	if err := s.Broker.Start(ctx); err != nil {
@@ -64,11 +66,12 @@ func (s *Services) Start(ctx context.Context) error {
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
+	s.research.Start(ctx, &s.wg)
 	s.wg.Add(1)
 	go func() { defer s.wg.Done(); s.HealthAlerts.Run(ctx) }()
 	s.startWatchList(ctx)
 	jobfailurelog.Start(ctx, &s.wg, s.Jobs) // issue #803
-	s.research.Start(ctx, &s.wg)            // replay evaluation (issue #1085): off by default
+	s.researchExtra.Start(ctx, &s.wg)       // replay evaluation (issue #1085): off by default
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)
@@ -84,4 +87,23 @@ func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.Trader.Close()
 	s.wg.Wait()
+}
+
+// handleSelfImprove is the analytics queue Handler: the daily
+// Continuous Loop batch Scheduler's post-close selfImproveCronSpec trigger
+// enqueues (functional.md §4.14). It runs Governor.RunDaily over the
+// recorded Calibration outcomes and logs what changed.
+func (s *Services) handleSelfImprove(ctx context.Context, _ jobqueue.Job) error {
+	result, err := s.Governor.RunDaily(ctx, s.Calibration)
+	var proposalID int64
+	if result.Proposal != nil {
+		proposalID = result.Proposal.ID
+	}
+	slog.InfoContext(ctx, "bootstrap: self-improvement daily batch finished",
+		"rolled_back_proposal_ids", result.RolledBack, "retried_applied_proposal_ids", result.RetriedApplied,
+		"proposal_id", proposalID, "applied", result.Applied, "skipped_ai_stages", result.SkippedStages)
+	if err != nil {
+		return fmt.Errorf("bootstrap: self-improvement daily batch: %w", err)
+	}
+	return nil
 }

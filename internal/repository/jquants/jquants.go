@@ -1,5 +1,5 @@
 // Package jquants persists the J-Quants read adapter's research data (issue
-// #1093, migration 000058): the listed-issue master, daily bars, minute bars, the
+// #1093, migration 000062): the listed-issue master, daily bars, minute bars, the
 // per-(dataset, day, issue) coverage marks and the per-day request ledger.
 //
 // The data is research-only and private-use (J-Quants' terms). Nothing here is a

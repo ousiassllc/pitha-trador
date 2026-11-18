@@ -1,6 +1,6 @@
 # ER: 開示・ニュースの追加の情報源（研究用）
 
-`docs/architecture/er.md` から分割した章。対象: `research_edinet_documents` / `research_edinet_fetch_days` / `research_tachibana_news` / `research_disclosure_source_status` と、読み取り用のビュー `research_disclosure_source_events_v`（マイグレーション `000059`。issue #1096）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/overview/integrations-disclosure-sources.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-disclosure-sources.md`。実装は `internal/repository/disclosuresrc`（表）・`internal/service/disclosuresrc`（記録部品・EDINET クライアント）・`internal/bootstrap/disclosuresrcwire`（メンテナンスタスク）。
+`docs/architecture/er.md` から分割した章。対象: `research_edinet_documents` / `research_edinet_fetch_days` / `research_tachibana_news` / `research_disclosure_source_status` と、読み取り用のビュー `research_disclosure_source_events_v`（マイグレーション `000063`。issue #1096）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/overview/integrations-disclosure-sources.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-disclosure-sources.md`。実装は `internal/repository/disclosuresrc`（表）・`internal/service/disclosuresrc`（記録部品・EDINET クライアント）・`internal/bootstrap/disclosuresrcwire`（メンテナンスタスク）。
 
 **研究専用**。ゲート・Policy・Risk・発注・Paper ガード・Live・Jev・RAG の索引・Calibration・メタモデルの学習・自己改善・既存の開示見送りルールは、これらの表を読まない。`disclosure_items`・`jev_decisions`・`jev_shadow_decisions`・`jev_trial_decisions`・`market_snapshots`・`daily_bars` には何も書かず、列も制約も足さない。書類・ニュースの本文は持たない。API キー・認証情報は持たない。時刻はすべて UTC の RFC3339（小数 9 桁固定）。
 

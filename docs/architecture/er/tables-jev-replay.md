@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev リプレイ評価）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_replay_runs` と `jev_replay_results`（マイグレーション `000057`。issue #1085）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・スイッチ・見積もり・学習カットオフ・費用の上限）は `docs/architecture/overview/integrations-jev-replay.md`、MCP ツールは `docs/api/endpoints/paper-results-mcp-jev-replay.md`。
+`docs/architecture/er.md` から分割した章。対象: `jev_replay_runs` と `jev_replay_results`（マイグレーション `000061`。issue #1085）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・スイッチ・見積もり・学習カットオフ・費用の上限）は `docs/architecture/overview/integrations-jev-replay.md`、MCP ツールは `docs/api/endpoints/paper-results-mcp-jev-replay.md`。
 
 保存済みのライブの trader 判断の入力（`jev_decisions.state_json`）を、お試しのアーム（`jev.trial.arms`）に**後から**聞き直した結果を残す研究用の表。`jev_decisions`・`jev_shadow_decisions`・`jev_trial_decisions` には**書かない**（`replayflow/isolation_test.go` が、表名を扱うコードをリプレイのリポジトリと MCP の読み取りに限ることを固定）。取引・Risk・RAG の索引・Calibration・メタモデルの学習・既存シャドーのどれも、この 2 表を読まない。
 

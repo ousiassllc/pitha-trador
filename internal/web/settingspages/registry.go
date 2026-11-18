@@ -180,8 +180,11 @@ var dialogs = []Dialog{
 	{PageBroker, "modal-tachibana-nightly", nil},
 	{PageBroker, "modal-tachibana-intraday", nil},
 	{PageBroker, "modal-tachibana-screen", nil},
+	{PageBroker, "modal-research-tachibana-bars", nil},
+	{PageBroker, "modal-research-tachibana-quotes", nil},
 
 	// 外部連携・AI
+	{PageIntegrations, "modal-ai-roles", nil},
 	{PageIntegrations, "modal-jev", nil},
 	{PageIntegrations, "modal-luna", nil},
 	{PageIntegrations, "modal-sol", nil},
@@ -194,6 +197,7 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
+	{PageIntegrations, "modal-mcp-experiments", nil},
 	{PageIntegrations, "modal-jev-prompt", nil},
 	{PageIntegrations, "modal-jev-trial", nil},
 

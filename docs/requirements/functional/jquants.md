@@ -1,6 +1,6 @@
 # 機能要件: J-Quants の日足・分足の取り込み
 
-`docs/requirements/functional.md` §4 の分割章（行数上限のため別ファイル）。issue #1093（関連: #1074 研究用ラベル）。設計は `docs/architecture/overview/integrations-jquants.md`、表は `docs/architecture/er/tables-jquants.md`、運用は `docs/environment/setup/jquants.md`、MCP は `docs/api/endpoints/paper-results-mcp-jquants.md`（§3.36）。
+`docs/requirements/functional.md` §4 の分割章（行数上限のため別ファイル）。issue #1093（関連: #1074 研究用ラベル）。設計は `docs/architecture/overview/integrations-jquants.md`、表は `docs/architecture/er/tables-jquants.md`、運用は `docs/environment/setup/jquants.md`、MCP は `docs/api/endpoints/paper-results-mcp-jquants.md`（§3.39）。
 
 - FR-JQUANTS-1（読み取りアダプタ）: アプリは J-Quants API V2（`/equities/master`・`/equities/bars/daily`・`/equities/bars/minute`。API キーはヘッダ`x-api-key`、続きは`pagination_key`）の読み取りアダプタを持つ。`*http.Client`とベース URL を差し替えられる。**API キー（秘密`JQUANTS_API_KEY`）が未設定のあいだ、スイッチがオフのあいだ、契約していない側の API（`jquants.plan_daily` / `jquants.plan_minute`が 0）は、HTTP 要求を 1 回も送らない**（数える RoundTripper のテストで固定）。キーはログ・エラー・DB・MCP の応答・通知に出さない。
 - FR-JQUANTS-2（既定オフ・Settings だけ）: `jquants.enabled`（既定 0）、`jquants.plan_daily` / `jquants.plan_minute`（既定 0）、`jquants.daily_request_cap`（既定 200、1〜5000）、`jquants.backfill_days`（既定 30、1〜1830）、`jquants.purge_requested`（既定 0）は`runtime_settings`に置き、Settings 画面だけが書く。Paper 実績 MCP の`settings_set`の許可リストに入れない。行が無い・壊れている値は既定（オフ・未契約）として扱う。

@@ -1,10 +1,10 @@
 # API 仕様: Paper 実績 MCP のリプレイ評価ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.37 の分割章（行数上限のため別ファイル）。issue #1085。保存済みのライブの trader 判断の入力を、お試しのアーム（`jev.trial.arms`）に後から聞き直して比べる**リプレイ評価**を、MCP から見積もり・開始・停止・進み具合の確認・結果の読み取りができる。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。設計は `docs/architecture/overview/integrations-jev-replay.md`、表は `docs/architecture/er/tables-jev-replay.md`。
+`docs/api/endpoints/paper-results-mcp.md` §3.40 の分割章（行数上限のため別ファイル）。issue #1085。保存済みのライブの trader 判断の入力を、お試しのアーム（`jev.trial.arms`）に後から聞き直して比べる**リプレイ評価**を、MCP から見積もり・開始・停止・進み具合の確認・結果の読み取りができる。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。設計は `docs/architecture/overview/integrations-jev-replay.md`、表は `docs/architecture/er/tables-jev-replay.md`。
 
 ## 3. ツール
 
-### 3.37 `replay_estimate` / `replay_start` / `replay_stop` / `replay_progress` / `replay_results`
+### 3.40 `replay_estimate` / `replay_start` / `replay_stop` / `replay_progress` / `replay_results`
 
 | ツール | 読み書き | 内容 |
 |---|---|---|

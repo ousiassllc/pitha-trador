@@ -1,7 +1,7 @@
 // Package disclosuresrc holds the value types of the extra disclosure / news
 // sources (issue #1096): the EDINET document list (metadata only) and the 立花
 // e支店 news, as the research tables research_edinet_documents and
-// research_tachibana_news store them (migration 000059).
+// research_tachibana_news store them (migration 000063).
 //
 // The data is research-only. It is never an input of the gates, Policy, Risk,
 // Jev or the existing disclosure skip rules.

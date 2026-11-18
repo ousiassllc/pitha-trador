@@ -59,12 +59,20 @@ type SettingsHandler struct {
 	// mcp shows the 外部連携 section's MCP card (issue #792); the panel
 	// itself is served by internal/web/handler/mcpsettings.
 	mcp bool
+	// mcpExperiments shows the 調整の実験 card next to it (modal
+	// `modal-mcp-experiments`); served by the same handler once the MCP write
+	// gate (which holds the experiments) is wired.
+	mcpExperiments bool
 	// jevPrompt shows the Jev prompt card (issue #872); the panel itself is
 	// served by internal/web/handler/jevprompt.
 	jevPrompt bool
 	// jevTrial shows the model-comparison trial card; the panel itself is
 	// served by internal/web/handler/jevtrial.
 	jevTrial bool
+	// aiRoles shows the 役割ごとのモデル card (issue #1080) and puts the two
+	// provider connections (独自 API, OpenRouter) in their own section above it;
+	// the panel itself is served by internal/web/handler/airoles.
+	aiRoles bool
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -76,6 +84,14 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // screen; call it only when the MCP panel routes are registered.
 func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
 	h.mcp = true
+	return h
+}
+
+// WithMCPExperiments shows the 調整の実験 card (modal `modal-mcp-experiments`)
+// on the Settings screen; call it only when the experiment routes are
+// registered (the MCP write gate is wired).
+func (h *SettingsHandler) WithMCPExperiments() *SettingsHandler {
+	h.mcpExperiments = true
 	return h
 }
 
@@ -91,6 +107,14 @@ func (h *SettingsHandler) WithJevPromptSettings() *SettingsHandler {
 // are registered.
 func (h *SettingsHandler) WithJevTrialSettings() *SettingsHandler {
 	h.jevTrial = true
+	return h
+}
+
+// WithAIRoleSettings shows the 役割ごとのモデル card (modal `modal-ai-roles`) on
+// the Settings screen, preceded by the AI provider connections; call it only
+// when the panel routes are registered.
+func (h *SettingsHandler) WithAIRoleSettings() *SettingsHandler {
+	h.aiRoles = true
 	return h
 }
 

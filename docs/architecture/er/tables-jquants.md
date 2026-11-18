@@ -1,6 +1,6 @@
 # ER: J-Quants の日足・分足（研究用）
 
-`docs/architecture/er.md` から分割した章。対象: `research_jquants_symbols` / `research_jquants_daily_bars` / `research_jquants_minute_bars` / `research_jquants_coverage` / `research_jquants_fetch_log`、および `research_horizon_labels` に足した列 `exit_source`（マイグレーション `000058`。issue #1093）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/overview/integrations-jquants.md`、運用は `docs/environment/setup/jquants.md`。
+`docs/architecture/er.md` から分割した章。対象: `research_jquants_symbols` / `research_jquants_daily_bars` / `research_jquants_minute_bars` / `research_jquants_coverage` / `research_jquants_fetch_log`、および `research_horizon_labels` に足した列 `exit_source`（マイグレーション `000062`。issue #1093）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/overview/integrations-jquants.md`、運用は `docs/environment/setup/jquants.md`。
 
 **研究専用・個人の私的利用**。ゲート・Policy・Risk・発注・Paper ガード・Live・Jev・RAG の索引・Calibration・メタモデルの学習・自己改善は、これらの表を読まない（`internal/repository/jquants/isolation_test.go` が固定）。`market_snapshots`・`daily_bars`・`disclosure_items`・`jev_decisions`・`jev_shadow_decisions`・`jev_trial_decisions` には何も書かず、列も制約も足さない。J-Quants のデータは、どの表も `source = 'jquants'` の列を持ち（CHECK で他の値を拒む）、解約したときの削除は「J-Quants 由来の行だけ」を対象にできる。API キーはどの表にも入れない。時刻は UTC の RFC3339（小数 9 桁固定）、日付は JST の `YYYY-MM-DD`。
 

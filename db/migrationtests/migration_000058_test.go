@@ -2,7 +2,9 @@ package migrationtests
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -13,14 +15,15 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000058 creates the J-Quants research tables (issue #1093) and adds
-// research_horizon_labels.exit_source. Every J-Quants table carries
-// source = 'jquants' (nothing else is accepted), natural keys make a re-fetch an
-// upsert, existing label rows read 'snapshot' afterwards and a row the recorder
-// wrote keeps its numbers, and one down step removes the new tables and the column
-// without touching the label rows. It migrates 57 -> 58 over a database that
-// already holds snapshots and labels and steps one back.
-func TestMigration000058_CreatesTheJQuantsTablesAndTheLabelProvenanceColumn(t *testing.T) {
+// Migration 000058 lets jev_trial_decisions.cost_source be 'subscription' (issue
+// #1081: the ChatGPT subscription through the Codex CLI). SQLite cannot alter a
+// CHECK, so the migration rebuilds the table the ordinary way (create the new
+// table, copy the rows, drop the old one, rename; no writable_schema). The test
+// pins: every row of 57 survives the up step unchanged (ids and the AUTOINCREMENT
+// position included), a subscription row must have no USD cost and count 0, the
+// indexes and the foreign key are rebuilt as they were, and one down step restores
+// the old CHECK, drops only the subscription rows, and leaves the rest as it was.
+func TestMigration000058_AllowsTheSubscriptionCostSourceAndKeepsTheRows(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -38,115 +41,236 @@ func TestMigration000058_CreatesTheJQuantsTablesAndTheLabelProvenanceColumn(t *t
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	exec := func(stmt string, args ...any) error {
-		_, err := conn.Exec(stmt, args...)
-		return err
-	}
-	count := func(table string) int {
-		t.Helper()
-		var n int
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
-			t.Fatalf("count %s: %v", table, err)
-		}
-		return n
-	}
-	exists := func(name string) bool {
-		t.Helper()
-		var n int
-		if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, name).Scan(&n); err != nil {
-			t.Fatalf("sqlite_master: %v", err)
-		}
-		return n == 1
-	}
-	jquantsTables := []string{"research_jquants_symbols", "research_jquants_daily_bars", "research_jquants_minute_bars", "research_jquants_coverage", "research_jquants_fetch_log"}
-
 	if err := m.Migrate(57); err != nil {
 		t.Fatalf("migrate to 57: %v", err)
 	}
-	for _, tbl := range jquantsTables {
-		if exists(tbl) {
-			t.Fatalf("%s exists before migration 58", tbl)
+	for _, q := range []string{
+		`INSERT INTO instruments (id, symbol, name, market, is_active, created_at, updated_at) VALUES (1, '7203', 'x', 'TSE Prime', 1, 't', 't')`,
+		`INSERT INTO jev_decisions (id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json, question_version, response_json, latency_ms, model_id)
+			VALUES (1, 1, '7203', 't', 'trader', 'h', '{}', 'trader-v3', '{}', 1, 'm'), (2, 1, '7203', 't', 'trader', 'h2', '{}', 'trader-v3', '{}', 1, 'm'),
+			(3, 1, '7203', 't', 'trader', 'h3', '{}', 'trader-v3', '{}', 1, 'm')`,
+		`INSERT INTO jev_trial_decisions (id, jev_decision_id, arm_id, prompt_version, provider, requested_model, status, cost_source, cost_usd, counted_cost_usd,
+			direction, regime, entry_quality, toxic_flow, liquidity_stressed, continuation_probability, input_tokens, created_at)
+			VALUES (1, 1, 'old', 'trader-v3', 'openrouter', 'm', 'ok', 'reported', 0.001, 0.001, 'LONG', 'TREND', 'good', 0.1, 0.1, 0.5, 100, '2026-11-14T00:00:00.000Z')`,
+		`INSERT INTO jev_trial_decisions (id, jev_decision_id, arm_id, prompt_version, requested_model, status, failure_code, http_status, error_excerpt, cost_source, cost_usd, counted_cost_usd)
+			VALUES (2, 3, 'failed', 'trader-v3', 'm', 'failed', 'http_429', 429, 'rate limited', 'unknown', NULL, 0.002)`,
+		// A deleted row leaves the AUTOINCREMENT position at 3: the next id must not be reused.
+		`INSERT INTO jev_trial_decisions (id, jev_decision_id, arm_id, prompt_version, requested_model, status, cost_source, counted_cost_usd,
+			direction, regime, entry_quality, toxic_flow, liquidity_stressed, continuation_probability)
+			VALUES (3, 2, 'gone', 'trader-v3', 'm', 'ok', 'unknown', 0, 'LONG', 'TREND', 'good', 0.1, 0.1, 0.5)`,
+		`DELETE FROM jev_trial_decisions WHERE id = 3`,
+	} {
+		if _, err := conn.Exec(q); err != nil {
+			t.Fatalf("seed: %v\n%s", err, q)
 		}
 	}
-	if err := exec(`INSERT INTO research_horizon_labels (snapshot_id, instrument_id, symbol, snapshot_at, day, sample_bucket, horizon, exit_at, entry_price, exit_price, label_version, long_gross_bps, long_cost_bps, long_net_bps)
-		VALUES (11, 1, '7203', '2026-10-14T01:00:00.000000000Z', '2026-10-14', 7, '30m', '2026-10-14T01:30:00.000000000Z', 1000, 1010, 1, 100.0, 15.0, 85.0)`); err != nil {
-		t.Fatalf("seed an existing label: %v", err)
+	insert := func(arm, source, costUSD string, counted float64) error {
+		_, err := conn.Exec(`INSERT INTO jev_trial_decisions (jev_decision_id, arm_id, prompt_version, provider, requested_model, status, cost_source, cost_usd, counted_cost_usd,
+			direction, regime, entry_quality, toxic_flow, liquidity_stressed, continuation_probability)
+			VALUES (2, ?, 'trader-v3', 'codex_chatgpt', 'm', 'ok', ?, `+costUSD+`, ?, 'LONG', 'TREND', 'good', 0.1, 0.1, 0.5)`, arm, source, counted)
+		return err
+	}
+	if err := insert("sub", "subscription", "NULL", 0); err == nil {
+		t.Fatal("a subscription row was accepted before migration 58")
+	}
+	rowsOf57 := dumpRows(t, conn)
+	indexesOf57 := indexSQL(t, conn)
+	if len(rowsOf57) != 2 || len(indexesOf57) != 2 {
+		t.Fatalf("seed: rows = %d, indexes = %d, want 2 and 2", len(rowsOf57), len(indexesOf57))
 	}
 
 	if err := m.Migrate(58); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
-	for _, name := range append(jquantsTables, "research_jquants_symbols_symbol_idx", "research_jquants_daily_bars_symbol_idx", "research_jquants_minute_bars_day_symbol_idx", "research_horizon_labels_jquants_idx") {
-		if !exists(name) {
-			t.Fatalf("%s missing after migration 58", name)
+	if got := dumpRows(t, conn); !equalStrings(got, rowsOf57) {
+		t.Errorf("the rows of 57 changed by the up step:\n got %q\nwant %q", got, rowsOf57)
+	}
+	indexesOf58 := indexSQL(t, conn)
+	if len(indexesOf58) != 3 {
+		t.Errorf("indexes = %v, want the 2 of 000054 plus jev_trial_decisions_provider_idx", indexesOf58)
+	}
+	for name, ddl := range indexesOf57 {
+		if indexesOf58[name] != ddl {
+			t.Errorf("index %s = %q, want %q", name, indexesOf58[name], ddl)
 		}
 	}
-	var source string
-	var net float64
-	if err := conn.QueryRow(`SELECT exit_source, long_net_bps FROM research_horizon_labels WHERE snapshot_id = 11`).Scan(&source, &net); err != nil || source != "snapshot" || net != 85.0 {
-		t.Fatalf("the existing label = (%q, %v, %v), want it kept with exit_source 'snapshot'", source, net, err)
+	if _, ok := indexesOf58["jev_trial_decisions_provider_idx"]; !ok {
+		t.Error("jev_trial_decisions_provider_idx is missing")
 	}
-	if err := exec(`INSERT INTO research_horizon_labels (snapshot_id, instrument_id, symbol, snapshot_at, day, sample_bucket, horizon, exit_at, entry_price, exit_price, label_version, long_gross_bps, long_cost_bps, long_net_bps, exit_source)
-		VALUES (12, 1, '7203', 't', '2026-10-14', 7, '60m', 't', 1, 1, 1, 1.0, 1.0, 0.0, 'jquants')`); err != nil {
-		t.Fatalf("a label with a J-Quants exit: %v", err)
+	requireRebuiltTable(t, conn, true)
+	if err := insert("sub", "subscription", "NULL", 0); err != nil {
+		t.Fatalf("a subscription row (no USD, counted 0): %v", err)
 	}
-	if err := exec(`INSERT INTO research_horizon_labels (snapshot_id, instrument_id, symbol, snapshot_at, day, sample_bucket, horizon, exit_at, entry_price, exit_price, label_version, long_gross_bps, long_cost_bps, long_net_bps, exit_source)
-		VALUES (13, 1, '7203', 't', '2026-10-14', 7, '60m', 't', 1, 1, 1, 1.0, 1.0, 0.0, 'other')`); err == nil {
-		t.Error("an unknown exit_source was accepted")
+	var id int
+	if err := conn.QueryRow(`SELECT id FROM jev_trial_decisions WHERE arm_id = 'sub'`).Scan(&id); err != nil || id != 4 {
+		t.Errorf("the new row got id %d (err %v), want 4: the AUTOINCREMENT position of 57 was lost", id, err)
 	}
-
-	for name, stmt := range map[string]string{
-		"symbols":     `INSERT INTO research_jquants_symbols (source, as_of, code, symbol, fetched_at) VALUES ('other', '2026-10-14', '72030', '7203', 't')`,
-		"daily bars":  `INSERT INTO research_jquants_daily_bars (source, day, code, symbol, fetched_at) VALUES ('other', '2026-10-14', '72030', '7203', 't')`,
-		"minute bars": `INSERT INTO research_jquants_minute_bars (source, code, symbol, day, bar_at, open, high, low, close, volume, turnover, fetched_at) VALUES ('other', '72030', '7203', '2026-10-14', 't', 1, 1, 1, 1, 1, 1, 't')`,
-		"coverage":    `INSERT INTO research_jquants_coverage (source, dataset, day, row_count, completed_at) VALUES ('other', 'daily', '2026-10-14', 1, 't')`,
-		"fetch log":   `INSERT INTO research_jquants_fetch_log (source, day, dataset) VALUES ('other', '2026-10-14', 'daily')`,
+	for name, err := range map[string]error{
+		"a subscription row with a USD cost":     insert("s2", "subscription", "0.01", 0),
+		"a subscription row counted in USD":      insert("s3", "subscription", "NULL", 0.01),
+		"an unknown cost source":                 insert("s4", "guess", "NULL", 0),
+		"a second row for the same decision/arm": insert("sub", "subscription", "NULL", 0),
 	} {
-		if err := exec(stmt); err == nil {
-			t.Errorf("a %s row with source 'other' was accepted", name)
+		if err == nil {
+			t.Errorf("%s was accepted", name)
 		}
 	}
-	const daily = `INSERT INTO research_jquants_daily_bars (day, code, symbol, open, fetched_at) VALUES ('2026-10-14', '72030', '7203', 1000, 't')`
-	if err := exec(daily); err != nil {
-		t.Fatalf("daily bar: %v", err)
+	if _, err := conn.Exec(`INSERT INTO jev_trial_decisions (jev_decision_id, arm_id, prompt_version, requested_model, status, cost_source, failure_code)
+		VALUES (999, 'orphan', 'trader-v3', 'm', 'failed', 'unknown', 'timeout')`); err == nil {
+		t.Error("a row for a missing jev_decisions row was accepted: the foreign key was lost")
 	}
-	if err := exec(daily); err == nil {
-		t.Error("a second daily bar for one (day, code) was accepted")
+	soundSchema := func(c *sql.DB) {
+		t.Helper()
+		var check string
+		if err := c.QueryRow(`PRAGMA integrity_check`).Scan(&check); err != nil || check != "ok" {
+			t.Errorf("integrity_check = %q (%v)", check, err)
+		}
+		var n int
+		if err := c.QueryRow(`SELECT COUNT(*) FROM pragma_foreign_key_check`).Scan(&n); err != nil || n != 0 {
+			t.Errorf("foreign_key_check rows = %d (%v), want 0", n, err)
+		}
+		if err := c.QueryRow(`SELECT COUNT(*) FROM jev_trial_decisions`).Scan(&n); err != nil || n != 3 {
+			t.Errorf("rows = %d (%v), want 3", n, err)
+		}
 	}
-	if err := exec(`INSERT INTO research_jquants_daily_bars (day, code, symbol, fetched_at) VALUES ('2026-10-15', '72030', '7203', 't')`); err != nil {
-		t.Errorf("a no-trade daily bar (null prices) was refused: %v", err)
+	soundSchema(conn)
+	// A new connection parses the schema from the file: it is sound for everyone, not only this connection.
+	var dbFile string
+	if err := conn.QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).Scan(&dbFile); err != nil {
+		t.Fatal(err)
 	}
-	const minute = `INSERT INTO research_jquants_minute_bars (code, symbol, day, bar_at, open, high, low, close, volume, turnover, fetched_at)
-		VALUES ('72030', '7203', '2026-10-14', '2026-10-14T00:00:00.000000000Z', 1000, 1001, 999, 1000, 100, 100000, 't')`
-	if err := exec(minute); err != nil {
-		t.Fatalf("minute bar: %v", err)
+	other, err := sql.Open("sqlite", "file:"+dbFile+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := exec(minute); err == nil {
-		t.Error("a second minute bar for one (code, bar_at) was accepted")
-	}
-	if err := exec(`INSERT INTO research_jquants_minute_bars (code, symbol, day, bar_at, open, high, low, close, volume, turnover, fetched_at)
-		VALUES ('72030', '7203', '2026-10-14', 'x', 0, 1, 1, 1, 1, 1, 't')`); err == nil {
-		t.Error("a minute bar with a non-positive price was accepted")
-	}
-	if err := exec(`INSERT INTO research_jquants_coverage (dataset, day, row_count, completed_at) VALUES ('ticks', '2026-10-14', 1, 't')`); err == nil {
-		t.Error("an unknown coverage dataset was accepted")
-	}
-	if err := exec(`INSERT INTO research_jquants_fetch_log (day, dataset) VALUES ('2026-10-14', 'relabel')`); err == nil {
-		t.Error("an unknown fetch-log dataset was accepted")
-	}
+	t.Cleanup(func() { _ = other.Close() })
+	soundSchema(other)
 
-	if err := m.Migrate(57); err != nil {
-		t.Fatalf("migrate down: %v", err)
+	if err := m.Steps(-1); err != nil {
+		t.Fatalf("down one step: %v", err)
 	}
-	for _, tbl := range jquantsTables {
-		if exists(tbl) {
-			t.Fatalf("%s remains after the down step", tbl)
+	if got := dumpRows(t, conn); !equalStrings(got, rowsOf57) {
+		t.Errorf("after the down step the rows are not those of 57 (only the subscription row goes):\n got %q\nwant %q", got, rowsOf57)
+	}
+	indexesDown := indexSQL(t, conn)
+	if len(indexesDown) != len(indexesOf57) {
+		t.Errorf("indexes after the down step = %v, want %v", indexesDown, indexesOf57)
+	}
+	for name, ddl := range indexesOf57 {
+		if indexesDown[name] != ddl {
+			t.Errorf("index %s after the down step = %q, want %q", name, indexesDown[name], ddl)
 		}
 	}
-	if got := count("research_horizon_labels"); got != 2 {
-		t.Fatalf("label rows after the down step = %d, want the 2 kept", got)
+	requireRebuiltTable(t, conn, false)
+	if err := insert("again", "subscription", "NULL", 0); err == nil {
+		t.Error("a subscription row was accepted after the down migration")
 	}
-	if err := conn.QueryRow(`SELECT exit_source FROM research_horizon_labels`).Scan(&source); err == nil {
-		t.Error("exit_source still exists after the down step")
+	// The old CHECK only needs counted_cost_usd >= 0: a reported row is still fine, and the id goes on from 57's position.
+	if err := insert("plain", "reported", "0.01", 0.01); err != nil {
+		t.Errorf("a reported row after the down migration: %v", err)
 	}
+	if err := conn.QueryRow(`SELECT id FROM jev_trial_decisions WHERE arm_id = 'plain'`).Scan(&id); err != nil || id != 5 {
+		t.Errorf("the row after the down step got id %d (err %v), want 5", id, err)
+	}
+	if _, err := conn.Exec(`INSERT INTO jev_trial_decisions (jev_decision_id, arm_id, prompt_version, requested_model, status, cost_source, failure_code)
+		VALUES (999, 'orphan', 'trader-v3', 'm', 'failed', 'unknown', 'timeout')`); err == nil {
+		t.Error("a row for a missing jev_decisions row was accepted after the down step: the foreign key was lost")
+	}
+}
+
+// The migration files must not rewrite the stored schema (writable_schema) nor touch sqlite_master.
+func TestMigration000058_DoesNotUseWritableSchema(t *testing.T) {
+	for _, f := range []string{"up", "down"} {
+		raw, err := db.MigrationsFS.ReadFile("migrations/000058_add_subscription_cost_source_to_jev_trial_decisions." + f + ".sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := strings.ToLower(string(raw))
+		for _, banned := range []string{"writable_schema", "sqlite_master", "sqlite_schema"} {
+			if strings.Contains(text, banned) {
+				t.Errorf("%s migration uses %s", f, banned)
+			}
+		}
+	}
+}
+
+// requireRebuiltTable checks the stored CHECK of jev_trial_decisions: 'subscription' present for 58, absent for the old one,
+// and that the rebuild left no *_new table or trigger behind.
+func requireRebuiltTable(t *testing.T, c *sql.DB, wantSubscription bool) {
+	t.Helper()
+	var ddl string
+	if err := c.QueryRow(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'jev_trial_decisions'`).Scan(&ddl); err != nil {
+		t.Fatalf("jev_trial_decisions: %v", err)
+	}
+	if got := strings.Contains(ddl, "subscription"); got != wantSubscription {
+		t.Errorf("stored schema mentions subscription = %v, want %v:\n%s", got, wantSubscription, ddl)
+	}
+	var n int
+	if err := c.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'jev_trial_decisions_new%' OR (type = 'trigger' AND tbl_name = 'jev_trial_decisions')`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("leftover rebuild objects = %d (%v), want 0", n, err)
+	}
+}
+
+// dumpRows returns every column of every row of jev_trial_decisions (ordered by id) as one string per row.
+func dumpRows(t *testing.T, c *sql.DB) []string {
+	t.Helper()
+	rows, err := c.Query(`SELECT * FROM jev_trial_decisions ORDER BY id`)
+	if err != nil {
+		t.Fatalf("dump: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for rows.Next() {
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, strings.Join(cols, ",")+"|"+fmt.Sprintf("%#v", vals))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// indexSQL returns the CREATE INDEX text of every explicit index on jev_trial_decisions, by name.
+func indexSQL(t *testing.T, c *sql.DB) map[string]string {
+	t.Helper()
+	rows, err := c.Query(`SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'jev_trial_decisions' AND sql IS NOT NULL`)
+	if err != nil {
+		t.Fatalf("indexes: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]string{}
+	for rows.Next() {
+		var name, ddl string
+		if err := rows.Scan(&name, &ddl); err != nil {
+			t.Fatal(err)
+		}
+		out[name] = ddl
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -32,7 +32,7 @@ func TestDisclosureSourceRecordsAreReadOnlyByTheirRecorderAndTheStatusTool(t *te
 		"internal/domain/disclosuresrc/",
 		"internal/config/disclosuresrcsettings/",
 		"internal/bootstrap/disclosuresrcwire/",
-		"internal/bootstrap/researchwire/",
+		"internal/bootstrap/researchextrawire/",
 		"internal/service/paperresultsmcp/disclosuresrcdiag/",
 		"internal/service/paperresultsmcp/jev_models_tool.go",
 		"internal/service/opsettings/",
