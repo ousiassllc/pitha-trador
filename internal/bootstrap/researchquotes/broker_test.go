@@ -25,6 +25,22 @@ type brokerRig struct {
 	feed *event.Feed
 }
 
+// feedClock tells the feed the rig's time but arms its timers on a clock of its
+// own that nothing advances. The feed's 15 s keep-alive watchdog and reconnect
+// backoff are timers: on the rig's clock, the minutes the tests advance would
+// fire the watchdog whenever the feed had connected by then (the fake broker
+// sends no KP), and the feed would reconnect, which counted a second connection
+// depending on goroutine timing. These tests are about the feed's REST interval
+// and connection budget, which read the time, not about keep-alive.
+type feedClock struct {
+	now    *tt.ManualClock
+	timers *tt.ManualClock
+}
+
+func (c feedClock) Now() time.Time { return c.now.Now() }
+
+func (c feedClock) NewTimer(d time.Duration) tachibana.Timer { return c.timers.NewTimer(d) }
+
 func newBrokerRig(t *testing.T, refill time.Duration, onQuote tt.Responder) *brokerRig {
 	t.Helper()
 	b := &brokerRig{rig: newRig(t), clk: tt.NewManualClock(thursday(9, 30, 5))}
@@ -36,7 +52,7 @@ func newBrokerRig(t *testing.T, refill time.Duration, onQuote tt.Responder) *bro
 	if _, err := c.Login(context.Background(), tt.AuthID, b.fb.Key()); err != nil {
 		t.Fatal(err)
 	}
-	b.feed = event.New(event.Config{Client: c, ConnectionBudget: 10, RefillInterval: refill, HTTPClient: b.fb.Server().Client(), Clock: b.clk})
+	b.feed = event.New(event.Config{Client: c, ConnectionBudget: 10, RefillInterval: refill, HTTPClient: b.fb.Server().Client(), Clock: feedClock{now: b.clk, timers: tt.NewManualClock(thursday(9, 30, 5))}})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); b.feed.Run(ctx) }()
