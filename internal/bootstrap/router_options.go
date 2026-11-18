@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
+	"github.com/ousiassllc/pitha-trador/internal/service/researchjobstatus"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
@@ -74,6 +75,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithHomeSource(homeview.Reader{DB: state.DB}),
 		router.WithTrialResultsSource(trialview.Reader{DB: state.DB}),
 		router.WithSecretsStore(secretsRepo),
+		router.WithResearchJobStatus(researchjobstatus.New(services.Settings)),
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithDefaultBackupDir(startup.DefaultBackupDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
 		router.WithJevPromptSettings(jevprompt.New(state.DB)),

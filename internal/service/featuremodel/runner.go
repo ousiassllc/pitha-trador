@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/featuremodel"
@@ -37,11 +39,12 @@ type Store interface {
 
 // Result is what one Run did.
 type Result struct {
-	// Day is the JST day a run was written for ("" when none), with its training rows
-	// and recorded predictions.
-	Day              string
+	// Day and Version are the JST day and the run version a run was written for ("" when
+	// none), with its training rows and recorded predictions.
+	Day, Version     string
 	NTrain, NPredict int
-	// Skipped are days without enough training data (they are tried again at the next Run).
+	// Skipped are the run versions without enough training data (they are tried again at
+	// the next Run).
 	Skipped []string
 	// Purged is how many old rows of the two model tables this run deleted.
 	Purged int
@@ -50,20 +53,30 @@ type Result struct {
 	More bool
 }
 
-// Runner trains and records the model of every recent JST day that had trader
-// decisions and has no run yet, one day per Run, and purges old rows.
+// Runner trains and records the models of every recent JST day that had trader
+// decisions and have no run yet, one run (one model of one day) per Run, and purges
+// old rows.
 type Runner struct {
-	store     Store
-	params    Params
-	now       func() time.Time
-	purgeRows int
-	maxPurge  int
+	store      Store
+	params     Params
+	treeParams TreeParams
+	specs      []Spec
+	now        func() time.Time
+	purgeRows  int
+	maxPurge   int
 }
 
-// NewRunner returns a Runner over store.
+// NewRunner returns a Runner over store that trains the Baseline model only; the
+// nightly task adds the others with WithSpecs(Specs()...).
 func NewRunner(store Store) *Runner {
-	return &Runner{store: store, params: DefaultParams(), now: time.Now, purgeRows: PurgeBatchRows, maxPurge: DefaultMaxPurgeBatches}
+	return &Runner{store: store, params: DefaultParams(), treeParams: DefaultTreeParams(), specs: []Spec{Baseline}, now: time.Now, purgeRows: PurgeBatchRows, maxPurge: DefaultMaxPurgeBatches}
 }
+
+// WithSpecs sets the models the Runner trains, in the order they are tried within a day.
+func (r *Runner) WithSpecs(specs ...Spec) *Runner { r.specs = specs; return r }
+
+// WithTreeParams overrides DefaultTreeParams (tests, with small fixtures).
+func (r *Runner) WithTreeParams(tp TreeParams) *Runner { r.treeParams = tp; return r }
 
 // WithClock overrides time.Now (tests).
 func (r *Runner) WithClock(now func() time.Time) *Runner { r.now = now; return r }
@@ -77,10 +90,36 @@ func (r *Runner) WithPurgeBatches(rows, batches int) *Runner {
 	return r
 }
 
-// Run does one bounded chunk: the oldest day of the last LookbackDays days up to
+// pending lists the (day, model) runs still to do, oldest day first and, within a day,
+// in the order of r.specs.
+func (r *Runner) pending(ctx context.Context, from, to string) ([]work, error) {
+	var todo []work
+	for _, spec := range r.specs {
+		if err := spec.validate(); err != nil {
+			return nil, err
+		}
+		days, err := r.store.PendingDays(ctx, from, to, spec.Version)
+		if err != nil {
+			return nil, err
+		}
+		for _, day := range days {
+			todo = append(todo, work{spec, day})
+		}
+	}
+	slices.SortStableFunc(todo, func(a, b work) int { return strings.Compare(a.day, b.day) })
+	return todo, nil
+}
+
+// work is one run to do: a model and the JST day it predicts.
+type work struct {
+	spec Spec
+	day  string
+}
+
+// Run does one bounded chunk: the oldest run of the last LookbackDays days up to
 // today (not older than the retention) that has trader LONG/SHORT decisions and no
-// run is trained and predicted (days without enough history are skipped and logged);
-// then, once no day is left, the rows older than retentionDays JST days are deleted
+// run is trained and predicted (runs without enough history are skipped and logged);
+// then, once none is left, the rows older than retentionDays JST days are deleted
 // (predictions first, then runs, in batches). The caller decides whether the day is
 // over (the nightly job runs from 16:00 JST) and whether the model is switched on.
 func (r *Runner) Run(ctx context.Context, retentionDays int) (Result, error) {
@@ -94,22 +133,23 @@ func (r *Runner) Run(ctx context.Context, retentionDays int) (Result, error) {
 	if from < cutoff {
 		from = cutoff // a day older than the retention would be purged at once
 	}
-	days, err := r.store.PendingDays(ctx, from, today.Format(time.DateOnly), Version)
+	todo, err := r.pending(ctx, from, today.Format(time.DateOnly))
 	if err != nil {
 		return res, err
 	}
-	for i, day := range days {
-		trained, preds, err := r.runDay(ctx, day)
+	for i, w := range todo {
+		version := w.spec.Version(w.day)
+		trained, preds, err := r.runOne(ctx, w)
 		if errors.Is(err, ErrInsufficient) {
-			slog.InfoContext(ctx, "featuremodel: no run for the day", "day", day, "reason", err.Error())
-			res.Skipped = append(res.Skipped, day)
+			slog.InfoContext(ctx, "featuremodel: no run for the day", "version", version, "reason", err.Error())
+			res.Skipped = append(res.Skipped, version)
 			continue
 		}
 		if err != nil {
 			return res, err
 		}
-		res.Day, res.NTrain, res.NPredict, res.More = day, trained.NTrain, preds, i+1 < len(days)
-		slog.InfoContext(ctx, "featuremodel: model trained and recorded", "day", day, "train_from", trained.From, "train_to", trained.To,
+		res.Day, res.Version, res.NTrain, res.NPredict, res.More = w.day, version, trained.NTrain, preds, i+1 < len(todo)
+		slog.InfoContext(ctx, "featuremodel: model trained and recorded", "version", version, "train_from", trained.From, "train_to", trained.To,
 			"n_train", trained.NTrain, "purged_rows", trained.Purged, "predictions", preds)
 		break
 	}
@@ -120,18 +160,26 @@ func (r *Runner) Run(ctx context.Context, retentionDays int) (Result, error) {
 	return res, err
 }
 
-// runDay trains for the day and writes the run and its predictions in one
+// runOne trains the model for the day and writes the run and its predictions in one
 // transaction (nothing is written when the run exists already).
-func (r *Runner) runDay(ctx context.Context, day string) (*Trained, int, error) {
-	t, err := Train(ctx, r.store, day, r.params)
+func (r *Runner) runOne(ctx context.Context, w work) (*Trained, int, error) {
+	var (
+		t   *Trained
+		err error
+	)
+	if w.spec.Algorithm == AlgorithmTree {
+		t, err = TrainTree(ctx, r.store, w.spec.Horizon, w.day, r.params, r.treeParams)
+	} else {
+		t, err = TrainRidge(ctx, r.store, w.spec.Horizon, w.day, r.params)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
-	preds, err := Predict(ctx, r.store, t.Model, day)
+	preds, err := Predict(ctx, r.store, t.Predictor(), w.day)
 	if err != nil {
 		return nil, 0, err
 	}
-	run, err := runRow(day, t, r.params)
+	run, err := runRow(w.spec, w.day, t, r.params, r.treeParams)
 	if err != nil {
 		return nil, 0, err
 	}

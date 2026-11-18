@@ -25,6 +25,7 @@ func TestEvaluationRecordIsReadOnlyByItsRecorderAndTheTrendTool(t *testing.T) {
 		"internal/service/evalrecord/",                       // the recorder (and its test fixture)
 		"internal/bootstrap/nightlyjobs/",                    // wires the recorder into the maintenance task
 		"internal/bootstrap/services_build.go",               // registers that task (one line)
+		"internal/service/researchjobstatus/",                // the Settings card's read-only status: the task's name only, never the table
 		"internal/service/paperresultsmcp/trenddiag/",        // the read-only MCP query
 		"internal/service/paperresultsmcp/research_tools.go", // registers that tool next to the other research tools
 		"db/migrations/",                                     // the schema

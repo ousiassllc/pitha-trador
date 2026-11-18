@@ -53,6 +53,8 @@ func (StaticSecretsStore) Delete(context.Context, string) error              { r
 type SettingsHandler struct {
 	store SecretsStore
 	ops   OperationalSettings // nil until WithOperationalSettings
+	// researchJobs feeds the research-jobs card's status panel (nil until WithResearchJobStatus).
+	researchJobs ResearchJobStatusSource
 	// session is the running broker adapter, for the 立花 card's session
 	// state (nil until WithBrokerSession).
 	session BrokerSession

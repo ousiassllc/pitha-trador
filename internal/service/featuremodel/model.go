@@ -1,9 +1,11 @@
-// Package featuremodel trains and records the research-only feature model of
-// issue #1092: a ridge regression on numeric market_snapshots features only (no AI,
-// no Jev output) that predicts, for a trader decision's bar, the net bps a LONG and a
-// SHORT held for 30 minutes would have made. It is trained walk-forward, nightly,
-// and its predictions are recorded next to Jev's decisions so the candidate ledger
-// can compare the two on the same rows.
+// Package featuremodel trains and records the research-only feature models of
+// issues #1092 and #1123: numeric market_snapshots features only (no AI, no Jev
+// output) that predict, for a trader decision's bar, the net bps a LONG and a SHORT
+// held to a label horizon (30m, 60m or close) would have made. Two algorithms
+// learn each horizon: a ridge regression (Train, Model) and a small gradient-boosted
+// tree model (TrainTree, TreeModel, internal/service/featuremodel/gbt). They are
+// trained walk-forward, nightly, and their predictions are recorded next to Jev's
+// decisions so the candidate ledger can compare them on the same rows.
 //
 // Research only: nothing it writes is a trading input (Policy, Risk, orders, the
 // Paper guard, Live, the Jev prompts, RAG, the meta-model and self-improvement never
@@ -26,9 +28,10 @@ import (
 const (
 	// Algorithm is research_model_runs.algorithm.
 	Algorithm = "ridge"
-	// Horizon is the label horizon the model learns (research_horizon_labels.horizon).
+	// Horizon is the label horizon of the first model, and what Train (the ridge
+	// model's baseline entry point) learns (research_horizon_labels.horizon).
 	Horizon = "30m"
-	// VersionPrefix names the method: rm-ridge1-30m-<predict day>.
+	// VersionPrefix names the baseline's method: rm-ridge1-30m-<predict day>.
 	VersionPrefix = "rm-ridge1-" + Horizon + "-"
 
 	// RidgeLambda is the L2 penalty on the standardized coefficients (not on the intercept).
@@ -125,9 +128,9 @@ type hyperparams struct {
 	Purge           string  `json:"purge"`
 }
 
-func hyperparamsJSON(p Params) (string, error) {
+func hyperparamsJSON(p Params, horizon string) (string, error) {
 	return marshal(hyperparams{
-		LabelHorizon: Horizon, RidgeLambda: p.RidgeLambda, SampleBuckets: p.SampleBuckets,
+		LabelHorizon: horizon, RidgeLambda: p.RidgeLambda, SampleBuckets: p.SampleBuckets,
 		MinTrainRows: p.MinTrainRows, MinTrainDays: p.MinTrainDays, MaxTrainDays: p.MaxTrainDays,
 		Standardization: "z-score by the training mean and population std (std=1 when the variance is 0)",
 		Imputation:      "training mean",

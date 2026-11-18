@@ -25,7 +25,7 @@ func TestTrainingDaysAreTheRecentCompleteDaysBeforeTheDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := featuremodel.NewRepository(db)
-	got, err := r.TrainingDays(context.Background(), "2026-09-05", 60)
+	got, err := r.TrainingDays(context.Background(), "30m", "2026-09-05", 60)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestTrainingDaysAreTheRecentCompleteDaysBeforeTheDay(t *testing.T) {
 			t.Fatalf("window holds %s at %d (unmarked, not before the day, or out of order)", d, i)
 		}
 	}
-	if none, err := r.TrainingDays(context.Background(), "2026-07-01", 60); err != nil || len(none) != 0 {
+	if none, err := r.TrainingDays(context.Background(), "30m", "2026-07-01", 60); err != nil || len(none) != 0 {
 		t.Errorf("days before the first mark = %v, %v; want none", none, err)
 	}
 }
@@ -55,7 +55,7 @@ func TestScanTrainingOrderAndSample(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	purged, err := featuremodel.NewRepository(db).ScanTraining(context.Background(), []string{"2026-10-05", "2026-10-06"}, 10, "2026-10-07", func(r featuremodel.TrainRow) error {
+	purged, err := featuremodel.NewRepository(db).ScanTraining(context.Background(), "30m", []string{"2026-10-05", "2026-10-06"}, 10, "2026-10-07", func(r featuremodel.TrainRow) error {
 		got = append(got, fmt.Sprintf("%s#%d", r.Day, r.SnapshotID))
 		return nil
 	})
@@ -66,7 +66,7 @@ func TestScanTrainingOrderAndSample(t *testing.T) {
 	if want := "[2026-10-05#6 2026-10-05#7 2026-10-05#8 2026-10-05#9 2026-10-05#10 2026-10-06#1 2026-10-06#4 2026-10-06#5]"; fmt.Sprint(got) != want {
 		t.Errorf("rows = %v, want %v", got, want)
 	}
-	if _, err := featuremodel.NewRepository(db).ScanTraining(context.Background(), []string{"2026-10-07"}, 10, "2026-10-07", func(featuremodel.TrainRow) error { return nil }); err == nil {
+	if _, err := featuremodel.NewRepository(db).ScanTraining(context.Background(), "30m", []string{"2026-10-07"}, 10, "2026-10-07", func(featuremodel.TrainRow) error { return nil }); err == nil {
 		t.Error("a training day that is not before the predicted day was accepted")
 	}
 }
