@@ -4,7 +4,7 @@
 
 ## 3. ツール
 
-### 3.35 `jev_evaluation_slices`
+### 3.41 `jev_evaluation_slices`
 
 `jev_evaluation`（`paper-results-mcp-jev-evaluation.md` §3.33）の **llm アーム**（判断自身の方向のコスト控除後 net bps）を、特徴で切り分けて返す。母集団・ラベル・cutoff・`(model_id, question_version)` ごとの別集計は `jev_evaluation` と同じ行（`evaldiag.Rows`）で、コホートごとの見出し（`all`）は `jev_evaluation` の llm の `all` と同じ数字になる。
 

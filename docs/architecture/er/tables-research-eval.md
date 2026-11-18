@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev 評価の日次記録）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_evaluation_daily`（マイグレーション `000057`。issue #1089）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/research-tools/paper-results-mcp-jev-trend.md`、読み取りツールは `docs/api/endpoints/research-tools/paper-results-mcp-jev-trend.md`。実装は `internal/repository/evalrecord`（表）・`internal/service/evalrecord`（記録部品）・`internal/bootstrap/nightlyjobs/evaluation.go`（日次タスク）。
+`docs/architecture/er.md` から分割した章。対象: `jev_evaluation_daily`（マイグレーション `000064`。issue #1089）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/research-tools/paper-results-mcp-jev-trend.md`、読み取りツールは `docs/api/endpoints/research-tools/paper-results-mcp-jev-trend.md`。実装は `internal/repository/evalrecord`（表）・`internal/service/evalrecord`（記録部品）・`internal/bootstrap/nightlyjobs/evaluation.go`（日次タスク）。
 
 ## 位置づけ
 

@@ -175,7 +175,7 @@ func buildTachibanaSourceSettings() []sourceSetting {
 			}},
 		)
 	}
-	return append(s,
+	s = append(s,
 		sourceSetting{KeyTachibanaEventMaxConnects, strconv.Itoa(DefaultTachibanaEventMaxConnects), func(raw string) (any, error) {
 			return parseIntIn(raw, TachibanaEventMaxConnectsMin, TachibanaEventMaxConnectsMax)
 		}},
@@ -186,6 +186,7 @@ func buildTachibanaSourceSettings() []sourceSetting {
 			return parseIntIn(raw, TachibanaRestQuoteRequestsMin, TachibanaRestQuoteRequestsMax)
 		}},
 	)
+	return append(s, researchSettings()...)
 }
 
 func findSourceSetting(key string) (sourceSetting, bool) {

@@ -2,7 +2,7 @@
 // evaluation (issue #1089): jev_evaluation_daily, one row per JST day, per
 // (model_id, question_version) cohort and per label horizon, holding the day's
 // counts and the sums of the net bps (cost-inclusive triple-barrier label) of the
-// LLM arm and of the random / momentum / contrarian baselines (migration 000057).
+// LLM arm and of the random / momentum / contrarian baselines (migration 000064).
 //
 // The record is for research only. Policy, Risk, order placement, the Paper
 // guard, Live, the Jev prompts, RAG, the meta-model training and self-improvement

@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（研究用の特徴量モデル）
 
-`docs/architecture/er.md` から分割した章。対象: `research_model_runs` / `research_model_predictions`（マイグレーション `000057`。issue #1092）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/research-tools/research-model.md`。実装は `internal/repository/featuremodel`（表）・`internal/service/featuremodel`（学習・予測）・`internal/bootstrap/nightlyjobs/model.go`（夜間タスク）。
+`docs/architecture/er.md` から分割した章。対象: `research_model_runs` / `research_model_predictions`（マイグレーション `000064`。issue #1092）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。設計は `docs/architecture/research-tools/research-model.md`。実装は `internal/repository/featuremodel`（表）・`internal/service/featuremodel`（学習・予測）・`internal/bootstrap/nightlyjobs/model.go`（夜間タスク）。
 
 ## 位置づけ
 

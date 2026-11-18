@@ -33,6 +33,11 @@ const (
 	// CostUnknown: neither a reported cost nor a list price. CostUSD is nil
 	// (never 0 USD) and CountedCostUSD is a worst-case figure.
 	CostUnknown = "unknown"
+	// CostSubscription: the call used a ChatGPT subscription (Codex CLI, issue
+	// #1081). No USD is incurred: CostUSD is nil and CountedCostUSD is 0, so the
+	// USD caps never count it. It is bounded by the provider's own call and token
+	// caps instead (jevtrialsettings.KeyCodexDailyCallCap, KeyCodexDailyTokenCap).
+	CostSubscription = "subscription"
 )
 
 // CutoffUnverified is the llm_cutoff_status of every row until a model's
@@ -51,6 +56,13 @@ const (
 	FailureTimeout         = "timeout"
 	FailureTransport       = "transport"
 	FailureInvalidResponse = "invalid_response"
+	// FailureUsageLimit: a Codex call failed with a text that matched a usage-limit
+	// message. It is only a label for a recognised text; any other failed Codex call
+	// is FailureCodexFailed (the call is stopped in both cases).
+	FailureUsageLimit = "usage_limit"
+	// FailureCodexFailed: a Codex call ended with turn.failed or a non-zero exit
+	// (not a timeout, which is FailureTimeout).
+	FailureCodexFailed = "codex_failed"
 )
 
 // Skip reasons (jev_trial_skips.reason): why the trial did not ask an arm about a
@@ -67,8 +79,27 @@ const (
 	SkipDailyCapOverall = "daily_cap_overall"
 	// SkipDailyCapArm: the same for the arm's own daily cost cap.
 	SkipDailyCapArm = "daily_cap_arm"
-	// SkipKeyNotSet: no OpenRouter key is configured.
+	// SkipKeyNotSet: no API key is configured for the arm's provider.
 	SkipKeyNotSet = "key_not_set"
+	// SkipProviderDisabled: the arm's provider has its own switch and it is off
+	// (the Codex provider, jevtrialsettings.KeyCodexEnabled).
+	SkipProviderDisabled = "provider_disabled"
+	// SkipProviderBusy: the Codex provider runs one call at a time and the previous
+	// live decision's calls were still running.
+	SkipProviderBusy = "provider_busy"
+	// SkipNotLoggedIn: the Codex CLI is not usable: not logged in with ChatGPT, no
+	// CLI or no dedicated CODEX_HOME.
+	SkipNotLoggedIn = "not_logged_in"
+	// SkipStoppedUsageLimit: the Codex provider is stopped until a time after a usage-limit
+	// failure.
+	SkipStoppedUsageLimit = "stopped_usage_limit"
+	// SkipStoppedProviderFailed: the Codex provider is stopped until a time after a failed call.
+	SkipStoppedProviderFailed = "stopped_provider_failed"
+	// SkipDailyCapCalls and SkipDailyCapTokens: the Codex provider's daily call or
+	// token cap is reached.
+	SkipDailyCapCalls = "daily_cap_calls"
+	// #nosec G101 -- a skip reason code, not a credential
+	SkipDailyCapTokens = "daily_cap_tokens"
 	// SkipPromptUnregistered: the arm's prompt version is not a registered trader version.
 	SkipPromptUnregistered = "prompt_version_unregistered"
 	// SkipStoppedPaymentRequired: the whole trial is stopped for the day by an HTTP 402.
@@ -90,6 +121,7 @@ const (
 var SkipReasons = []string{
 	SkipConcurrencyFull, SkipMinInterval, SkipDailyCapOverall, SkipDailyCapArm, SkipKeyNotSet, SkipPromptUnregistered,
 	SkipStoppedPaymentRequired, SkipStoppedForbidden, SkipStoppedFailureCap, SkipStoppedOther, SkipThrottled, SkipCheckFailed,
+	SkipProviderDisabled, SkipProviderBusy, SkipNotLoggedIn, SkipStoppedUsageLimit, SkipStoppedProviderFailed, SkipDailyCapCalls, SkipDailyCapTokens,
 }
 
 // ValidSkipReason reports whether reason is one of SkipReasons.
@@ -117,7 +149,7 @@ type Decision struct {
 	JevDecisionID int64
 	ArmID         string
 	PromptVersion string
-	// Provider is the arm's provider ("openrouter"); RequestedModel the model
+	// Provider is the arm's provider ("openrouter", "custom" or "codex_chatgpt"); RequestedModel the model
 	// id sent; ServedModel, ServedProvider and ResponseID are what the
 	// response reported ("" without a response).
 	Provider       string

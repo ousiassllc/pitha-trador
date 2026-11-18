@@ -2,7 +2,7 @@
 // research_model_runs, one row per walk-forward training (the model's features,
 // hyperparameters, coefficients and training window), and
 // research_model_predictions, the model's predicted long/short net bps for every
-// trader LONG/SHORT Jev decision of the predicted day (migration 000057). The
+// trader LONG/SHORT Jev decision of the predicted day (migration 000064). The
 // candidate ledger reads the two tables to compare the model with Jev on the same
 // decision rows.
 //

@@ -1,6 +1,6 @@
 # 設計: 学習用データセットの書き出し（training_dataset_export）
 
-`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1094。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-dataset-export.md` §3.39、データの仕様（列・ラベルの版・分割・manifest・ハッシュ）は `docs/architecture/research-tools/training-dataset.md`。
+`docs/architecture/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1094。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-dataset-export.md` §3.45、データの仕様（列・ラベルの版・分割・manifest・ハッシュ）は `docs/architecture/research-tools/training-dataset.md`。
 
 ## 1. 目的と位置づけ
 

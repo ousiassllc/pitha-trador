@@ -23,6 +23,12 @@ import (
 // jev_decisions is the decision type (scout / trader).
 const ModelSwitchName = "JEV_MODEL"
 
+// RoleSwitchName is the Confounder.Name of a recorded change of the live Jev
+// role's provider or model on the Settings screen (ai_role_history, issue
+// #1080): the AI provider layer's counterpart of ModelSwitchName. Values are the
+// "provider / model" labels before and after.
+const RoleSwitchName = "AI_ROLE_JEV"
+
 // UnsetModel stands for an unset JEV_MODEL (the default model applies) in the
 // Values of a recorded switch.
 const UnsetModel = "未設定（既定のモデル）"
@@ -59,7 +65,47 @@ SELECT at, before_value, after_value FROM jev_model_changes WHERE at >= ? AND at
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("experiment: model switches: %w", err)
 	}
+	roles, err := roleSwitches(ctx, q, period, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, roles...), nil
+}
+
+// roleSwitches lists the changes of the live Jev role's provider and model saved
+// in [from, to) (ai_role_history, kind 'saved'), oldest first, like modelSwitches.
+// Only a switch that changes the provider or the role's own model name is a row
+// there; like JEV_MODEL it takes effect at the next start, and is counted when it
+// was saved inside the period.
+func roleSwitches(ctx context.Context, q query.Q, period, from, to string) ([]Confounder, error) {
+	rows, err := q.QueryContext(ctx, `
+SELECT at, before_provider, before_model, provider, model FROM ai_role_history
+WHERE kind = 'saved' AND role = 'jev' AND at >= ? AND at < ? ORDER BY id`, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("experiment: ai role switches: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := []Confounder{}
+	for rows.Next() {
+		var at, bp, bm, ap, am string
+		if err := rows.Scan(&at, &bp, &bm, &ap, &am); err != nil {
+			return nil, fmt.Errorf("experiment: scan ai role switch: %w", err)
+		}
+		out = append(out, Confounder{Kind: KindModel, Period: period, Name: RoleSwitchName, At: query.FormatOut(at), Values: []string{roleLabel(bp, bm), roleLabel(ap, am)}})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("experiment: ai role switches: %w", err)
+	}
 	return out, nil
+}
+
+// roleLabel is the "provider / model" label of a stored pair; an empty model is
+// the provider's default.
+func roleLabel(provider, model string) string {
+	if model == "" {
+		model = UnsetModel
+	}
+	return provider + " / " + model
 }
 
 func modelOrUnset(v *string) string {

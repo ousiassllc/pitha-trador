@@ -1,6 +1,6 @@
 # 設計: 研究用の特徴量モデル（ウォークフォワード学習・予測の記録）
 
-issue #1092。表は `docs/architecture/er/tables-research-model.md`（マイグレーション `000057`）。実装は `internal/repository/featuremodel`（表の読み書き）・`internal/service/featuremodel`（学習・予測・実行部品）・`internal/bootstrap/nightlyjobs/model.go`（夜間タスク）。
+issue #1092。表は `docs/architecture/er/tables-research-model.md`（マイグレーション `000064`）。実装は `internal/repository/featuremodel`（表の読み書き）・`internal/service/featuremodel`（学習・予測・実行部品）・`internal/bootstrap/nightlyjobs/model.go`（夜間タスク）。
 
 ## 1. 目的と位置づけ
 

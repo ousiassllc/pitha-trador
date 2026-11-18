@@ -1,0 +1,6 @@
+{
+  "data": [
+    {"Date": "2026-11-17", "Code": "72030", "CoName": "トヨタ自動車", "CoNameEn": "TOYOTA MOTOR CORPORATION", "S17": "6", "S17Nm": "自動車・輸送機", "S33": "3050", "S33Nm": "輸送用機器", "ScaleCat": "TOPIX Core30", "Mkt": "0111", "MktNm": "プライム", "Mrgn": "1", "MrgnNm": "信用"},
+    {"Date": "2026-11-17", "Code": "67580", "CoName": "ソニーグループ", "CoNameEn": "Sony Group Corporation", "S17": "7", "S17Nm": "電機・精密", "S33": "3650", "S33Nm": "電気機器", "ScaleCat": "TOPIX Core30", "Mkt": "0111", "MktNm": "プライム", "Mrgn": "1", "MrgnNm": "信用"}
+  ]
+}

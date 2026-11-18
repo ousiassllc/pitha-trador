@@ -1,10 +1,10 @@
 # API 仕様: Paper 実績 MCP の学習用データセット書き出しツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.39 の分割章（行数上限のため別ファイル）。issue #1094。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。設計は `docs/architecture/research-tools/paper-results-mcp-dataset-export.md`、データの仕様（列・ラベルの版・分割・manifest・ハッシュの確かめ方）は `docs/architecture/research-tools/training-dataset.md`。
+`docs/api/endpoints/paper-results-mcp.md` §3.45 の分割章（行数上限のため別ファイル）。issue #1094。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。設計は `docs/architecture/research-tools/paper-results-mcp-dataset-export.md`、データの仕様（列・ラベルの版・分割・manifest・ハッシュの確かめ方）は `docs/architecture/research-tools/training-dataset.md`。
 
 ## 3. ツール
 
-### 3.39 `training_dataset_export`
+### 3.45 `training_dataset_export`
 
 期間内の `decision_type = 'trader'` の**全判断**（`NONE` を含む）を、1 判断 = 1 行の CSV の学習用データセットとして、**この PC のローカルフォルダ**に書き出す。応答は **manifest だけ**で、行の中身・秘密・設定の値は返さない。**研究専用**で、取引の入力ではない。MCP のツールのうちファイルを書く唯一のもの（DB は書き換えない）。注釈は `readOnlyHint: false`・`destructiveHint: false`。
 

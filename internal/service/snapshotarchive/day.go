@@ -24,8 +24,8 @@ func (a *Archiver) readDBDay(ctx context.Context, date string, maxID int64) (dbD
 		return dbDay{}, err
 	}
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT id, timestamp FROM market_snapshots
-		 WHERE timestamp >= ? AND timestamp < ? AND id <= ? ORDER BY timestamp, id`, date, next, maxID)
+		a.forTable(`SELECT id, timestamp FROM market_snapshots
+		 WHERE timestamp >= ? AND timestamp < ? AND id <= ? ORDER BY timestamp, id`), date, next, maxID)
 	if err != nil {
 		return dbDay{}, err
 	}
@@ -118,7 +118,7 @@ func compareIDs(dbIDs []int64, archived map[int64]struct{}) (missing, extra int)
 
 // record stores the verified day in the manifest and returns it.
 func (a *Archiver) record(date string, info fileInfo, action string) (Day, error) {
-	m, err := ReadManifest(a.dir)
+	m, err := ReadTableManifest(a.dir, a.table)
 	if err != nil {
 		return Day{}, err
 	}

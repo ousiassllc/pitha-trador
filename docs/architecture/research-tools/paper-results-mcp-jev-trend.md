@@ -1,6 +1,6 @@
 # 設計: Paper 実績 MCP の Jev 評価の推移ツール
 
-`docs/architecture/paper-results-mcp.md` §5 の分割章（行数上限のため別ファイル）。issue #1089（その 2）。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-jev-trend.md` §3.36。表の定義は `docs/architecture/er/tables-research-eval.md`。評価そのものは `docs/architecture/paper-results-mcp-jev-evaluation.md`。
+`docs/architecture/paper-results-mcp.md` §5 の分割章（行数上限のため別ファイル）。issue #1089（その 2）。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-jev-trend.md` §3.42。表の定義は `docs/architecture/er/tables-research-eval.md`。評価そのものは `docs/architecture/paper-results-mcp-jev-evaluation.md`。
 
 ## 1. 位置づけ
 

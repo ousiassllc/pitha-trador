@@ -4,7 +4,7 @@
 
 ## 3. ツール
 
-### 3.36 `jev_evaluation_trend`
+### 3.42 `jev_evaluation_trend`
 
 `jev_evaluation`（§3.33）の主な数字を**日ごと**に並べた推移。夜間の研究ジョブ（`research.eval.enabled=1` のときだけ動く）が、JST の日が終わった後にその日の評価を `(model_id, question_version, horizon_minutes)` ごとに `jev_evaluation_daily` へ 1 行ずつ記録したものだけを読む。ラベルや足は読み直さない。記録は**書いた日の設定・データのまま**で、あとから設定を変えても書き換わらない。
 

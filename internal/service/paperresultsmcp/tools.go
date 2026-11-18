@@ -123,36 +123,25 @@ var tools = []tool{
 		days, err := query.DailyPnL(ctx, e.q, e.r)
 		return map[string]any{"days": days}, len(days), err
 	}),
-	{
-		name:        "paper_trades",
-		description: "クローズ済み Paper 取引の一覧（ホワイトリスト列のみ。新しい順）",
-		schema: periodSchema(map[string]any{
-			"limit":  limitProp(maxListLimit),
-			"cursor": map[string]any{"type": "string", "description": "前回応答の next_cursor"},
-		}),
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a struct {
-				periodArgs
-				Limit  *int   `json:"limit"`
-				Cursor string `json:"cursor"`
-			}
-			if err := strictDecode(raw, &a); err != nil {
-				return a.periodArgs, nil, err
-			}
-			limit, err := resolveLimit(a.Limit, maxListLimit)
-			if err != nil {
-				return a.periodArgs, nil, err
-			}
-			return a.periodArgs, func(ctx context.Context, e toolEnv) (any, int, error) {
-				trades, next, err := query.Trades(ctx, e.q, e.r, limit, a.Cursor)
-				var nextCursor *string
-				if next != "" {
-					nextCursor = &next
-				}
-				return map[string]any{"trades": trades, "next_cursor": nextCursor}, len(trades), err
-			}, nil
-		},
-	},
+	diagTool("paper_trades", "クローズ済み Paper 取引の一覧（ホワイトリスト列のみ。新しい順）", map[string]any{
+		"limit":  limitProp(maxListLimit),
+		"cursor": map[string]any{"type": "string", "description": "前回応答の next_cursor"},
+	}, func(ctx context.Context, e toolEnv, a struct {
+		periodArgs
+		Limit  *int   `json:"limit"`
+		Cursor string `json:"cursor"`
+	}) (any, int, error) {
+		limit, terr := resolveLimit(a.Limit, maxListLimit)
+		if terr != nil {
+			return nil, 0, terr
+		}
+		trades, next, err := query.Trades(ctx, e.q, e.r, limit, a.Cursor)
+		var nextCursor *string
+		if next != "" {
+			nextCursor = &next
+		}
+		return map[string]any{"trades": trades, "next_cursor": nextCursor}, len(trades), err
+	}),
 	{
 		name: "jev_calibration",
 		description: "Jev 判断の件数と、ラベル版・horizon 別の的中率・Brier・信頼度帯（読み取り専用）。" +
@@ -195,66 +184,42 @@ var tools = []tool{
 			}, nil
 		},
 	},
-	{
-		name:        "metalabel_history",
-		description: "メタモデルの採用/却下履歴と OOS AUC/EV、各モデルの採用診断（oos_takes・OOS 日数・信頼区間・採用基準・数値基準 5 項目の充足と最初の未達 first_unmet・現行モデルとの比較・変更頻度制限・前向き評価。未記録は null）、予測の take/skip 件数（ライブ予測。oos_takes とは別の数）、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）",
-		schema:      periodSchema(map[string]any{"limit": limitProp(maxMetalabelList)}),
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a struct {
-				periodArgs
-				Limit *int `json:"limit"`
-			}
-			if err := strictDecode(raw, &a); err != nil {
-				return a.periodArgs, nil, err
-			}
-			limit, err := resolveLimit(a.Limit, maxMetalabelList)
-			if err != nil {
-				return a.periodArgs, nil, err
-			}
-			return a.periodArgs, func(ctx context.Context, e toolEnv) (any, int, error) {
-				h, err := query.Metalabel(ctx, e.q, e.r, limit)
-				return h, len(h.Models), err
-			}, nil
-		},
-	},
+	diagTool("metalabel_history", "メタモデルの採用/却下履歴と OOS AUC/EV、各モデルの採用診断（oos_takes・OOS 日数・信頼区間・採用基準・数値基準 5 項目の充足と最初の未達 first_unmet・現行モデルとの比較・変更頻度制限・前向き評価。未記録は null）、予測の take/skip 件数（ライブ予測。oos_takes とは別の数）、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）", map[string]any{"limit": limitProp(maxMetalabelList)}, func(ctx context.Context, e toolEnv, a struct {
+		periodArgs
+		Limit *int `json:"limit"`
+	}) (any, int, error) {
+		limit, terr := resolveLimit(a.Limit, maxMetalabelList)
+		if terr != nil {
+			return nil, 0, terr
+		}
+		h, err := query.Metalabel(ctx, e.q, e.r, limit)
+		return h, len(h.Models), err
+	}),
 	diagTool("risk_rejections", "Risk Engine 拒否の理由コード別件数（理由文は返さない。読み取り専用）", nil, func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
 		rr, err := query.Rejections(ctx, e.q, e.r)
 		return rr, len(rr.Buckets), err
 	}),
-	{
-		name:        "kill_switch_history",
-		description: "Kill Switch の発動と解除のラベル履歴（新しい順。読み取り専用）",
-		schema:      periodSchema(map[string]any{"limit": limitProp(maxListLimit)}),
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a struct {
-				periodArgs
-				Limit *int `json:"limit"`
-			}
-			if err := strictDecode(raw, &a); err != nil {
-				return a.periodArgs, nil, err
-			}
-			limit, err := resolveLimit(a.Limit, maxListLimit)
-			if err != nil {
-				return a.periodArgs, nil, err
-			}
-			return a.periodArgs, func(ctx context.Context, e toolEnv) (any, int, error) {
-				events, err := query.KillSwitchHistory(ctx, e.q, e.r, limit)
-				return map[string]any{"events": events}, len(events), err
-			}, nil
-		},
-	},
-	diagTool("collection_status", "データ収集の状態: スナップショットの鮮度と欠損日、立会日ごとのそろい（session_gaps: 終日欠け・日中の欠けを、アプリが立会後に残した日次記録から。ジョブ保持の 7 日より前も読める）、ジョブ件数と失敗の内訳（失敗の内訳は期間の末尾 3 日まで。時間切れのときは job_failures.timed_out）、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）", nil,
-		func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
-			c, err := query.CollectionStatus(ctx, e.q, e.r, e.now)
-			return c, len(c.MissingSessionDates), err
-		}),
+	diagTool("kill_switch_history", "Kill Switch の発動と解除のラベル履歴（新しい順。読み取り専用）", map[string]any{"limit": limitProp(maxListLimit)}, func(ctx context.Context, e toolEnv, a struct {
+		periodArgs
+		Limit *int `json:"limit"`
+	}) (any, int, error) {
+		limit, terr := resolveLimit(a.Limit, maxListLimit)
+		if terr != nil {
+			return nil, 0, terr
+		}
+		events, err := query.KillSwitchHistory(ctx, e.q, e.r, limit)
+		return map[string]any{"events": events}, len(events), err
+	}),
+	diagTool("collection_status", "データ収集の状態: スナップショットの鮮度と欠損日、立会日ごとのそろい（session_gaps: 終日欠け・日中の欠けを、アプリが立会後に残した日次記録から。ジョブ保持の 7 日より前も読める）、ジョブ件数と失敗の内訳（失敗の内訳は期間の末尾 3 日まで。時間切れのときは job_failures.timed_out）、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）", nil, func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
+		c, err := query.CollectionStatus(ctx, e.q, e.r, e.now)
+		return c, len(c.MissingSessionDates), err
+	}),
 	diagTool("session_diagnostics", "立会日ごとの収集の診断（読み取り専用）: market_snapshots 行数、market-data ジョブの成功数・失敗数・成功なのに行が無いジョブ数、"+
 		"他キューのジョブ完了数、ウォッチリスト件数と、欠けた日の原因の手がかりになる固定コードの observations、"+
-		"アプリが残した日次記録 recorded（終日欠け・日中の欠けの種別とコード、その日に見えた警告コード。ジョブ保持より長く残る）。過去日の kabu ログイン状態とアプリ起動記録は DB に無い（現在の状態だけ current に出す）。期間の末尾 14 日だけを読む。時間切れのときは読めた分だけ返し timed_out と incomplete で示す", nil,
-		func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
-			d, err := sessiondiag.Read(ctx, e.q, e.r, e.now)
-			return d, len(d.Days), err
-		}),
+		"アプリが残した日次記録 recorded（終日欠け・日中の欠けの種別とコード、その日に見えた警告コード。ジョブ保持より長く残る）。過去日の kabu ログイン状態とアプリ起動記録は DB に無い（現在の状態だけ current に出す）。期間の末尾 14 日だけを読む。時間切れのときは読めた分だけ返し timed_out と incomplete で示す", nil, func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
+		d, err := sessiondiag.Read(ctx, e.q, e.r, e.now)
+		return d, len(d.Days), err
+	}),
 	healthTodayTool,
 }
 

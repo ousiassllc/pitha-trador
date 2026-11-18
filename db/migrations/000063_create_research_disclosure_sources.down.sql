@@ -1,0 +1,5 @@
+DROP VIEW research_disclosure_source_events_v;
+DROP TABLE research_disclosure_source_status;
+DROP TABLE research_tachibana_news;
+DROP TABLE research_edinet_fetch_days;
+DROP TABLE research_edinet_documents;

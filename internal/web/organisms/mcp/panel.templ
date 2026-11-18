@@ -54,15 +54,19 @@ type PanelProps struct {
 	Audit                 []AuditRow
 }
 
-// Panel renders the Settings screen's MCP section (`#mcp-panel`'s content):
-// the state (待受中 / 起動中 / 停止中 / エラー / キー未設定) and whether the MCP
-// starts with the application next time, the 起動 / 停止 / 再起動 buttons
-// (`POST /settings/mcp/{start,stop,restart}`, issue #795), the enable switch
-// and listen address (saved by `POST /settings/mcp`), the API key generate /
-// regenerate action (`POST /settings/mcp/key`), the values to register in the
-// Grok Bot with the key masked, and where paper-results-mcp and its settings
-// file live. The MCP is still a separate process: the application only
-// launches it as a child, and a saved change takes effect on 再起動.
+// Panel renders the Settings screen's MCP section (`#mcp-panel`'s content),
+// connection first: the state (待受中 / 起動中 / 停止中 / エラー / キー未設定)
+// and whether the MCP starts with the application next time, the 起動 / 停止 /
+// 再起動 buttons (`POST /settings/mcp/{start,stop,restart}`, issue #795), the
+// enable switch and listen address (saved by `POST /settings/mcp`), the API key
+// generate / regenerate action (`POST /settings/mcp/key`), the values to
+// register in the Grok Bot with the key masked, then the settings-write
+// permission, the order-proposal intake switch and the audit log (writeSection)
+// and, last, where paper-results-mcp and its settings file live. The tuning
+// experiments are not here: they have their own card and dialog on the same
+// Settings page (Experiments). The MCP is still a separate process: the
+// application only launches it as a child, and a saved change takes effect on
+// 再起動.
 //
 // The reveal block carries `hx-history="false"` (htmx must not snapshot the
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
@@ -87,7 +91,6 @@ templ Panel(props PanelProps) {
 			if props.Note != "" {
 				<span data-testid="mcp-state-note">{ props.Note }</span>
 			}
-			<span>待受アドレス: <code data-testid="mcp-listen">{ props.Listen }</code></span>
 			<span data-testid="mcp-autostart" data-autostart={ boolAttr(props.AutoStart) }>{ props.AutoStartNote }</span>
 			if props.ConfigChanged {
 				<span class="text-warning" data-testid="mcp-config-changed">設定が保存されています。「再起動」を押すと反映されます。</span>
@@ -119,10 +122,6 @@ templ Panel(props PanelProps) {
 				}
 			</div>
 		</form>
-		if props.WriteGate {
-			@writeSection(props)
-			<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
-		}
 		<div class="flex flex-col gap-2" data-testid="mcp-key">
 			<span class="flex items-center gap-2 text-ink">
 				API キー:
@@ -155,6 +154,9 @@ templ Panel(props PanelProps) {
 			</dd>
 			<dd>ヘッダー: <code data-testid="mcp-auth-header">{ props.AuthHeader }</code></dd>
 		</dl>
+		if props.WriteGate {
+			@writeSection(props)
+		}
 		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
 			<dt class="text-ink">paper-results-mcp の配置先</dt>
 			<dd class="flex flex-wrap items-center gap-2">

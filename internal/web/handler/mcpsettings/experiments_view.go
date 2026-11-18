@@ -84,6 +84,9 @@ func confounderLine(f experiment.Confounder) string {
 	if f.Kind == experiment.KindModel && f.Name == experiment.ModelSwitchName && len(f.Values) == 2 {
 		return fmt.Sprintf("交絡: %s Jev のモデルが切り替えられました（%s、%s → %s）。", confounderPeriodText(f.Period), jst(f.At), f.Values[0], f.Values[1])
 	}
+	if f.Kind == experiment.KindModel && f.Name == experiment.RoleSwitchName && len(f.Values) == 2 {
+		return fmt.Sprintf("交絡: %s Jev のプロバイダー・モデルの設定が切り替えられました（%s、%s → %s）。", confounderPeriodText(f.Period), jst(f.At), f.Values[0], f.Values[1])
+	}
 	return confounderText(f)
 }
 
