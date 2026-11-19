@@ -3,7 +3,7 @@ module github.com/ousiassllc/pitha-trador
 go 1.26.11
 
 require (
-	github.com/a-h/templ v0.3.1020
+	github.com/a-h/templ v0.3.1118
 	github.com/coder/websocket v1.8.15
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/gin-gonic/gin v1.12.0
@@ -14,9 +14,9 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/xuri/excelize/v2 v2.11.1-0.20261018005640-da3f2df1bb7f
-	golang.org/x/mod v0.41.0
-	golang.org/x/net v0.61.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/mod v0.43.0
+	golang.org/x/net v0.62.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/text v0.43.0
 	gonum.org/v1/gonum v0.17.0
 	modernc.org/sqlite v1.59.0
@@ -24,7 +24,7 @@ require (
 
 require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
-	github.com/andybalholm/brotli v1.2.7 // indirect
+	github.com/andybalholm/brotli v1.3.0 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.2 // indirect
@@ -52,7 +52,7 @@ require (
 	github.com/leaanthony/slicer v1.6.0 // indirect
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
