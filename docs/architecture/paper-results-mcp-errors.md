@@ -12,14 +12,14 @@
 | `unauthorized` | 401 | `Authorization: Bearer` が無い、または `api_key` と一致しない。SQL は発行しない。必須の認証失敗はこれだけ | 認証に失敗しました。 |
 | `access_denied` | 401 | 任意。アーキテクチャ §3.5 で `verify_access_headers` が true のときだけ。`CF-Access-Client-Id` または `CF-Access-Client-Secret` が無い、またはローカル設定と一致しない。SQL は発行しない。必須要件の失敗コードではない | 認証に失敗しました。 |
 | `invalid_period` | 422 | `from` / `to` の形式が `YYYY-MM-DD` でない、片方だけ、`to <= from`、期間が 366 日を超える、`to` が JST の翌日より未来 | 期間の指定が不正です。 |
-| `limit_exceeded` | 422 | 要求の `limit` がツール上限を超える、または期間内の集計対象件数が上限（クローズ済み 5,000 件、horizon 8 種）を超える。部分結果は返さない。`order_proposal_submit` では、JST の 1 日に受け付けた注文案が 20 件に達している（`error.data.detail` に「注文案は JST の 1 日に 20 件までです」。何も書かない）。`message` は固定文のまま | 取得量が上限を超えています。期間を狭めてください。 |
+| `limit_exceeded` | 422 | 要求の `limit` がツール上限を超える、または期間内の集計対象件数が上限（クローズ済み 5,000 件、horizon 8 種）を超える。部分結果は返さない。`backtest_start` では、組が 13 以上・`extra_cost_bps` が 7 個以上・期間が 32 日以上。`virtual_paper_profile_create` では、動いているプロファイルが 5 件・全体が 20 件に達している（issue #1086・#1087。何も書かない）。`order_proposal_submit` では、JST の 1 日に受け付けた注文案が 20 件に達している（`error.data.detail` に「注文案は JST の 1 日に 20 件までです」。何も書かない）。`message` は固定文のまま | 取得量が上限を超えています。期間を狭めてください。 |
 | `db_locked` | 503 | `mode=ro` の接続が 1 秒の `busy_timeout` 以内にロックを取れない。設定・注文案の書き込みの接続が 2 秒以内に書き込みロックを取れないときも同じ（何も保存しない） | データベースが使用中です。しばらくしてから再度呼んでください。 |
 | `db_unavailable` | 503 | DB ファイルが無い、開けない（設定の書き込み接続を含む）、`PRAGMA query_only=ON` に失敗した、または必要な列が無くツールを実行できない | データベースを読み取れません。 |
 | `query_timeout` | 504 | ツール 1 回の処理が 3 秒を超えた（待ち時間を含む）。クエリはキャンセルし、自動では再試行しない | 読み取りが時間内に終わりませんでした。 |
-| `concurrency_limited` | 429 | すでに 2 件のツール呼び出しが実行中。3 件目は SQL を始めない | 同時に処理できる件数を超えています。 |
-| `write_disabled` | 403 | `settings_set` を呼んだが、書き込み許可がオフ（`runtime_settings` の `mcp.settings_write_enabled` が `0`、または壊れた値）。何も保存しない。`settings_write_enable` と読み取りのツールは使える | 設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。 `jev_prompt_promote`（issue #872）も同じスイッチに従い、オフなら同じコードで拒否して何も書かない |
+| `concurrency_limited` | 429 | すでに 2 件のツール呼び出しが実行中。3 件目は SQL を始めない。`backtest_start` は、別のバックテストが実行中のとき（同時 1 件。何も書かない。issue #1086） | 同時に処理できる件数を超えています。 |
+| `write_disabled` | 403 | `settings_set`（`backtest_start`・`virtual_paper_profile_create`・`virtual_paper_profile_stop` も同じ）を呼んだが、書き込み許可がオフ（`runtime_settings` の `mcp.settings_write_enabled` が `0`、または壊れた値）。何も保存しない。`settings_write_enable` と読み取りのツールは使える | 設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。 `jev_prompt_promote`（issue #872）も同じスイッチに従い、オフなら同じコードで拒否して何も書かない |
 | `key_not_allowed` | 403 | `settings_set` の `key`、または `experiment_create` の `kind=setting` の `name` がホワイトリスト（API 仕様 §3.10）に無い。未知のキーも、Live・ブートストラップ・秘密・書き込みスイッチ自身などの既知の別キーも同じ。書き込み許可の確認や DB への接触より前に返す | このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。 |
-| `invalid_value` | 422 | ホワイトリストのキーだが、値が GUI の検証（範囲・形式）に通らない。何も保存しない。`error.data.detail` に、検証の理由（呼び出し側が送った値と許容範囲だけを引く固定の文型。秘密は載らない）を付ける | 値が不正です。settings_get の constraint を確認してください。 `jev_prompt_promote` の `version` がこのビルドに登録されていない、またはすでにライブの版のときも同じコード（`error.data.detail` に理由。何も書かない） |
+| `invalid_value` | 422 | `backtest_start` / `virtual_paper_profile_create` の `params` が範囲外のときも同じ（`detail` に項目名と許容範囲だけ）。ホワイトリストのキーだが、値が GUI の検証（範囲・形式）に通らない。何も保存しない。`error.data.detail` に、検証の理由（呼び出し側が送った値と許容範囲だけを引く固定の文型。秘密は載らない）を付ける | 値が不正です。settings_get の constraint を確認してください。 `jev_prompt_promote` の `version` がこのビルドに登録されていない、またはすでにライブの版のときも同じコード（`error.data.detail` に理由。何も書かない） |
 | `proposals_disabled` | 403 | `order_proposal_submit` を呼んだが、注文案の受け付けがオフ（`runtime_settings` の `mcp.order_proposals_enabled` の行が無い・`0`・壊れた値。既定はオフ）。何も書かない。`order_proposal_get` と `order_proposals_disable` は使える。オンにできるのは Settings 画面だけ | 注文案の受け付けはオフです。Settings の「外部連携」でオンにしてください（MCP からはオンにできません）。 |
 | `idempotency_conflict` | 409 | `order_proposal_submit` の `idempotency_key` が、内容の違う注文案ですでに使われている（内容が同じなら再送として最初の案を返し、このコードにならない）。何も書かない | この idempotency_key は内容の違う案で使われています。別のキーで出し直してください。 |
 | `proposal_not_found` | 404 | `order_proposal_get` / `order_proposal_cancel` の `proposal_id` の注文案が無い | その proposal_id の注文案はありません。 |
@@ -27,6 +27,8 @@
 | `multiple_variables` | 422 | `experiment_create` の `changes` が 2 つ以上（同じ変数の 2 回も含む）。何も書かない（issue #871） | 1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。 |
 | `experiment_not_found` | 404 | `experiment_compare` / `experiment_close` の `experiment_id` の実験が無い | その experiment_id の実験はありません。experiments_list で確認してください。 |
 | `experiment_not_running` | 409 | `experiment_close` の実験が、もう終わっている（`closed` / `aborted`）。再び開けない。何も書かない | この実験はもう終わっています（再び開くことはできません）。 |
+| `backtest_not_found` | 404 | `backtest_get` の `run_id` のバックテストが無い（issue #1086） | その run_id のバックテストはありません。backtest_list で確認してください。 |
+| `backtest_unavailable` | 503 | `backtest_start` で、再生用のデータを読む設定が無い・読めない、または MCP が停止処理中。何も書かない（issue #1086） | バックテストを実行できません（再生用のデータを読む設定が無い、または読めません）。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -39,7 +41,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 52 個（読み取り 26（期間指定 23 + `health_today`・`ai_roles` + `promotion_checklist`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1、リプレイ 5、書き出し 1）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 58 個（読み取り 26（期間指定 23 + `health_today`・`ai_roles` + `promotion_checklist`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1、リプレイ 5、書き出し 1、バックテストと仮想 Paper 6）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
@@ -67,3 +69,4 @@
 | 1.9 | 2026-11-14 | `invalid_argument` の条件のツール数を 31 → 35 に直し、内訳を実装（`paperresultsmcp.ToolNames()`）に合わせた（読み取り 16 = 期間指定 15 + `health_today`）。ずれは `mcptests` の `TestToolCountInDocsMatchesDispatchTable` が検出する。新しいコードは無い | issue #1070 |
 | 1.10 | 2026-11-15 | `invalid_argument` の条件のツール数を 35 → 37 に直した（`jev_evaluation` と `research_horizon_summary` の読み取り 2 つを足したため。読み取り 18 = 期間指定 17 + `health_today`） | issue #1073 / #1074（PR #1077 への main の取り込み） |
 | 1.11 | 2026-11-15 | `invalid_argument` の条件のツール数を 37 → 42 に直した（読み取り 22・書き出し 1 を足した） | issue #1089・#1090・#1091・#1094 |
+| 1.12 | 2026-11-15 | バックテストのコード `backtest_not_found`（404）・`backtest_unavailable`（503）を追加。`limit_exceeded`（組・追加コスト・期間・仮想 Paper のプロファイル数）と `concurrency_limited`（実行中のバックテスト）の条件を追記し、ツール数を 58 にした（バックテスト 3 + 仮想 Paper 3）。`settings_set` の `hypothesis`（空・長すぎ・変更なし）は既存の `invalid_argument` | issue #1086 / #1087 / #1088 |

@@ -87,26 +87,34 @@ func (w *Writer) Set(ctx context.Context, client, key, raw string) (Entry, error
 		if !on {
 			return ErrWriteDisabled
 		}
-		svc := newService(store, w.base)
-		before, err := getSetting(ctx, store, svc, key)
-		if err != nil {
-			return err
-		}
-		if err := saveSetting(ctx, store, svc, key, raw, w.now()); err != nil {
-			return err
-		}
-		after, err := getSetting(ctx, store, svc, key)
-		if err != nil {
-			return err
-		}
-		e := Entry{Actor: ActorMCP, Client: client, Action: ActionSet, Key: key, After: &after.Current}
-		if before.Overridden {
-			e.Before = &before.Current
-		}
-		out, err = insertAudit(ctx, tx, w.now(), e)
+		out, _, _, err = w.saveAndAudit(ctx, store, tx, client, key, raw)
 		return err
 	})
 	return out, err
+}
+
+// saveAndAudit is the write of Set inside its transaction (the write switch has
+// been checked): validate and store raw for key, then append the audit row. It
+// also returns the key's effective value before and after, which the
+// experiment-recording variant of Set (setexperiment.go) stores as the
+// experiment's before / after.
+func (w *Writer) saveAndAudit(ctx context.Context, store *system.RuntimeSettingsRepository, tx sqlExecer, client, key, raw string) (entry Entry, before, after opsettings.Value, err error) {
+	svc := newService(store, w.base)
+	if before, err = getSetting(ctx, store, svc, key); err != nil {
+		return Entry{}, before, after, err
+	}
+	if err = saveSetting(ctx, store, svc, key, raw, w.now()); err != nil {
+		return Entry{}, before, after, err
+	}
+	if after, err = getSetting(ctx, store, svc, key); err != nil {
+		return Entry{}, before, after, err
+	}
+	e := Entry{Actor: ActorMCP, Client: client, Action: ActionSet, Key: key, After: &after.Current}
+	if before.Overridden {
+		e.Before = &before.Current
+	}
+	entry, err = insertAudit(ctx, tx, w.now(), e)
+	return entry, before, after, err
 }
 
 // SetEnabled turns the write switch on or off and records it. It works while
@@ -136,6 +144,26 @@ type sqlExecer interface {
 func (w *Writer) inTx(ctx context.Context, fn func(*system.RuntimeSettingsRepository, sqlExecer) error) error {
 	return runInTx(ctx, w.db, "write transaction", func(tx *sql.Tx) error {
 		return fn(system.NewRuntimeSettingsRepositoryOn(tx), tx)
+	})
+}
+
+// InTx runs fn in one write transaction on the writer's connection, with the
+// writer's clock. When gated, the write switch is read first inside the same
+// transaction and ErrWriteDisabled is returned (nothing written) while it is
+// off. It is the one transaction runner of mcpset/researchwrite, the research
+// tables' single-statement writes; what names the transaction in its errors.
+func (w *Writer) InTx(ctx context.Context, what string, gated bool, fn func(tx *sql.Tx, now time.Time) error) error {
+	return runInTx(ctx, w.db, what, func(tx *sql.Tx) error {
+		if gated {
+			on, err := WriteEnabled(ctx, system.NewRuntimeSettingsRepositoryOn(tx))
+			if err != nil {
+				return err
+			}
+			if !on {
+				return ErrWriteDisabled
+			}
+		}
+		return fn(tx, w.now())
 	})
 }
 

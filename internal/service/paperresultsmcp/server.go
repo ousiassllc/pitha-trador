@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtestjob"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtesttool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
@@ -81,6 +83,9 @@ type Options struct {
 	DriverName string
 	// InterfaceAddrs overrides net.InterfaceAddrs for the tailnet check.
 	InterfaceAddrs settings.InterfaceAddrs
+
+	// Backtest configures backtest_start (issue #1086).
+	Backtest backtesttool.Options
 }
 
 // Server is the MCP endpoint. Create it with New.
@@ -92,6 +97,7 @@ type Server struct {
 	// MaxConcurrent.
 	slots       chan struct{}
 	experiments *experiment.SummaryCache // experiments_list's rows of finished experiments (issue #880)
+	backtests   *backtestjob.Manager     // runs backtest_start's backtests in the background (issue #1086)
 
 	mu sync.Mutex
 	db *sql.DB // opened on the first authenticated tool call
@@ -116,6 +122,7 @@ func New(opts Options) *Server {
 	if s.opts.DriverName == "" {
 		s.opts.DriverName = readdb.DriverName
 	}
+	s.backtests = backtesttool.NewManager(opts.Backtest, s.log, s.Writer)
 	return s
 }
 
@@ -195,6 +202,7 @@ func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 
 // Close releases the database connection, if one was opened.
 func (s *Server) Close() error {
+	s.backtests.Close() // a backtest in flight ends (interrupted) before the writer it records through closes
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var errs []error
