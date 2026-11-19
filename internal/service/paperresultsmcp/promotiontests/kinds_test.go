@@ -48,7 +48,6 @@ func TestRejectsBadArguments(t *testing.T) {
 	cand := map[string]any{"kind": "shadow", "id": "trader-v9"}
 	for name, args := range map[string]map[string]any{
 		"no candidate":        {},
-		"experiment":          {"candidate": map[string]any{"kind": "experiment", "id": "7"}},
 		"setting":             {"candidate": map[string]any{"kind": "setting", "id": "x"}},
 		"experiment current":  {"candidate": cand, "current": map[string]any{"kind": "experiment", "id": "7"}},
 		"live as candidate":   {"candidate": map[string]any{"kind": "live", "id": "live"}},

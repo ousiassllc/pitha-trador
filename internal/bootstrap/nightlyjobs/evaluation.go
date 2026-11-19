@@ -11,11 +11,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/evalrecord"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	servicerecord "github.com/ousiassllc/pitha-trador/internal/service/evalrecord"
+	"github.com/ousiassllc/pitha-trador/internal/service/researchjobstatus"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
 // EvaluationTaskName is the maintenance task's name (its last-success date is stored under it).
-const EvaluationTaskName = "jev_evaluation_daily"
+const EvaluationTaskName = researchjobstatus.EvalTask
 
 // EvaluationRunFrom is the JST time of day from which the task runs: the market has closed
 // (15:30) and the day's last bars are stored, so a day is recorded once it is complete.
@@ -57,7 +58,7 @@ func newEvaluationJob(db *sql.DB, settings *system.RuntimeSettingsRepository) *e
 }
 
 func (j *evaluationJob) task() maintenance.Task {
-	return maintenance.Task{Name: EvaluationTaskName, Label: "Jev 評価の日次記録", Run: j.run}
+	return maintenance.Task{Name: EvaluationTaskName, Label: "Jev 評価の日次記録", Run: j.run, TrackFailure: true}
 }
 
 // run does one chunk once the JST time of day has reached EvaluationRunFrom and the switch is on;

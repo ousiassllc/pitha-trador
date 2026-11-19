@@ -14,6 +14,7 @@ package promotiondiag
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/ledgerdiag"
@@ -28,7 +29,9 @@ const Description = "候補（シャドーのプロンプト版・お試しの�
 	"項目: same_rows_and_period・common_rows・common_days・diff_ci_lower・multiple_comparison・positive_days・not_one_day_wins・max_drawdown・after_ai_cost・after_training_cutoff・model_version_stable。" +
 	"各項目は status（pass / fail / unknown）・actual・required・detail、全体は first_unmet（最初に満たさなかった項目）。" +
 	"しきい値は promotionsettings のフロア（docs/architecture/research-tools/paper-results-mcp-promotion.md）か、Settings の research.promotion.* で厳しくした値で、呼び出しの min_* / max_adjusted_p は厳しくする方向にだけ指定できる（緩めると invalid_argument）。" +
-	"設定の組（experiment・setting）は同じ行で比べられないので unsupported_candidate_kind。usd_jpy と notional_jpy が両方無ければ after_ai_cost は unknown"
+	"設定の組（調整の実験）は同じ行で比べられないので、candidate に kind=experiment（id=実験の id）か kind=setting（id=設定キー。そのキーの最新の実験）を渡すと、experiment_compare の前後比較を同じ 11 項目で見る" +
+	"（current は指定しない。前後は別の取引なので same_rows_and_period・after_ai_cost・after_training_cutoff は not_applicable の unknown、eligible_as_evidence は常に false で、数字は参考。experiment・setting を current にする、ホワイトリストにない設定キー、experiment・setting に current を付ける組み合わせは unsupported_candidate_kind。実験の記録が無い setting は全項目 unknown）。" +
+	"usd_jpy と notional_jpy が両方無ければ after_ai_cost は unknown"
 
 // SchemaProperties are the tool's own arguments besides the period.
 func SchemaProperties() map[string]any {
@@ -38,13 +41,13 @@ func SchemaProperties() map[string]any {
 			"properties": map[string]any{
 				"kind": map[string]any{"type": "string", "enum": kinds},
 				"id": map[string]any{"type": "string", "minLength": 1, "maxLength": ledgerdiag.MaxIDLen,
-					"description": "shadow=プロンプト版 / trial=アーム id / baseline=random・momentum・contrarian・none・long_leg・short_leg / research_model=<algorithm>:<30m|60m|close> / live_cohort=<model_id>/<version>"},
+					"description": "shadow=プロンプト版 / trial=アーム id / baseline=random・momentum・contrarian・none・long_leg・short_leg / research_model=<algorithm>:<30m|60m|close> / live_cohort=<model_id>/<version> / experiment=調整の実験の id（整数。current は指定しない） / setting=設定キー（MCP のホワイトリストのキー。最新の実験を見る。current は指定しない）"},
 			},
 			"description": desc,
 		}
 	}
 	return map[string]any{
-		"candidate":             ref("提案する候補", candidateKinds),
+		"candidate":             ref("提案する候補", append(slices.Clone(candidateKinds), settingsSetKinds...)),
 		"current":               ref("置き換え元。省略はライブの Jev（kind=live の id は live）", append([]string{ledgerdiag.KindLive}, candidateKinds[:4]...)),
 		"horizon":               map[string]any{"type": "string", "enum": []string{ledgerdiag.Horizon10m, ledgerdiag.Horizon30m, ledgerdiag.Horizon60m, ledgerdiag.HorizonClose}, "default": ledgerdiag.Horizon10m, "description": "ラベルのホライズン（candidate_ledger と同じ）"},
 		"usd_jpy":               map[string]any{"type": "number", "exclusiveMinimum": 0, "description": "USD/JPY。notional_jpy と両方渡したときだけ after_ai_cost を判定する"},
@@ -59,11 +62,11 @@ func SchemaProperties() map[string]any {
 }
 
 // Run is the tool: the checklist of the candidate over [r.From, r.To) and the number of
-// common rows it is computed on. The clock is not used (the signature matches the other analyses).
-func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request) (any, int, error) {
-	out, err := Check(ctx, q, r, req)
+// common rows (for an experiment / setting, trades of the thinner period) it is computed on.
+func Run(ctx context.Context, q query.Q, r query.Range, now time.Time, req Request) (any, int, error) {
+	out, err := Check(ctx, q, r, now, req)
 	if err != nil {
 		return nil, 0, err
 	}
-	return out, out.KeyNumbers.CommonRows, nil
+	return out, out.rows(), nil
 }

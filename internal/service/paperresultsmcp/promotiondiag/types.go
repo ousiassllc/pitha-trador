@@ -43,10 +43,18 @@ type Result struct {
 	// EligibleAsEvidence: every item passed. Evidence for a person's proposal, not an instruction.
 	EligibleAsEvidence bool `json:"eligible_as_evidence"`
 	// HorizonNote is set (and EligibleAsEvidence false) when a research model is compared at a horizon it was not trained for.
-	HorizonNote string            `json:"horizon_note,omitempty"`
-	Applied     bool              `json:"applied"`
-	KeyNumbers  KeyNumbers        `json:"key_numbers"`
+	HorizonNote string `json:"horizon_note,omitempty"`
+	Applied     bool   `json:"applied"`
+	// KeyNumbers are the numbers of a candidate read from the candidate ledger; nil for an experiment / setting
+	// candidate, whose numbers are ExperimentNumbers.
+	KeyNumbers  *KeyNumbers       `json:"key_numbers,omitempty"`
 	Definitions map[string]string `json:"definitions"`
+	// Experiment, ExperimentNumbers and EvidenceNote are set for a candidate of kind experiment / setting only
+	// (settingsset_result.go): the experiment the result is read from, its numbers, and why such a result is
+	// never eligible_as_evidence.
+	Experiment        *ExperimentInfo    `json:"experiment,omitempty"`
+	ExperimentNumbers *ExperimentNumbers `json:"experiment_numbers,omitempty"`
+	EvidenceNote      string             `json:"evidence_note,omitempty"`
 }
 
 // Criteria are the numeric criteria in force with their documented floors and where each value comes from.
@@ -76,6 +84,9 @@ type Item struct {
 	Required   any    `json:"required"`
 	Comparator string `json:"comparator"`
 	Detail     string `json:"detail"`
+	// NotApplicable marks an item that cannot be judged for the candidate's kind (an experiment's before and
+	// after are different trades, not the same rows). It is status unknown, never fail, and never first_unmet.
+	NotApplicable bool `json:"not_applicable,omitempty"`
 }
 
 // KeyNumbers are the numbers behind the items.

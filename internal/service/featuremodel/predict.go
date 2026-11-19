@@ -13,9 +13,23 @@ type DecisionSource interface {
 	Decisions(ctx context.Context, day string) ([]repo.Decision, error)
 }
 
+// Predictor is a fitted model: the predicted LONG and SHORT net bps of a feature
+// vector aligned with repo.Features (NaN: missing). Model and TreeModel are.
+type Predictor interface {
+	Predict(x []float64) (long, short float64)
+}
+
+// Predictor returns the fitted model of the training, ridge or tree.
+func (t *Trained) Predictor() Predictor {
+	if t.Tree != nil {
+		return t.Tree
+	}
+	return t.Model
+}
+
 // Predict returns the model's prediction for every decision of the day that has
 // a bar (the source returns only those), in decision-id order.
-func Predict(ctx context.Context, src DecisionSource, m Model, day string) ([]repo.Prediction, error) {
+func Predict(ctx context.Context, src DecisionSource, m Predictor, day string) ([]repo.Prediction, error) {
 	ds, err := src.Decisions(ctx, day)
 	if err != nil {
 		return nil, err
@@ -28,22 +42,26 @@ func Predict(ctx context.Context, src DecisionSource, m Model, day string) ([]re
 	return preds, nil
 }
 
-// runRow builds the research_model_runs row of a training and its n predictions.
-func runRow(predictDay string, t *Trained, p Params) (repo.Run, error) {
+// runRow builds the research_model_runs row of a training of the model spec that
+// predicts predictDay: its features, hyperparameters and fitted coefficients (or trees).
+func runRow(spec Spec, predictDay string, t *Trained, p Params, tp TreeParams) (repo.Run, error) {
 	features, err := marshal(repo.Features)
 	if err != nil {
 		return repo.Run{}, err
 	}
-	hp, err := hyperparamsJSON(p)
-	if err != nil {
-		return repo.Run{}, err
+	var hp, coef string
+	if t.Tree != nil {
+		if hp, err = treeHyperparamsJSON(p, tp, t); err == nil {
+			coef, err = marshal(t.Tree)
+		}
+	} else if hp, err = hyperparamsJSON(p, spec.Horizon); err == nil {
+		coef, err = marshal(t.Model)
 	}
-	coef, err := marshal(t.Model)
 	if err != nil {
-		return repo.Run{}, fmt.Errorf("featuremodel: coefficients: %w", err)
+		return repo.Run{}, fmt.Errorf("featuremodel: run record: %w", err)
 	}
 	return repo.Run{
-		Version: Version(predictDay), Algorithm: Algorithm, LabelHorizon: Horizon,
+		Version: spec.Version(predictDay), Algorithm: spec.Algorithm, LabelHorizon: spec.Horizon,
 		FeaturesJSON: features, HyperparamsJSON: hp, CoefficientsJSON: coef,
 		TrainFrom: t.From, TrainTo: t.To, PredictDay: predictDay, NTrain: t.NTrain, TrainDigest: t.Digest,
 	}, nil

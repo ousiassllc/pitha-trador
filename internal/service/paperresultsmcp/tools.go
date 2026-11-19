@@ -69,7 +69,13 @@ var (
 )
 
 func strictDecode(raw json.RawMessage, dst any) *toolError {
-	return toolErrorOf(tooldef.StrictDecode(raw, dst))
+	f := tooldef.StrictDecode(raw, dst)
+	if f != nil {
+		if ue := unsupportedKind(f.Cause); ue != nil { // promotion_checklist's kinds are checked while decoding
+			return ue
+		}
+	}
+	return toolErrorOf(f)
 }
 
 func resolveLimit(requested *int, maxLimit int) (int, *toolError) {

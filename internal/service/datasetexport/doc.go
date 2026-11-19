@@ -1,5 +1,5 @@
 // Package datasetexport builds the versioned, secret-free training dataset of issue #1094:
-// one CSV row per Jev trader decision (decision_type='trader', every direction incl. NONE)
+// one CSV (and Parquet) row per Jev trader decision (decision_type='trader', every direction incl. NONE)
 // with its decision-time features, Jev's structured answer, the gate result, every label
 // the app stores for it and the shadow / trial answers, written to a local folder.
 //
@@ -13,9 +13,10 @@ package datasetexport
 
 import "os"
 
-// SchemaVersion is the version of the column set and the file layout. Any change of a
-// column, its meaning or the file layout bumps it.
-const SchemaVersion = "1"
+// SchemaVersion is the version of the column set, the file layout and the hash spec. Any change
+// of a column, its meaning, the files or what the dataset hash covers bumps it.
+// "2": Parquet files beside the CSV files, and the period and the split in the dataset hash.
+const SchemaVersion = "2"
 
 // Bounds of one export. MaxDecisions bounds the decisions read per call so the whole
 // export (the reads, the CSV and the hashing) stays inside the MCP's 3 s budget; more
@@ -34,7 +35,11 @@ const (
 	FileAll        = "dataset.csv"
 	FileTrain      = "dataset_train.csv"
 	FileEval       = "dataset_eval.csv"
-	ManifestName   = "manifest.json"
+	// The Parquet twin of each CSV file: the same rows and columns (an empty CSV cell is null).
+	FileAllParquet   = "dataset.parquet"
+	FileTrainParquet = "dataset_train.parquet"
+	FileEvalParquet  = "dataset_eval.parquet"
+	ManifestName     = "manifest.json"
 )
 
 // Permissions of what the export creates.

@@ -66,6 +66,8 @@ func TestPackagesImportOnlyReadOnlyHelpers(t *testing.T) {
 	const module = "github.com/ousiassllc/pitha-trador/"
 	allowed := map[string]bool{
 		"internal/config/jevshadowsettings": true, "internal/config/metalabelsettings": true, "internal/config/promotionsettings": true,
+		// the checklist of an experiment / setting candidate: the MCP's setting whitelist and the experiment comparison
+		"internal/config/mcpwritesettings": true, "internal/service/paperresultsmcp/experiment": true,
 		"internal/domain": true, "internal/repository/sqlutil": true, "internal/service/jev": true,
 		"internal/service/metaablation/stats":                true,
 		"internal/service/paperresultsmcp/evaldiag":          true,
@@ -125,5 +127,24 @@ func TestSQLIsReadOnlyAndOverTheDocumentedTables(t *testing.T) {
 		if !seen[table] {
 			t.Errorf("the table scan never saw %s: the check is vacuous", table)
 		}
+	}
+}
+
+// The checklist reads an experiment's comparison (experiment.Get / List / Compare / Windows) and never
+// records, closes or changes one: the writing half of the experiment package is not named.
+func TestChecklistNeverWritesAnExperiment(t *testing.T) {
+	t.Parallel()
+	named := 0
+	walkGo(t, "internal/service/paperresultsmcp/promotiondiag", func(rel string, src []byte) {
+		text := string(src)
+		named += strings.Count(text, "experiment.Compare(") + strings.Count(text, "experiment.List(")
+		for _, write := range []string{"experiment.Insert", "experiment.Close", "experiment.Tx", ".ExecContext(", "BeginTx"} {
+			if strings.Contains(text, write) {
+				t.Errorf("%s uses %s: the checklist only reads an experiment", rel, write)
+			}
+		}
+	})
+	if named == 0 {
+		t.Error("the checklist never reads an experiment: the check is vacuous")
 	}
 }

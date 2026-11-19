@@ -10,9 +10,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
-// TrainRow is one training example: a market snapshot with its 30-minute
-// label. X is aligned with Features (NaN: missing). HasLong/HasShort tell which
-// sides had an executable quote, so which of LongNet/ShortNet exist.
+// TrainRow is one training example: a market snapshot with its label of one
+// horizon (30m, 60m or close). X is aligned with Features (NaN: missing).
+// HasLong/HasShort tell which sides had an executable quote, so which of
+// LongNet/ShortNet exist.
 type TrainRow struct {
 	SnapshotID        int64
 	Day               string
@@ -28,15 +29,27 @@ type Decision struct {
 	X                []float64
 }
 
+// Horizons are the label horizons of research_horizon_labels the model learns, in
+// the order the runner trains them; labeledColumn is the research_label_days count
+// column of each.
+var (
+	Horizons      = []string{"30m", "60m", "close"}
+	labeledColumn = map[string]string{"30m": "labeled_30m", "60m": "labeled_60m", "close": "labeled_close"}
+)
+
 // TrainingDays returns the up-to-limit most recent JST days strictly before the
-// day `before` that research_label_days marks complete and that hold 30-minute rows
-// (labeled_30m > 0), oldest first. A day without the mark (the
+// day `before` that research_label_days marks complete and that hold rows of the
+// label horizon (labeled_<horizon> > 0), oldest first. A day without the mark (the
 // recorder stopped midway) is never returned.
-func (r *Repository) TrainingDays(ctx context.Context, before string, limit int) ([]string, error) {
+func (r *Repository) TrainingDays(ctx context.Context, horizon, before string, limit int) ([]string, error) {
+	column, ok := labeledColumn[horizon]
+	if !ok {
+		return nil, fmt.Errorf("featuremodel: label horizon %q is not one of %v", horizon, Horizons)
+	}
 	if limit <= 0 {
 		return nil, nil
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT day FROM research_label_days WHERE day < ? AND labeled_30m > 0 ORDER BY day DESC LIMIT ?`, before, limit)
+	rows, err := r.db.QueryContext(ctx, `SELECT day FROM research_label_days WHERE day < ? AND `+column+` > 0 ORDER BY day DESC LIMIT ?`, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("featuremodel: list training days: %w", err)
 	}
@@ -59,13 +72,16 @@ func (r *Repository) TrainingDays(ctx context.Context, before string, limit int)
 }
 
 // ScanTraining calls fn for every training row of the given days, in the fixed
-// order (day, snapshot_id): the 30-minute rows of the label table with
+// order (day, snapshot_id): the rows of the label horizon with
 // sample_bucket < buckets whose label is fully known before notBefore (exit_at <
 // the start of the predicted day: the purge), joined to the snapshot's features.
 // A row whose snapshot has been purged from market_snapshots has no features and
 // is not a row. purged is how many rows the exit_at rule dropped. The fixed order
 // makes every sum over the rows reproducible bit for bit.
-func (r *Repository) ScanTraining(ctx context.Context, days []string, buckets int, predictDay string, fn func(TrainRow) error) (purged int, err error) {
+func (r *Repository) ScanTraining(ctx context.Context, horizon string, days []string, buckets int, predictDay string, fn func(TrainRow) error) (purged int, err error) {
+	if _, ok := labeledColumn[horizon]; !ok {
+		return 0, fmt.Errorf("featuremodel: label horizon %q is not one of %v", horizon, Horizons)
+	}
 	cutoff, err := formatDayStart(predictDay)
 	if err != nil {
 		return 0, err
@@ -74,12 +90,12 @@ func (r *Repository) ScanTraining(ctx context.Context, days []string, buckets in
 		if day >= predictDay {
 			return purged, fmt.Errorf("featuremodel: training day %s is not before the predicted day %s", day, predictDay)
 		}
-		if err := r.scanDay(ctx, day, buckets, cutoff, fn); err != nil {
+		if err := r.scanDay(ctx, horizon, day, buckets, cutoff, fn); err != nil {
 			return purged, err
 		}
 		var dropped int
 		if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM research_horizon_labels l JOIN market_snapshots m ON m.id = l.snapshot_id
-WHERE l.day = ? AND l.horizon = '30m' AND l.sample_bucket < ? AND l.exit_at >= ?`, day, buckets, cutoff).Scan(&dropped); err != nil {
+WHERE l.day = ? AND l.horizon = ? AND l.sample_bucket < ? AND l.exit_at >= ?`, day, horizon, buckets, cutoff).Scan(&dropped); err != nil {
 			return purged, fmt.Errorf("featuremodel: count purged rows of %s: %w", day, err)
 		}
 		purged += dropped
@@ -87,11 +103,11 @@ WHERE l.day = ? AND l.horizon = '30m' AND l.sample_bucket < ? AND l.exit_at >= ?
 	return purged, nil
 }
 
-func (r *Repository) scanDay(ctx context.Context, day string, buckets int, cutoff string, fn func(TrainRow) error) error {
+func (r *Repository) scanDay(ctx context.Context, horizon, day string, buckets int, cutoff string, fn func(TrainRow) error) error {
 	rows, err := r.db.QueryContext(ctx, `SELECT l.snapshot_id, l.long_net_bps, l.short_net_bps, `+featureSelect+`
 FROM research_horizon_labels l JOIN market_snapshots m ON m.id = l.snapshot_id
-WHERE l.day = ? AND l.horizon = '30m' AND l.sample_bucket < ? AND l.exit_at < ?
-ORDER BY l.snapshot_id`, day, buckets, cutoff)
+WHERE l.day = ? AND l.horizon = ? AND l.sample_bucket < ? AND l.exit_at < ?
+ORDER BY l.snapshot_id`, day, horizon, buckets, cutoff)
 	if err != nil {
 		return fmt.Errorf("featuremodel: read training rows of %s: %w", day, err)
 	}

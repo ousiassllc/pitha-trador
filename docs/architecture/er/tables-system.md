@@ -22,6 +22,8 @@ erDiagram
 | value | text | NOT NULL | JSON文字列 |
 | updated_at | text | NOT NULL | |
 
+研究用の夜間タスクの失敗の記録（issue #1126）はキー`system.maintenance.<task>.last_failure`（`<task>`は`jev_evaluation_daily` / `research_model`の 2 つだけ。JSON `{"date":"YYYY-MM-DD","reason":"<1 行・120 文字まで>"}`、回復後は`null`。メンテナンスランナーが`Task.TrackFailure`のタスクの失敗時にだけ書き、`ErrSkipped`（オフ）では書かない）。Settings の「夜間タスクの状態」だけが読み、取引・昇格には使わない。テーブル・マイグレーションの追加は無い。
+
 Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.settings_write_enabled`（JSON の整数`1`=許可・`0`=禁止。行が無いときは許可。`1`/`0`以外は禁止として扱う）。アプリ（Settings の MCP カード）と MCP プロセスが同じ行を読み書きする（`internal/config/mcpwritesettings`）。MCP がこの表へ書けるのは、`mcpwritesettings.Keys()`のホワイトリストのキーとこのスイッチだけ。
 
 Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`で書けるのは`jev.shadow.enabled`と`jev.shadow.candidate_version`の2キーだけ（issue #929）で、ほかは書けない）。意思決定モデル比較のトライアル（issue #1059）は別系統のキー`jev.trial.enabled`（既定は無効）・`jev.trial.arms`（既定は空）・`jev.trial.daily_cost_cap_usd`（既定 0.10 USD）・`jev.trial.halt`・アームごとの`jev.trial.halt.<arm>`/`jev.trial.failures.<arm>`/`jev.trial.throttle.<arm>`を使う（`jev.shadow.*`とは重ならない。詳細は`er/tables-jev-trial.md`。**MCPの`settings_set`では1キーも書けない**。有効化はSettings画面だけ）。 AI の役割ごとのプロバイダー・モデルはキー`ai.role.<role>`（`er/tables-ai-roles.md`。Settings 画面だけが書く。MCP の`settings_set`では書けない。issue #1080）。

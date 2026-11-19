@@ -4,22 +4,29 @@ issue #1094。Paper 実績 MCP の `training_dataset_export` が書き出す**�
 
 ## 1. 位置づけ
 
-Jev の判断（1 判断 = 1 行）に、判断時点の特徴量・Jev の構造化された答え・ゲート結果・各種ラベル・シャドーとお試しの答えを付けた CSV。**研究・学習の素材**で、取引の入力ではない。ファイルはこの PC のローカルフォルダにだけ書き、外部へは送らない。秘密・生の板・気配・価格水準・応答の本文は含まない（§8）。ラベルは判断の**後**の値動きから付いた将来の情報なので、学習の入力（特徴量）にしてはいけない。
+Jev の判断（1 判断 = 1 行）に、判断時点の特徴量・Jev の構造化された答え・ゲート結果・各種ラベル・シャドーとお試しの答えを付けた CSV と Parquet。**研究・学習の素材**で、取引の入力ではない。ファイルはこの PC のローカルフォルダにだけ書き、外部へは送らない。秘密・生の板・気配・価格水準・応答の本文は含まない（§8）。ラベルは判断の**後**の値動きから付いた将来の情報なので、学習の入力（特徴量）にしてはいけない。
 
 ## 2. スキーマの版
 
-`schema_version` = `"1"`。列の追加・削除・並びや意味の変更、ファイル構成の変更は版を上げる。版が変わると `dataset_sha256` の入力も変わるので、`dataset_id` も変わる。
+`schema_version` = `"2"`（版 1 は CSV だけで、`dataset_id` が期間・分け方を含まなかった）。列の追加・削除・並びや意味の変更、ファイル構成（Parquet の型・書き込みの設定を含む）やハッシュの仕様の変更は版を上げる。版が変わると `dataset_sha256` の入力も変わるので、`dataset_id` も変わる。
 
 ## 3. 行
 
 - 期間 `[from, to)`（JST の日）の `jev_decisions` のうち `decision_type = 'trader'` の**全判断**（`NONE` を含む。scout は含まない）。1 判断 = 1 行。1 回に 20000 判断まで（超えたら `limit_exceeded`）。
 - 並びは `decided_at`、次に `decision_id` の昇順（決定的）。同じ入力は同じバイト列になる。
 - CSV は UTF-8・改行 `\n`・ヘッダー 1 行。数値は 10 進（指数表記なし）、空欄は欠測（NULL・該当なし）。値が想定の型・列挙の外なら空欄にする（本文や自由文は混ざらない）。
-- ファイル: 分割なしは `dataset.csv` 1 本、分割ありは `dataset_train.csv` と `dataset_eval.csv`。どちらも `manifest.json` と同じフォルダ `exports/<dataset_id>/` に置く。
+- ファイル: 分割なしは `dataset.csv` と `dataset.parquet`、分割ありは `dataset_train.csv`・`dataset_train.parquet`・`dataset_eval.csv`・`dataset_eval.parquet`。すべて `manifest.json` と同じフォルダ `exports/<dataset_id>/` に置く。Parquet は同じ側の CSV と**同じ行・同じ列・同じ順**（行数が一致する）。
+
+### Parquet の形式（issue #1124）
+
+- ライブラリは `github.com/parquet-go/parquet-go`（v0.26.4。Apache-2.0、cgo なしの Go。amd64 の一部にアセンブラがあるが `purego` タグで純 Go に切り替えられる。Windows でも `go build` / `go vet` が通る。依存は `klauspost/compress`・`andybalholm/brotli`・`pierrec/lz4`・`parquet-go/bitpack`・`parquet-go/jsonlite` で、すでに入っている `google/uuid` 以外は新規）。書き込みは `internal/service/datasetexport/parquetenc` だけが行い、他のパッケージはこのライブラリを import しない（`TestOnlyTheParquetWriterImportsTheParquetLibrary`）。
+- 列はすべて optional（空欄 = null）。型は列ごとに固定: `decision_id` `instrument_id` `signal_count` `cf_horizon_minutes` と 0 / 1 のフラグ（`has_bar` `has_signal` `risk_passed` `cf_cutoff_unverified`）は INT64、SQL 側で数値として検査済みの列（特徴量・ラベル・確信度・OFI など）は DOUBLE、それ以外（識別子・日付・列挙・版名）は UTF-8 の BYTE_ARRAY。0 / 1 のフラグを BOOLEAN にしないのは、ライブラリが BOOLEAN のページのビットを詰めるときに最後のバイトの未使用ビットを使い回しのバッファの値のまま残し、同じ入力でもバイト列が変わることがあるため（実測で確認）。型に合わない値や NaN / Inf はエラーにし、黙って別の値にしない。
+- DOUBLE は CSV の 10 進表記を `ParseFloat` で読んだ値で、CSV と数値として一致する。`decided_at` は CSV と同じ UTF-8 の文字列（タイムスタンプ型にしない。ナノ秒を落とさず、型の解釈の差を作らない）。
+- 決定的なバイト列: 書き込みの設定をすべて固定する（圧縮なし、データページ v2、1 行グループ 10000 行、統計あり、ページのバッファは呼び出しごとに新しいもの（共有のプールを使わない）、`created_by` は固定文字列、key-value メタデータは `pitha_dataset_schema_version` だけ）。ファイルに時刻・乱数・ホスト名・ライブラリの版は入れない。行グループが複数になる大きさでも同じバイト列になる（`TestDatasetSchemaIsDeterministicAndKeepsColumnOrder`）。ライブラリの更新でバイト列が変わりうるので、更新するときはこのテストと manifest のハッシュの扱いを確認し、変わるなら `schema_version` を上げる。
 
 ## 4. 列
 
-列の順序は下の表の順（グループの並び）で、`manifest.columns` と各 CSV のヘッダーが同じ。許可リストにない列は書かない。
+列の順序は下の表の順（グループの並び）で、`manifest.columns`・各 CSV のヘッダー・各 Parquet の列が同じ。許可リストにない列は書かない。
 
 ### 識別子と分割
 
@@ -218,28 +225,34 @@ Jev の答えは `response_json` の**固定の 5 キー**だけを `json_extrac
 | `dataset_id` | `ds-` + `dataset_sha256` の先頭 12 桁 |
 | `dataset_sha256` | 全体のハッシュ（§10） |
 | `created_at` | 作成時刻（UTC RFC3339。呼び出し側の時計） |
-| `from` / `to` | 期間の JST 日（`to` は含まない） |
-| `split_at` / `embargo_days` | 分割（`split_at` は分割なしで `null`） |
+| `from` / `to` | 実際に使った期間の JST 日（`to` は含まない）。`dataset_sha256` に入る |
+| `split_at` / `embargo_days` | 実際に使った分割（`split_at` は分割なしで `null`）。`dataset_sha256` に入る |
 | `label_version` | `calibration`（`label_version` 2・`horizon_minutes`・`rows_at_other_horizons`）、`research_horizon`（1・`horizons`）、`counterfactual`（2）、`note` |
 | `decisions` / `rows` | 期間の trader 判断の数 / 書き出した行数 |
 | `rows_train` / `rows_eval` / `rows_in_embargo` / `rows_purged` | §7。分割なしは 0 |
 | `train_days` / `eval_days` | 各側の最初と最後の判断の JST 日（`first` / `last`）。分割なしは `null` |
 | `columns` / `excluded_columns` | 列の順 / 除外（§8） |
 | `shadow_versions` / `shadow_versions_omitted` / `trial_arms` / `trial_arms_omitted` | §6 |
-| `files[]` | `name` / `rows` / `bytes` / `sha256`（ファイルのバイト列の SHA-256）。順は `dataset_train.csv`、`dataset_eval.csv`（分割なしは `dataset.csv`） |
+| `files[]` | `name` / `format`（`csv` / `parquet`）/ `rows` / `bytes` / `sha256`（ファイルのバイト列の SHA-256）。順は `dataset_train.csv`、`dataset_train.parquet`、`dataset_eval.csv`、`dataset_eval.parquet`（分割なしは `dataset.csv`、`dataset.parquet`）。同じ側の CSV と Parquet の `rows` は一致する |
 | `save_dir` | 書き出したフォルダの絶対パス（パスは応答に出してよい） |
 | `notice` | ローカルのみ・外部へ送っていない・データの中身は応答に含めない |
 
 ## 10. ハッシュの確かめ方
 
-1. 各ファイルについて `sha256sum <file>` が `files[].sha256` と一致し、バイト数が `files[].bytes` と一致する。
-2. `dataset_sha256` = SHA-256（`"<schema_version>\n"` に続けて、`files[]` の順に各 `sha256`（小文字 16 進）と `"\n"` を連結したもの）。分割ありの例: `printf '1\n%s\n%s\n' <train の sha256> <eval の sha256> | sha256sum`。
+1. 各ファイル（CSV・Parquet）について `sha256sum <file>` が `files[].sha256` と一致し、バイト数が `files[].bytes` と一致する。
+2. `dataset_sha256` = SHA-256（次の行を順に連結したもの。各行は `"\n"` で終わる）:
+   - `<schema_version>`
+   - `from=<from>`、`to=<to>`、`split_at=<split_at。分割なしは空>`、`embargo_days=<n>`
+   - `files[]` の順に `<name> <sha256（小文字 16 進）>`
+
+   分割なしの例: `printf '2\nfrom=2026-10-05\nto=2026-10-12\nsplit_at=\nembargo_days=0\ndataset.csv %s\ndataset.parquet %s\n' <csv の sha256> <parquet の sha256> | sha256sum`。
 3. `dataset_id` は `dataset_sha256` の先頭 12 桁に `ds-` を付けたもの。`manifest.json` 自身は `created_at` と `save_dir` を含むのでハッシュに入れない。
 
-同じ期間・分割・DB の内容なら、同じバイト列・同じ `dataset_id` になる（再実行は何も書き直さない）。ラベルや答えが後から付くと中身が変わり、別の `dataset_id` になる。
+期間と分け方がハッシュに入るので、期間・`split_at`・`embargo_days` のどれかだけが違う書き出しは、ファイルのバイト列が同じでも別の `dataset_id`（別のフォルダ）になり、古い指定の manifest を「同じデータセット」として返すことはない（`TestAnotherPeriodOrSplitIsAnotherDataset`）。同じ期間・分割・DB の内容なら、同じバイト列・同じ `dataset_id` になる（再実行は何も書き直さない。既存のフォルダは、各ファイルのハッシュ・manifest の `dataset_sha256`・manifest 自身の期間・分け方・ファイルのハッシュから計算し直したハッシュがすべて合うときだけ同じデータセットとして扱い、1 つでも違えば上書きせず `dataset_dir_conflict`）。ラベルや答えが後から付くと中身が変わり、別の `dataset_id` になる。
 
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規（スキーマ版 1） | issue #1094 |
+| 2.0 | 2026-11-19 | スキーマ版 2: `dataset_sha256` に期間（`from`・`to`）と分け方（`split_at`・`embargo_days`）を含める。Parquet を CSV と並べて書く（ファイルごとのハッシュ・`format`）。ハッシュの式を `<name> <sha256>` の行形式に変更 | issue #1121・#1124 |

@@ -47,7 +47,7 @@ func seedMany(t *testing.T, w *sql.DB, n int) {
 
 // The decision limit: MaxDecisions decisions export whole (every source joined, one row each, hash
 // verifies), one more is limit_exceeded and writes nothing. The full-size export is timed and logged
-// (about 0.9 s on a developer machine, against the production 3 s budget); the server here runs with a
+// (about 1.3 s on a developer machine, with the Parquet files, against the production 3 s budget); the server here runs with a
 // longer budget so a loaded CI runner does not turn the timing into a failure. Skipped under -short and
 // the race detector.
 func TestTheDecisionLimitIsEnforcedAndTheFullSizeExports(t *testing.T) {
@@ -74,6 +74,8 @@ func TestTheDecisionLimitIsEnforcedAndTheFullSizeExports(t *testing.T) {
 			t.Errorf("%s does not hash to the manifest", f.Name)
 		}
 	}
+	sameAsCSV(t, m.SaveDir, m.Files[0], m.Files[1]) // 10001 rows: more than one row group
+	sameAsCSV(t, m.SaveDir, m.Files[2], m.Files[3])
 	tb := parseCSV(t, readFile(t, filepath.Join(m.SaveDir, "dataset_eval.csv")))
 	row := tb.rowOf(t, 1+datasetexport.MaxDecisions/2)
 	if tb.cell(t, row, "calib_h10_net_bps") != "5.5" || tb.cell(t, row, "rh_close_long_net_bps") != "0" || tb.cell(t, row, "shadow1_version") != "cand-a" || tb.cell(t, row, "trial1_arm_id") != "arm-x" {

@@ -89,6 +89,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	if o.operationalSettings != nil {
 		settingsHandler.WithOperationalSettings(o.operationalSettings)
+		if o.researchJobStatus != nil {
+			settingsHandler.WithResearchJobStatus(o.researchJobStatus)
+		}
 		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)
 		engine.DELETE("/ops-settings/:key", settingsHandler.ResetOps)
 	}

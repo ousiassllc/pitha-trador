@@ -6,11 +6,11 @@
 
 ### 3.45 `training_dataset_export`
 
-期間内の `decision_type = 'trader'` の**全判断**（`NONE` を含む）を、1 判断 = 1 行の CSV の学習用データセットとして、**この PC のローカルフォルダ**に書き出す。応答は **manifest だけ**で、行の中身・秘密・設定の値は返さない。**研究専用**で、取引の入力ではない。MCP のツールのうちファイルを書く唯一のもの（DB は書き換えない）。注釈は `readOnlyHint: false`・`destructiveHint: false`。
+期間内の `decision_type = 'trader'` の**全判断**（`NONE` を含む）を、1 判断 = 1 行の CSV と、同じ行・同じ列の Parquet の学習用データセットとして、**この PC のローカルフォルダ**に書き出す。応答は **manifest だけ**で、行の中身・秘密・設定の値は返さない。**研究専用**で、取引の入力ではない。MCP のツールのうちファイルを書く唯一のもの（DB は書き換えない）。注釈は `readOnlyHint: false`・`destructiveHint: false`。
 
 **既定はオフ。** Settings の `research.export.enabled`（`runtime_settings` の JSON 整数 1 / 0、既定 0）がオンのときだけ書く。オフ（未設定・0・壊れた値）の間は何も書かない（フォルダも作らない）。Settings 画面か、MCP の `settings_set`（研究用のスイッチ 3 つだけがホワイトリストに入っている。保持期間・昇格の基準は入っていない）から変える。このツールがオンにすることはない。
 
-書き先は引数で指定できない。DB ファイルと同じフォルダの `exports/<dataset_id>/`（`dataset_id` は内容のハッシュから決まる）。フォルダは `0700`、ファイルは `0600`。
+書き先は引数で指定できない。DB ファイルと同じフォルダの `exports/<dataset_id>/`（`dataset_id` は内容のハッシュと期間・分け方から決まる）。フォルダは `0700`、ファイルは `0600`。
 
 引数:
 
@@ -42,10 +42,10 @@
 
 | キー | 内容 |
 |---|---|
-| `schema_version` | `"1"` |
-| `dataset_id` / `dataset_sha256` | `ds-` + 先頭 12 桁 / 全体のハッシュ（スキーマの版と各ファイルのハッシュから） |
+| `schema_version` | `"2"` |
+| `dataset_id` / `dataset_sha256` | `ds-` + 先頭 12 桁 / 全体のハッシュ（スキーマの版・期間 `from` / `to`・分割 `split_at` / `embargo_days`・各ファイルのハッシュから。期間か分割だけが違う書き出しは別の `dataset_id`） |
 | `created_at` | 作成時刻（UTC RFC3339） |
-| `from` / `to` / `split_at` / `embargo_days` | 期間と分割（`split_at` は分割なしで `null`） |
+| `from` / `to` / `split_at` / `embargo_days` | 実際に使った期間と分割（`split_at` は分割なしで `null`）。`dataset_sha256` に入る |
 | `label_version` | `calibration`（2、`horizon_minutes`、`rows_at_other_horizons`）、`research_horizon`（1、`horizons`）、`counterfactual`（2）、`note` |
 | `decisions` / `rows` | 期間の trader 判断の数 / 書き出した行数 |
 | `rows_train` / `rows_eval` / `rows_in_embargo` / `rows_purged` | 上の規則の件数（分割なしは 0） |
@@ -53,14 +53,15 @@
 | `columns` | 列の名前（CSV のヘッダーと同じ順） |
 | `excluded_columns` | 出さない列の一覧（生の板・気配・価格水準・応答の本文・自由文・設定・秘密） |
 | `shadow_versions` / `shadow_versions_omitted` / `trial_arms` / `trial_arms_omitted` | シャドー（最大 3 版）・お試し（最大 4 アーム）のスロットに入った版・アーム（スロット順）と、上限で列にならなかった数 |
-| `files[]` | `dataset_train.csv` / `dataset_eval.csv`（分割なしは `dataset.csv`）ごとの `name` / `rows` / `bytes` / `sha256` |
+| `files[]` | `dataset_train.csv` / `dataset_train.parquet` / `dataset_eval.csv` / `dataset_eval.parquet`（分割なしは `dataset.csv` / `dataset.parquet`）ごとの `name` / `format`（`csv` / `parquet`）/ `rows` / `bytes` / `sha256`。同じ側の CSV と Parquet の `rows` は一致する |
 | `save_dir` | 書き出したフォルダの絶対パス（パスは応答に出してよい） |
 | `notice` | 同上 |
 
-ファイルの SHA-256 が `files[].sha256` と一致し、`dataset_sha256` が `training-dataset.md` §10 の式で再現できる。同じ入力は同じバイト列・同じ `dataset_id` になる。
+ファイルの SHA-256 が `files[].sha256` と一致し、`dataset_sha256` が `training-dataset.md` §10 の式で再現できる。同じ期間・分割・内容は同じバイト列・同じ `dataset_id` になる（Parquet もバイト単位で再現する）。応答は manifest だけで、Parquet の中身（行）も返さない。
 
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規 | issue #1094 |
+| 1.1 | 2026-11-19 | Parquet 出力（`files[].format`）、`dataset_id` に期間と分割を含める、`schema_version` 2 | issue #1121・#1124 |

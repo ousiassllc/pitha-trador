@@ -85,10 +85,11 @@ func TestOnlyTheAdapterImportsTheExportAndItImportsLittle(t *testing.T) {
 		})
 	}
 	allowed := map[string]bool{
-		"github.com/ousiassllc/pitha-trador/internal/config/researchjobsettings":    true, // the switch's key and validation
-		"github.com/ousiassllc/pitha-trador/internal/domain":                        true, // the answer vocabulary
-		"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil":            true, // the stored time layout
-		"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query": true, // the read-only Q and RejectCode
+		"github.com/ousiassllc/pitha-trador/internal/config/researchjobsettings":       true, // the switch's key and validation
+		"github.com/ousiassllc/pitha-trador/internal/domain":                           true, // the answer vocabulary
+		"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil":               true, // the stored time layout
+		"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query":    true, // the read-only Q and RejectCode
+		"github.com/ousiassllc/pitha-trador/internal/service/datasetexport/parquetenc": true, // the Parquet writer (no dataset knowledge)
 	}
 	walkGo(t, "internal/service/datasetexport", func(rel string, src []byte) {
 		for _, imp := range importsOf(t, src) {
@@ -103,6 +104,21 @@ func TestOnlyTheAdapterImportsTheExportAndItImportsLittle(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The Parquet library is used by the Parquet writer only, and nothing outside the export imports it
+// (a second user of the dataset format would be a second place to audit for what it writes).
+func TestOnlyTheParquetWriterImportsTheParquetLibrary(t *testing.T) {
+	const lib = "github.com/parquet-go/parquet-go"
+	for _, dir := range []string{"internal", "cmd"} {
+		walkGo(t, dir, func(rel string, src []byte) {
+			for _, imp := range importsOf(t, src) {
+				if strings.HasPrefix(imp, lib) && !strings.HasPrefix(rel, "internal/service/datasetexport/parquetenc/") {
+					t.Errorf("%s imports %s: only datasetexport/parquetenc may", rel, imp)
+				}
+			}
+		})
+	}
 }
 
 // The package writes no table (no statement but a read) and reads only the tables it documents.

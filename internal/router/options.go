@@ -49,14 +49,15 @@ type options struct {
 	watchlistSource     watchlist.Source
 	homeSource          home.Source
 	trialResults        trialresults.Source
-	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
-	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
-	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
-	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
-	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
-	jevPrompt           jevprompt.Service            // nil until WithJevPromptSettings: no Jev prompt card
-	jevTrial            jevtrial.Service             // nil until WithJevTrialSettings: no model-comparison trial card
-	aiRoles             airoles.Service              // nil until WithAIRoleSettings: no 役割ごとのモデル card
+	secretsStore        settings.SecretsStore            // nil until WithSecretsStore; also gates the Setup Guard
+	operationalSettings settings.OperationalSettings     // nil until WithOperationalSettings: no 運用設定 section
+	brokerSession       settings.BrokerSession           // nil until WithBrokerSession: no 立花 session state
+	mcpSettings         mcpsettings.Admin                // nil until WithMCPSettings: no MCP card
+	mcpWriteGate        mcpsettings.WriteGate            // nil until WithMCPWriteGate: no write section
+	jevPrompt           jevprompt.Service                // nil until WithJevPromptSettings: no Jev prompt card
+	jevTrial            jevtrial.Service                 // nil until WithJevTrialSettings: no model-comparison trial card
+	aiRoles             airoles.Service                  // nil until WithAIRoleSettings: no 役割ごとのモデル card
+	researchJobStatus   settings.ResearchJobStatusSource // nil until WithResearchJobStatus: no 夜間タスクの状態 panel
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource

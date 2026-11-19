@@ -11,6 +11,7 @@ import (
 	repomodel "github.com/ousiassllc/pitha-trador/internal/repository/featuremodel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/featuremodel"
+	"github.com/ousiassllc/pitha-trador/internal/service/researchjobstatus"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
@@ -23,13 +24,23 @@ const ModelRunFrom = 16 * time.Hour
 // the host's time zone.
 var modelJST = time.FixedZone("JST", 9*60*60)
 
-// ModelTask is the research model's nightly training task (issue #1092). It is OFF by
-// default (research.model.enabled): while off - or before 16:00 JST - Run returns
+// ModelTaskName is the maintenance task's name (its last-success date and last failure are stored under it).
+const ModelTaskName = researchjobstatus.ModelTask
+
+// ModelTask is the research model's nightly training task (issues #1092, #1123). It is
+// OFF by default (research.model.enabled): while off - or before 16:00 JST - Run returns
 // maintenance.ErrSkipped before it reads or writes anything, not even the runner's
-// last-success date. When on, one Run trains and records one JST day and returns
-// maintenance.ErrMore while days or old rows are left. See internal/service/featuremodel.
+// last-success date. When on, one Run trains and records one model (ridge or tree, of
+// the 30m, 60m or close label) of one JST day and returns maintenance.ErrMore while
+// runs or old rows are left. See internal/service/featuremodel.
 func ModelTask(db *sql.DB, settings *system.RuntimeSettingsRepository) maintenance.Task {
-	return newModelJob(featuremodel.NewRunner(repomodel.NewRepository(db)), settings, time.Now).task()
+	return newModelJob(newFeatureRunner(db), settings, time.Now).task()
+}
+
+// newFeatureRunner is the runner of the nightly task: the ridge and the tree model of
+// every label horizon (featuremodel.Specs).
+func newFeatureRunner(db *sql.DB) *featuremodel.Runner {
+	return featuremodel.NewRunner(repomodel.NewRepository(db)).WithSpecs(featuremodel.Specs()...)
 }
 
 // modelRunner is what the job needs of featuremodel.Runner.
@@ -48,7 +59,7 @@ func newModelJob(runner modelRunner, settings researchjobsettings.Store, now fun
 }
 
 func (j *modelJob) task() maintenance.Task {
-	return maintenance.Task{Name: "research_model", Label: "研究用モデルの夜間の学習", Run: j.run}
+	return maintenance.Task{Name: ModelTaskName, Label: "研究用モデルの夜間の学習", Run: j.run, TrackFailure: true}
 }
 
 // run does one chunk once the JST time of day has reached ModelRunFrom and the switch
@@ -75,7 +86,7 @@ func (j *modelJob) run(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("nightlyjobs: research model: %w", err)
 	}
-	slog.InfoContext(ctx, "nightlyjobs: research model run", "day", res.Day, "n_train", res.NTrain, "predictions", res.NPredict, "skipped_days", len(res.Skipped), "purged_rows", res.Purged, "more", res.More)
+	slog.InfoContext(ctx, "nightlyjobs: research model run", "day", res.Day, "version", res.Version, "n_train", res.NTrain, "predictions", res.NPredict, "skipped_days", len(res.Skipped), "purged_rows", res.Purged, "more", res.More)
 	if res.More {
 		return maintenance.ErrMore
 	}

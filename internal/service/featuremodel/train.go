@@ -2,12 +2,8 @@ package featuremodel
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"math"
 	"time"
 
@@ -19,15 +15,19 @@ import (
 // rows). It is the normal early-days condition, not a failure: no run is written.
 var ErrInsufficient = errors.New("featuremodel: insufficient training data")
 
-// Source is what Train reads (internal/repository/featuremodel.Repository).
+// Source is what training reads (internal/repository/featuremodel.Repository).
 type Source interface {
-	TrainingDays(ctx context.Context, before string, limit int) ([]string, error)
-	ScanTraining(ctx context.Context, days []string, buckets int, predictDay string, fn func(repo.TrainRow) error) (purged int, err error)
+	TrainingDays(ctx context.Context, horizon, before string, limit int) ([]string, error)
+	ScanTraining(ctx context.Context, horizon string, days []string, buckets int, predictDay string, fn func(repo.TrainRow) error) (purged int, err error)
 }
 
-// Trained is the result of one walk-forward training.
+// Trained is the result of one walk-forward training. Model is the ridge model (the
+// zero value for a tree model); Tree is the tree model (nil for a ridge model).
 type Trained struct {
 	Model Model
+	Tree  *TreeModel
+	// Horizon is the label horizon the model learned.
+	Horizon string
 	// From and To are the first and last JST day that contributed rows; Days how many days did.
 	From, To string
 	Days     int
@@ -40,28 +40,40 @@ type Trained struct {
 	Digest string
 }
 
-// Train fits the model that predicts the JST day predictDay with the hyperparameters p. It reads only the
-// complete label days strictly before predictDay (the most recent p.MaxTrainDays of
-// them) and, of those, only rows whose label was fully known before predictDay began
-// (exit_at < the start of predictDay): nothing from predictDay or later can enter,
-// whatever those rows hold. The rows are read twice in the fixed order (day,
-// snapshot_id) and never held: first for the feature means and deviations, then for
-// the normal equations. The same rows give bit-identical coefficients.
+// Train fits the baseline ridge model, the 30-minute label's: TrainRidge for Horizon.
 func Train(ctx context.Context, src Source, predictDay string, p Params) (*Trained, error) {
+	return TrainRidge(ctx, src, Horizon, predictDay, p)
+}
+
+// window is the walk-forward training window of one horizon as a first scan sees it:
+// the days, the row counts and the feature means and deviations to standardize with.
+type window struct {
+	t         *Trained
+	days      []string
+	mean, std []float64
+}
+
+// scanWindow reads only the complete label days strictly before predictDay (the most
+// recent p.MaxTrainDays of them) and, of those, only rows whose label was fully known
+// before predictDay began (exit_at < the start of predictDay): nothing from
+// predictDay or later can enter, whatever those rows hold, and this holds for every
+// horizon alike (a label's exit is at most the close of its own day). The rows are
+// read in the fixed order (day, snapshot_id) and never held.
+func scanWindow(ctx context.Context, src Source, horizon, predictDay string, p Params) (*window, error) {
 	if _, err := time.ParseInLocation(time.DateOnly, predictDay, time.UTC); err != nil {
 		return nil, fmt.Errorf("featuremodel: predicted day %q: %w", predictDay, err)
 	}
-	days, err := src.TrainingDays(ctx, predictDay, p.MaxTrainDays)
+	days, err := src.TrainingDays(ctx, horizon, predictDay, p.MaxTrainDays)
 	if err != nil {
 		return nil, err
 	}
 	if len(days) < p.MinTrainDays {
-		return nil, fmt.Errorf("%w: %d complete label days before %s, need %d", ErrInsufficient, len(days), predictDay, p.MinTrainDays)
+		return nil, fmt.Errorf("%w: %d complete %s label days before %s, need %d", ErrInsufficient, len(days), horizon, predictDay, p.MinTrainDays)
 	}
 	stats := make([]welford, len(repo.Features))
-	t := &Trained{}
+	t := &Trained{Horizon: horizon}
 	seen := map[string]bool{}
-	purged, err := src.ScanTraining(ctx, days, p.SampleBuckets, predictDay, func(r repo.TrainRow) error {
+	purged, err := src.ScanTraining(ctx, horizon, days, p.SampleBuckets, predictDay, func(r repo.TrainRow) error {
 		for i, x := range r.X {
 			if !math.IsNaN(x) {
 				stats[i].add(x)
@@ -88,24 +100,39 @@ func Train(ctx context.Context, src Source, predictDay string, p Params) (*Train
 	}
 	t.Purged, t.Days = purged, len(seen)
 	if t.Days < p.MinTrainDays || t.NLong < p.MinTrainRows || t.NShort < p.MinTrainRows {
-		return nil, fmt.Errorf("%w: %d days with rows, %d LONG and %d SHORT rows before %s (need %d days, %d rows per side)",
-			ErrInsufficient, t.Days, t.NLong, t.NShort, predictDay, p.MinTrainDays, p.MinTrainRows)
+		return nil, fmt.Errorf("%w: %d days with %s rows, %d LONG and %d SHORT rows before %s (need %d days, %d rows per side)",
+			ErrInsufficient, t.Days, horizon, t.NLong, t.NShort, predictDay, p.MinTrainDays, p.MinTrainRows)
 	}
-	m := Model{Mean: map[string]float64{}, Std: map[string]float64{}}
-	mean, std := make([]float64, len(stats)), make([]float64, len(stats))
+	w := &window{t: t, days: days, mean: make([]float64, len(stats)), std: make([]float64, len(stats))}
 	for i := range stats {
-		mean[i], std[i] = stats[i].meanStd()
-		m.Mean[repo.Features[i]], m.Std[repo.Features[i]] = mean[i], std[i]
+		w.mean[i], w.std[i] = stats[i].meanStd()
 	}
-	long, short := newNormalEq(len(stats)), newNormalEq(len(stats))
-	dig := newDigest()
-	z, n := make([]float64, len(stats)), 0
-	_, err = src.ScanTraining(ctx, days, p.SampleBuckets, predictDay, func(r repo.TrainRow) error {
+	return w, nil
+}
+
+// TrainRidge fits the ridge model that predicts the JST day predictDay from the
+// labels of one horizon with the hyperparameters p (see scanWindow for what it may
+// read). A second scan streams the rows into the normal equations. The same rows
+// give bit-identical coefficients.
+func TrainRidge(ctx context.Context, src Source, horizon, predictDay string, p Params) (*Trained, error) {
+	w, err := scanWindow(ctx, src, horizon, predictDay, p)
+	if err != nil {
+		return nil, err
+	}
+	t := w.t
+	m := Model{Mean: map[string]float64{}, Std: map[string]float64{}}
+	for i, name := range repo.Features {
+		m.Mean[name], m.Std[name] = w.mean[i], w.std[i]
+	}
+	long, short := newNormalEq(len(w.mean)), newNormalEq(len(w.mean))
+	dig := newDigest(Spec{Algorithm, horizon}.prefix())
+	z, n := make([]float64, len(w.mean)), 0
+	_, err = src.ScanTraining(ctx, horizon, w.days, p.SampleBuckets, predictDay, func(r repo.TrainRow) error {
 		n++
 		for i, x := range r.X {
 			z[i] = 0 // a missing value standardizes to the training mean
 			if !math.IsNaN(x) {
-				z[i] = (x - mean[i]) / std[i]
+				z[i] = (x - w.mean[i]) / w.std[i]
 			}
 		}
 		if r.HasLong {
@@ -145,41 +172,3 @@ func fit(e *normalEq, side string, lambda float64) (Side, error) {
 	}
 	return s, nil
 }
-
-// digest hashes the ordered training rows: snapshot id, which sides exist, the
-// targets and the feature values (a missing value as its own marker).
-type digest struct {
-	h   hash.Hash
-	buf [8]byte
-}
-
-func newDigest() *digest {
-	d := &digest{h: sha256.New()}
-	_, _ = d.h.Write([]byte(VersionPrefix))
-	return d
-}
-
-func (d *digest) u64(v uint64) {
-	binary.BigEndian.PutUint64(d.buf[:], v)
-	_, _ = d.h.Write(d.buf[:])
-}
-
-func (d *digest) f64(v float64, present bool) {
-	if !present {
-		_, _ = d.h.Write([]byte{0})
-		return
-	}
-	_, _ = d.h.Write([]byte{1})
-	d.u64(math.Float64bits(v))
-}
-
-func (d *digest) row(r repo.TrainRow) {
-	_ = binary.Write(d.h, binary.BigEndian, r.SnapshotID) // hash.Hash.Write never fails
-	d.f64(r.LongNet, r.HasLong)
-	d.f64(r.ShortNet, r.HasShort)
-	for _, x := range r.X {
-		d.f64(x, !math.IsNaN(x))
-	}
-}
-
-func (d *digest) sum() string { return hex.EncodeToString(d.h.Sum(nil)) }

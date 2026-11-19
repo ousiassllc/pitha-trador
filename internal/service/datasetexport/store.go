@@ -113,7 +113,9 @@ func writeFile(path string, data []byte) (err error) {
 }
 
 // verifyExisting compares the existing folder with the dataset about to be written: every data
-// file must hash as the new one and manifest.json must parse and carry the same dataset hash.
+// file must hash as the new one and manifest.json must parse, carry the same dataset hash and be
+// consistent with it (the hash recomputed from the manifest's own schema version, period, split and
+// file hashes is the hash it states: an old specification's manifest is never taken for this one).
 // Anything else (a missing or different file, a symlink, a bad manifest) is a conflict.
 func verifyExisting(dir string, files []encoded, manifest Manifest) (outcome, Manifest, error) {
 	info, err := os.Lstat(dir)
@@ -131,7 +133,8 @@ func verifyExisting(dir string, files []encoded, manifest Manifest) (outcome, Ma
 		return conflict, manifest, nil
 	}
 	var existing Manifest
-	if json.Unmarshal(raw, &existing) != nil || existing.DatasetSHA256 != manifest.DatasetSHA256 {
+	if json.Unmarshal(raw, &existing) != nil || existing.DatasetSHA256 != manifest.DatasetSHA256 ||
+		DatasetHash(existing.SchemaVersion, existing.Spec(), existing.Files) != existing.DatasetSHA256 {
 		return conflict, manifest, nil
 	}
 	return identical, existing, nil
