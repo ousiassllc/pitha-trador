@@ -127,7 +127,7 @@ func (f *Feed) handle(ctx context.Context, sess tachibana.EventSession, symbols 
 	case "FD":
 		for row, items := range n.Rows() {
 			if row >= 1 && row <= len(symbols) {
-				f.merge(symbols[row-1], items, now)
+				f.merge(symbols[row-1], items, now, false)
 			}
 		}
 	case "ST":

@@ -24,14 +24,21 @@ func TestResearchHorizonLabelsAreReadOnlyByTheirRecorderAndTheResearchTool(t *te
 		"domain/researchlabel",
 	}
 	readers := []string{
-		"internal/repository/researchlabel/",                  // the record's own repository
-		"internal/service/researchlabel/",                     // the recorder
-		"internal/bootstrap/researchlabeljob/",                // wires the recorder into the maintenance task
-		"internal/bootstrap/services_build.go",                // registers that task (one line)
-		"internal/domain/researchlabel/",                      // the record's value types
-		"internal/service/paperresultsmcp/researchdiag/",      // the read-only MCP query
-		"internal/service/paperresultsmcp/jev_models_tool.go", // registers that tool (next to the other read-only diagnostic tools)
-		"db/migrations/",                                      // the schema
+		"internal/repository/researchlabel/",                        // the record's own repository
+		"internal/service/researchlabel/",                           // the recorder
+		"internal/bootstrap/researchlabeljob/",                      // wires the recorder into the maintenance task
+		"internal/bootstrap/jquantswire/",                           // J-Quants (#1093): re-labels research labels with J-Quants exits and deletes those rows on cancellation
+		"internal/bootstrap/services_build.go",                      // registers that task (one line)
+		"internal/domain/jquants/",                                  // J-Quants (#1093): its value types name the exit_source column
+		"internal/domain/researchlabel/",                            // the record's value types
+		"internal/service/paperresultsmcp/researchdiag/",            // the read-only MCP query
+		"internal/service/paperresultsmcp/experiment/labelcompare/", // the read-only label-based experiment comparison (issue #1088)
+		"internal/service/paperresultsmcp/jev_models_tool.go",       // registers that tool (next to the other read-only diagnostic tools)
+		"db/migrations/",                                            // the schema
+		// Research-only readers of the labels (#1090, #1092, #1094): each has its own isolation test of its own tables.
+		"internal/repository/featuremodel/", "internal/service/featuremodel/", // the research model's training rows
+		"internal/service/paperresultsmcp/ledgerdiag/", // the candidate ledger's 30m / 60m / close horizons
+		"internal/service/datasetexport/",              // the training dataset's research label columns
 	}
 
 	for _, dir := range []string{"internal", "cmd"} {
@@ -139,9 +146,8 @@ func TestServicesBuildOnlyRegistersTheResearchMaintenanceTask(t *testing.T) {
 			continue
 		}
 		switch {
-		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`:
-		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchfxjob"`: // the FX record's own task (its isolation is pinned in repository/researchfx)
-		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchfxjob.New(state.DB, s.Settings).Task())"):
+		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"`,
+			strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchquotejob"`: // #1083's own task (its isolation test pins it)
 		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task())"):
 			calls++
 		default:

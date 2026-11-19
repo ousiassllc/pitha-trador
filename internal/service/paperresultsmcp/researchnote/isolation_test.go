@@ -28,8 +28,8 @@ func TestResearchNotesAreReadAndWrittenOnlyByTheirTools(t *testing.T) {
 	}
 	allowed := []string{
 		"internal/service/paperresultsmcp/researchnote/",            // the record's own code
-		"internal/service/paperresultsmcp/mcpset/research_notes.go", // the MCP writer's two transactions and the screen's list
-		"internal/service/paperresultsmcp/research_note_tools.go",   // registers the notetool specs in the dispatch table
+		"internal/service/paperresultsmcp/mcpset/research_notes.go", // the Settings screen's list
+		"internal/service/paperresultsmcp/ext_tools.go",             // registers the notetool definitions in the dispatch table
 		"internal/service/paperresultsmcp/errors.go",                // the tools' error-code texts (they name the list tool)
 		"internal/web/handler/mcpsettings/research_notes",           // the Settings screen's read-only list
 		"internal/web/organisms/mcp/research_notes",                 // its view

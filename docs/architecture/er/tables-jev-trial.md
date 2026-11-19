@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev 意思決定モデル比較のトライアル）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。issue #1059）と `jev_trial_skips`（マイグレーション `000055`。issue #1062）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
+`docs/architecture/er.md` から分割した章。対象: `jev_trial_decisions`（マイグレーション `000054`。`cost_source` に `subscription` を足す作り直しが `000058`。issue #1081）と `jev_trial_skips`（マイグレーション `000055`。issue #1062）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様（フロー・費用の数え方・隔離）は `docs/architecture/overview/integrations-jev-trial.md`。
 
 ## jev_trial_decisions
 
@@ -36,11 +36,11 @@ erDiagram
 | jev_decision_id | integer | NOT NULL, FK → `jev_decisions.id` | 並べたライブの判定。ライブの答えは同じ行で見る |
 | arm_id | varchar(48) | NOT NULL, CHECK 空でない | アーム（`jev.trial.arms` の `id`。例 `or-clef-flash-v3`）。#1010 のアームへ写せる文字列 id |
 | prompt_version | varchar(40) | NOT NULL, CHECK 空でない | 聞いた Trader プロンプトの版（`internal/service/jev/prompts.go` の登録名。第 1 段階はライブと同じ `trader-v3`） |
-| provider | varchar(40) | NOT NULL, 既定 '' | アームのプロバイダー（`openrouter`） |
+| provider | varchar(40) | NOT NULL, 既定 '' | アームのプロバイダー（`openrouter`／`custom`／`codex_chatgpt`。issue #1080・#1081）。`INDEX (provider, created_at)`（`000058`）は、ChatGPT のサブスクの 1 日の呼び出し回数・トークン数の集計用 |
 | requested_model | varchar(100) | NOT NULL, CHECK 空でない | リクエストに送ったモデル id |
 | served_model / served_provider / response_id | varchar | NOT NULL, 既定 '' | 応答が返したモデル・実際に処理したプロバイダー・応答 id。応答が無い行は空（OpenRouter は処理元を切り替えうるので、送ったモデルと別に残す） |
 | status | varchar(8) | NOT NULL, CHECK IN | `ok`＝全問に答えた／`failed`＝応答が得られなかった（通信・HTTP エラー・不正な応答）／`refused`＝全問を拒否／`partial`＝一部の質問を拒否 |
-| failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response`）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
+| failure_code | varchar(24) | NOT NULL, 既定 '' | `status='failed'` のときの短い固定分類（`http_402` / `http_403` / `http_413` / `http_429` / `http_529` / `http_4xx` / `http_5xx` / `timeout` / `transport` / `invalid_response` / `usage_limit`＝Codex の失敗の文面が使用量の上限のものに一致した（一致のラベルで、測定ではない）/ `codex_failed`＝Codex の呼び出しが`turn.failed`か非 0 終了。文面は残さない）。それ以外は空（CHECK `(status='failed') = (failure_code<>'')`） |
 | http_status | integer | NULL可 | HTTP エラー応答のステータス。それ以外は NULL |
 | error_excerpt | varchar(200) | NOT NULL, 既定 '' | エラーの**短い抜粋**（上限 200 バイト）。エラー本文の全文は残さない。設定済みの OpenRouter キー文字列（部分一致）・`sk-…`・`Bearer …` は `[redacted]` に伏せる |
 | direction | varchar(10) | NULL可, CHECK | `LONG` / `SHORT` / `NONE`。拒否・欠落した質問は **NULL**（`NONE` や 0 で補わない） |
@@ -52,7 +52,7 @@ erDiagram
 | latency_ms | integer | NOT NULL, 既定 0 | 呼び出しの総所要時間（1 回きり。再試行しない） |
 | input_tokens / output_tokens | integer | NULL可, CHECK 0 以上 | 応答の `usage`。応答が無い・`usage` が無い行は NULL |
 | cost_usd | numeric(12,8) | NULL可, CHECK 0 以上 | 報告値 `usage.cost`、または定価×入力トークンの推定。**どちらも無ければ NULL（0 ではない）** |
-| cost_source | varchar(20) | NOT NULL, CHECK IN | `reported`＝応答の `usage.cost`／`list_price_estimate`＝アームの定価（1M 入力トークンあたり）×入力トークン数の推定／`unknown`＝どちらも無い |
+| cost_source | varchar(20) | NOT NULL, CHECK IN | `reported`＝応答の `usage.cost`／`list_price_estimate`＝アームの定価（1M 入力トークンあたり）×入力トークン数の推定／`unknown`＝どちらも無い／`subscription`＝ChatGPT のサブスク（Codex CLI。USD は発生しない。`cost_usd` は NULL かつ `counted_cost_usd` は 0 に CHECK で固定。`000058`） |
 | counted_cost_usd | numeric(12,8) | NOT NULL, 既定 0 | **1 日の費用上限の判定に数えた額**。`reported`＝報告値、`list_price_estimate`＝推定値（処理先を固定していないアーム〈`provider_only` なし〉は、定価と最悪単価の高い方で数えた額。`cost_usd` は定価での推定額のまま）、`unknown`＝最悪値側の単価（`jevtrialsettings.WorstCaseUSDPerMtok`＝0.24 USD/百万トークン）で数えた額。`cost_usd` が NULL でもこの列は 0 と限らない。4xx 応答（413 を除く）と 529 は課金されない前提で 0（前提であり実測ではない。5xx・413・タイムアウト等は最悪値側で数える） |
 | request_bytes / state_bytes | integer | NOT NULL, 既定 0 | リクエスト本文・`state` の大きさ（バイト）。切り詰め疑いを後から判断する材料 |
 | truncation_suspected | integer | NOT NULL, 既定 0, CHECK IN (0, 1) | 報告された入力トークン数に対してリクエストが大きすぎる（`request_bytes / input_tokens` が `trial.TruncationSuspectBytesPerToken`＝6 を超える。未計測の目安）とき 1。**疑いの印であって断定ではない**。Clef 系の切り詰めの有無が実測できるまで、同じ入力での公平な比較とは扱わない |
@@ -91,7 +91,7 @@ erDiagram
 | id | integer | PK, AUTOINCREMENT | |
 | jev_decision_id | integer | NOT NULL, FK → `jev_decisions.id` | 見送ったライブの判定 |
 | arm_id | varchar(48) | NOT NULL, CHECK 空でない | 見送ったアーム（`jev.trial.arms` の `id`） |
-| reason | varchar(40) | NOT NULL, CHECK 空でない | 見送りの理由の固定コード（`jevtrial.SkipReasons`。コード側が検証する。`concurrency_full` / `min_interval` / `daily_cap_overall` / `daily_cap_arm` / `key_not_set` / `prompt_version_unregistered` / `stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other` / `throttled` / `check_failed`）。意味は `architecture/overview/integrations-jev-trial.md` |
+| reason | varchar(40) | NOT NULL, CHECK 空でない | 見送りの理由の固定コード（`jevtrial.SkipReasons`。コード側が検証する。`concurrency_full` / `min_interval` / `daily_cap_overall` / `daily_cap_arm` / `key_not_set` / `prompt_version_unregistered` / `stopped_payment_required` / `stopped_forbidden` / `stopped_failure_cap` / `stopped_other` / `throttled` / `check_failed` / `provider_disabled` / `provider_busy` / `not_logged_in` / `stopped_usage_limit` / `stopped_provider_failed` / `daily_cap_calls` / `daily_cap_tokens`）。意味は `architecture/overview/integrations-jev-trial.md` |
 | created_at | text | NOT NULL | 見送りを決めた時刻（UTC の RFC3339）。`jev_trial_cost` の今日の見送りは **JST の日**で切る |
 
 制約・インデックス: `UNIQUE (jev_decision_id, arm_id)`（同じ組の 2 回目は無視。最初の理由が残る）、`INDEX (created_at)`。ライブの判定を消す処理は無い（保持の対象外）ため、外部キーの削除時の動きは指定しない。読む側（MCP の `jev_trial_compare` / `jev_trial_cost`）は件数だけを返し、行は返さない。
@@ -103,12 +103,16 @@ erDiagram
 | キー | 値 | 意味 |
 |------|----|------|
 | `jev.trial.enabled` | 整数 `1` / `0` | トライアルの有効。**行が無い・壊れている値は無効（既定）** |
-| `jev.trial.arms` | JSON 配列（`Arm`） | 比較するアーム（`id` / `provider` / `model` / `prompt_version` / 任意の `daily_cost_cap_usd` / `list_price_usd_per_mtok` / `provider_only` / `data_collection` / `zdr`）。**既定は空**（アームが無ければ何も呼ばない）。最大 8 アーム、`id` は重複不可 |
+| `jev.trial.arms` | JSON 配列（`Arm`） | 比較するアーム（`id` / `provider` / `model` / `prompt_version` / 任意の `daily_cost_cap_usd` / `list_price_usd_per_mtok` / `provider_only` / `data_collection` / `zdr`）。**既定は空**（アームが無ければ何も呼ばない）。最大 8 アーム、`id` は重複不可。保存は Settings 画面のアームのフォーム（1 アーム 1 カード）から行い、保存前の検証は保存済み値を読むときと同じ`jevtrialsettings.ValidateArms`（1 つでも不正なら何も保存しない） |
 | `jev.trial.daily_cost_cap_usd` | JSON 数値 | 全アーム合計の 1 日（JST）あたりの費用の上限。無ければ `jevtrialsettings.DefaultDailyCostCapUSD`（0.10 USD）。0 以下・100 USD 超は保存できない |
 | `jev.trial.halt` | JSON オブジェクト | トライアル全体をその日（JST）止めた記録（`{"date","reason","spent_usd","cap_usd","status","at"}`。`reason` は `daily_cost_cap` / `payment_required`＝HTTP 402）。翌日（JST）に再開する |
 | `jev.trial.halt.<arm>` | JSON オブジェクト | そのアームをその日（JST）止めた記録（`reason` は `arm_cost_cap` / `daily_failure_cap` / `forbidden`＝HTTP 403）。翌日（JST）に再開する |
 | `jev.trial.failures.<arm>` | JSON オブジェクト | そのアームのその日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`DailyFailureCap`（20 回。シャドーと同じ定数）に達するとその日そのアームを止める |
 | `jev.trial.throttle.<arm>` | JSON オブジェクト | そのアームが 429/529 で止まった最後の記録（`{"date","count","status","reason","at","until"}`）。`until`（15 分後。シャドーと同じ待ち時間）まで呼ばない |
+| `jev.trial.codex.enabled` | 整数 `1` / `0` | ChatGPT のサブスク（`codex_chatgpt`）のアームのスイッチ。**行が無い・壊れている値は無効（既定）**。オフの間はアームを保存できず、呼ばない（issue #1081） |
+| `jev.trial.codex.daily_call_cap` / `jev.trial.codex.daily_token_cap` | JSON 整数 | Codex の 1 日（JST）の呼び出し回数・トークン数（入力＋出力）の上限。無ければ 30 回・500,000 トークン |
+| `jev.trial.codex.halt` | JSON オブジェクト | Codex プロバイダー全体の停止記録（`{"reason","until","until_known","at","calls","tokens"}`。`reason` は `usage_limit` / `failed` / `call_cap` / `token_cap`）。`until` まで呼ばない（再開時刻が分からなければ JST のその日の終わり） |
+| `jev.trial.codex.login` | JSON オブジェクト | 最後のログイン確認（`{"state","at"}`。`state` は `chatgpt` / `logged_out` / `other_auth` / `unavailable`）。アプリが書き、画面と MCP が読む。CLI の出力・認証情報は入れない |
 
 アームごとの上限（`Arm.daily_cost_cap_usd`。省略時 0.05 USD）と全体の上限（`jev.trial.daily_cost_cap_usd`）は両方とも判定し、どちらかに達すると止まる。
 
@@ -118,3 +122,4 @@ erDiagram
 |----|------|---------|---------|
 | 1.0 | 2026-11-13 | 新規作成。`jev_trial_decisions`（`000054`）と、関連する `runtime_settings` のキー（`jev.trial.*`） | issue #1059 |
 | 1.1 | 2026-11-14 | `jev_trial_skips`（`000055`。呼ばなかった比較の理由別の記録）を追加。`error_excerpt` の伏せ字に設定済みキーの部分一致を追記。`counted_cost_usd` の数え方（定価に依らない）を追記 | issue #1062 / #1068 / #1065 |
+| 1.2 | 2026-11-15 | マイグレーション`000058`: `cost_source`に`subscription`（ChatGPT のサブスク。`cost_usd` NULL・`counted_cost_usd` 0）を追加し、`INDEX (provider, created_at)`を追加。`provider`に`codex_chatgpt`、失敗コード・見送り理由、`jev.trial.codex.*`のキーを追加 | issue #1081 |

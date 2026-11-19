@@ -15,6 +15,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -22,8 +24,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
-	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchonlysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -245,8 +247,25 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
-	case researchfxsettings.IsKey(key):
+	case isResearchFX(key):
 		return validateResearchFX(key, encoded)
+	case researchonlysettings.IsKey(key):
+		if err := researchonlysettings.Validate(key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case jquantssettings.IsKey(key):
+		// Each value stands alone: only its own value is checked.
+		if _, err := jquantssettings.Parse(key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case disclosuresrcsettings.IsKey(key):
+		// Each value stands alone: only its own value is checked.
+		if err := disclosuresrcsettings.Validate(key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case watchsettings.IsKey(key):
 		// Each value stands alone: only its own range is checked. The watch
 		// size is refused above the kabu stream cap; the information API limiter

@@ -36,12 +36,12 @@ type connection struct {
 var settingsConnections = []connection{
 	{
 		id:          "jev",
-		name:        "Jev",
-		description: "売買判断を行う AI（Jev）への接続です。API キーは必須です。接続先 URL とモデル名は未設定なら既定値を使います。",
+		name:        "独自 API（Jev）",
+		description: "独自 API（URL とキー）への接続で、売買判断を行う AI（Jev）が使います。API キーは必須です。接続先 URL とモデル名は未設定なら既定値を使います。役割ごとに別のプロバイダーを選んでいても、独自 API を選んだ役割はこの接続を使います。",
 		fields: []settingsField{
 			{config.KeyJevAPIKey, "API キー"},
 			{config.KeyJevBaseURL, "接続先 URL（任意）"},
-			{config.KeyJevModel, "モデル名（任意）"},
+			{config.KeyJevModel, "Jev のモデル名（任意。「役割ごとのモデル」で指定がなければこれを使います）"},
 		},
 	},
 	{
@@ -113,11 +113,27 @@ var settingsConnections = []connection{
 	},
 	{
 		id:          "openrouter",
-		name:        "OpenRouter（モデル比較）",
-		description: "モデル比較トライアルが、比較対象のモデルを呼び出すための OpenRouter への接続です（任意）。入力しなくてもアプリは通常どおり動きます。売買判断を行う Jev の接続とは別です。",
+		name:        "OpenRouter",
+		description: "OpenRouter への接続です（任意）。「役割ごとのモデル」で OpenRouter を選んだ役割と、モデル比較トライアルのアームがこの 1 つのキーで呼びます。入力しなくてもアプリは通常どおり動きます。独自 API（Jev）の接続とは別です。",
 		fields: []settingsField{
 			{config.KeyOpenRouterAPIKey, "API キー（任意）"},
 			{config.KeyOpenRouterBaseURL, "接続先 URL（任意）"},
+		},
+	},
+	{
+		id:          "jquants",
+		name:        "J-Quants（日足・分足）",
+		description: "J-Quants から日足・分足を研究専用の表へ取り込むための API キーです（任意）。入力しなくてもアプリは通常どおり動き、キーが未設定のあいだは J-Quants へ何も送りません。取り込みの有効・無効と契約の内容は、運用設定の「J-Quants（日足・分足の取り込み）」で行います。",
+		fields: []settingsField{
+			{config.KeyJQuantsAPIKey, "API キー（任意）"},
+		},
+	},
+	{
+		id:          "edinet",
+		name:        "EDINET（開示書類の一覧）",
+		description: "EDINET API（金融庁）から書類一覧のメタデータを研究専用の表へ記録するための API キーです（任意）。入力しなくてもアプリは通常どおり動き、キーが未設定のあいだは EDINET へ何も送りません。書類の本文は取得しません。記録の有効・無効は、運用設定の「開示・ニュースの追加の情報源（EDINET・立花）」で行います。",
+		fields: []settingsField{
+			{config.KeyEdinetAPIKey, "API キー（任意）"},
 		},
 	},
 }
@@ -128,7 +144,7 @@ var settingsConnections = []connection{
 var defaultedKeys = []string{
 	config.KeyJevBaseURL, config.KeyJevModel,
 	config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
-	config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
+	config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL, config.KeyJQuantsAPIKey, config.KeyEdinetAPIKey,
 	config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 }

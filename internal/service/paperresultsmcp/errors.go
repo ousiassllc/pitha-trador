@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
@@ -43,6 +44,11 @@ const (
 	// The research-note tools' codes (issue #1095).
 	CodeResearchNoteNotFound        Code = "research_note_not_found"
 	CodeResearchNoteVersionConflict Code = "research_note_version_conflict"
+	// The research-backtest tools' codes (issue #1086).
+	CodeBacktestNotFound    Code = "backtest_not_found"
+	CodeBacktestUnavailable Code = "backtest_unavailable"
+	// promotion_checklist's code: a candidate / current kind or combination it cannot check (issue #1122).
+	CodeUnsupportedCandidateKind Code = "unsupported_candidate_kind"
 )
 
 type codeInfo struct {
@@ -74,6 +80,10 @@ var codeTable = map[Code]codeInfo{
 	CodeExperimentNotFound:   {http.StatusNotFound, "その experiment_id の実験はありません。experiments_list で確認してください。"},
 	CodeExperimentNotRunning: {http.StatusConflict, "この実験はもう終わっています（再び開くことはできません）。"},
 	CodeResearchNoteNotFound: {http.StatusNotFound, "その note_id の研究ノートはありません。research_notes_list で確認してください。"}, CodeResearchNoteVersionConflict: {http.StatusConflict, "ノートはすでに別の版に更新されています。research_note_get で最新の版を読み、その current_version を expected_version にして出し直してください。"},
+	CodeBacktestNotFound:    {http.StatusNotFound, "その run_id のバックテストはありません。backtest_list で確認してください。"},
+	CodeBacktestUnavailable: {http.StatusServiceUnavailable, "バックテストを実行できません（再生用のデータを読む設定が無い、または読めません）。"},
+
+	CodeUnsupportedCandidateKind: {http.StatusUnprocessableEntity, "この候補の種類・組み合わせは昇格チェックリストでは比べられません。error.data.detail の理由とツールの説明を確認してください。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.
@@ -84,7 +94,7 @@ type toolError struct {
 	// validator reason (it quotes the caller's own value and the accepted range;
 	// no whitelisted setting is secret), and the order-proposal tools'
 	// invalid_argument / limit_exceeded reasons (they name the argument and the
-	// rule, never a value).
+	// rule, never a value), and unsupported_candidate_kind's fixed reason.
 	detail string
 }
 
@@ -102,17 +112,32 @@ func fail(code Code) *toolError { return &toolError{code: code} }
 // failDetail is fail with a client-visible detail (see toolError.detail).
 func failDetail(code Code, detail string) *toolError { return &toolError{code: code, detail: detail} }
 
+// unsupportedKind is promotion_checklist's "this kind or combination cannot be checked" failure
+// (error.data.detail is its fixed reason, never the caller's value), or nil for any other error.
+func unsupportedKind(err error) *toolError {
+	var u interface{ UnsupportedKind() string }
+	if errors.As(err, &u) {
+		return failDetail(CodeUnsupportedCandidateKind, u.UnsupportedKind())
+	}
+	return nil
+}
+
 // classify maps any error from a tool run to its spec code. ctx is the
 // per-call context: its deadline decides query_timeout even when the driver
 // reports the interruption as a generic error.
 func classify(ctx context.Context, err error) *toolError {
 	var te *toolError
 	var ce query.CodedError
+	if ue := unsupportedKind(err); ue != nil {
+		return ue
+	}
 	switch {
 	case errors.As(err, &te):
 		return te
 	case errors.As(err, &ce):
 		return &toolError{code: Code(ce.ErrorCode()), detail: ce.ErrorDetail(), cause: err}
+	case errors.Is(err, experiment.ErrNotFound): // a promotion_checklist experiment candidate that was never recorded
+		return fail(CodeExperimentNotFound)
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return &toolError{code: CodeQueryTimeout, cause: err}
 	case errors.Is(err, query.ErrLimitExceeded):

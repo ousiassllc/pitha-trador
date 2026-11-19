@@ -74,7 +74,7 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 
 #### `fx_context`（`fx_symbol` を指定したとき）
 
-引数 `fx_symbol`（任意。`USD_JPY` のような通貨ペア）を指定すると、各 cohort に `fx_context` を足す。研究用の為替 1 分足の記録（`research_fx_candles`。`docs/api/endpoints/paper-results-mcp-research-fx.md`）を**読むだけ**で、記述のみ（しきい値なし・取引には使わない）。**指定しなければ `fx_context` というキーは出ず、応答はこの引数が無かった頃とバイト単位で同じ**（記録の有無にもよらない）。指定しても `fx_context` 以外の値は変わらない。
+引数 `fx_symbol`（任意。`USD_JPY` のような通貨ペア）を指定すると、各 cohort に `fx_context` を足す。研究用の為替 1 分足の記録（`research_fx_candles`。`docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md`）を**読むだけ**で、記述のみ（しきい値なし・取引には使わない）。**指定しなければ `fx_context` というキーは出ず、応答はこの引数が無かった頃とバイト単位で同じ**（記録の有無にもよらない）。指定しても `fx_context` 以外の値は変わらない。
 
 | キー | 内容 |
 |---|---|

@@ -11,7 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
-// Description is the tool's description (docs/api/endpoints/paper-results-mcp-research-fx.md §3.35).
+// Description is the tool's description (docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md §3.46).
 const Description = "研究用の為替 1 分足の記録の読み取り専用の集計（取引の入力ではない）: 通貨ペア（系列）ごとに、期間（JST の GMO 取引日。06:00 JST 切り替え）内の足の件数・" +
 	"最初と最後の足の開始時刻（UTC）・売値（BID）だけ／買値（ASK）だけの分の数、取引日の内訳（recorded＝足のある日、market_closed＝GMO が答えたが足が 0 本の日＝土日・休日など市場休みで欠けではない、" +
 	"missing＝記録を始めた日以降で取引日が終わっているのに印の無い日＝まだ取っていない・取得失敗・取得期間（直近の数日）切れで、欠け）、足のある日の最初と最後の足の間の欠け（interior_gaps: 連続した欠けの start・end・minutes。件数は上限つき）。" +

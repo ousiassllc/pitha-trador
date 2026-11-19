@@ -79,14 +79,30 @@ const (
 	KeyTachibanaDemoAuthID         = "TACHIBANA_DEMO_AUTH_ID"
 	KeyTachibanaProdAuthID         = "TACHIBANA_PROD_AUTH_ID"
 	KeyTachibanaDemoSecondPassword = "TACHIBANA_DEMO_SECOND_PASSWORD"
-	// KeyOpenRouterAPIKey/KeyOpenRouterBaseURL supply the Jev model-comparison
-	// trial's arms (internal/service/jev/trialwire; issue #1059). Both are
+	// KeyOpenRouterAPIKey/KeyOpenRouterBaseURL are the OpenRouter provider's
+	// connection (issue #1080): the Jev model-comparison trial's OpenRouter arms
+	// (internal/service/jev/trialwire; issue #1059) and every AI role set to
+	// OpenRouter (internal/config/airole) call with them. Both are
 	// optional: unset leaves the trial inert (the app still starts), and they
 	// are never part of RequiredSecretKeys, so the Setup Guard does not ask
-	// for them. They are independent of the live Jev keys. An empty base URL
+	// for them. They are independent of the live Jev keys (the live Jev uses them
+	// only when the Settings screen sets its role to OpenRouter). An empty base URL
 	// makes the trial use OpenRouter's public endpoint.
 	KeyOpenRouterAPIKey  = "OPENROUTER_API_KEY"
 	KeyOpenRouterBaseURL = "OPENROUTER_BASE_URL"
+	// KeyEdinetAPIKey is EDINET API v2's Subscription-Key (issue #1096), the
+	// key of the EDINET document-list recorder (disclosure source records). It is
+	// optional: unset, the recorder sends no request (and it is also off until
+	// disclosure_src.edinet.enabled is switched on). It is never part of
+	// RequiredSecretKeys. EDINET carries the key in the query string, so no URL
+	// of its requests is ever logged or stored.
+	KeyEdinetAPIKey = "EDINET_API_KEY"
+	// KeyJQuantsAPIKey is the J-Quants API V2 key (issue #1093), sent in the
+	// x-api-key header of the read adapter (internal/service/marketdata/jquants).
+	// It is optional: unset, the adapter sends no request (it is also off until
+	// jquants.enabled is switched on). It is never part of RequiredSecretKeys,
+	// and never logged, returned by the MCP or stored in a research table.
+	KeyJQuantsAPIKey = "JQUANTS_API_KEY"
 )
 
 // Switch values of KeyNewsFeedEnabled.
@@ -105,7 +121,7 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 // as missing.
 var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey, KeyNewsFeedEnabled,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL,
-	KeyOpenRouterAPIKey, KeyOpenRouterBaseURL,
+	KeyOpenRouterAPIKey, KeyOpenRouterBaseURL, KeyEdinetAPIKey, KeyJQuantsAPIKey,
 	KeyTachibanaDemoAuthID, KeyTachibanaProdAuthID, KeyTachibanaDemoSecondPassword}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
@@ -168,6 +184,12 @@ type Secrets struct {
 	// KeyOpenRouterAPIKey); empty means the model-comparison trial cannot run.
 	OpenRouterAPIKey  string
 	OpenRouterBaseURL string
+	// EdinetAPIKey is optional (see KeyEdinetAPIKey); empty means the EDINET
+	// document-list recorder sends no request.
+	EdinetAPIKey string
+	// JQuantsAPIKey is optional (see KeyJQuantsAPIKey); empty means the J-Quants
+	// read adapter sends no request.
+	JQuantsAPIKey string
 	// TachibanaDemoAuthID / TachibanaProdAuthID are the 立花 認証ID per
 	// environment. The デモ 第二暗証番号 is unexported so it can only leave
 	// Secrets through TachibanaCredentials, which withholds it in 本番.
@@ -264,6 +286,8 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		OpusBaseURL:       values[KeyOpusBaseURL],
 		OpenRouterAPIKey:  values[KeyOpenRouterAPIKey],
 		OpenRouterBaseURL: values[KeyOpenRouterBaseURL],
+		EdinetAPIKey:      values[KeyEdinetAPIKey],
+		JQuantsAPIKey:     values[KeyJQuantsAPIKey],
 
 		TachibanaDemoAuthID:         values[KeyTachibanaDemoAuthID],
 		TachibanaProdAuthID:         values[KeyTachibanaProdAuthID],

@@ -142,13 +142,13 @@ jobs:
       - name: go test (sleep guard keeper, windows)
         run: go test -run 'TestWindowsKeeper' ./internal/service/sleepguard
       # The Jev model-comparison trial and its Settings section run on the
-      # Windows app too (issue #1071): runner, wire client, Settings service,
+      # Windows app too (issue #1071; the Codex CLI client and its flow tests, issue #1081): runner, wire clients, Settings service,
       # handler, keys and the SQLite repository run natively here. Plain
       # `go test` (no -race, no -count=N) to keep this job short: locally trialflow
       # takes ~7 s and jevtrial ~3 s, while the Linux job already runs them with
       # -race. evalflow is out (shadow, not the trial; ~475 s at -race -count=5).
       - name: go test (jev trial / settings, windows)
-        run: go test ./internal/service/jev/trial ./internal/service/jev/trialwire ./internal/service/jev/trialflow ./internal/service/jevtrial ./internal/web/handler/jevtrial ./internal/config/jevtrialsettings
+        run: go test ./internal/service/jev/trial ./internal/service/jev/trialwire ./internal/service/jev/trialflow ./internal/service/jev/codexwire ./internal/service/jev/codexflow ./internal/service/jevtrial ./internal/web/handler/jevtrial ./internal/config/jevtrialsettings
       - name: go test (jev trial repository, windows)
         run: go test -run 'TestTrialRepository' ./internal/repository/judgement
 

@@ -60,6 +60,26 @@ func Text(enabled bool) string {
 // DefaultSymbols returns the default pairs (a new slice).
 func DefaultSymbols() []string { return []string{DefaultSymbolsText} }
 
+// DefaultText is the stored-form text of key while nothing is stored.
+func DefaultText(key string) string {
+	if key == KeyEnabled {
+		return Text(DefaultEnabled)
+	}
+	return DefaultSymbolsText
+}
+
+// Validate checks one stored value of key (the switch, or the pairs); each
+// value stands alone.
+func Validate(key, jsonValue string) error {
+	var err error
+	if key == KeyEnabled {
+		_, err = ParseEnabled(jsonValue)
+	} else {
+		_, err = ParseSymbols(jsonValue)
+	}
+	return err
+}
+
 // ParseEnabled decodes the runtime_settings value of KeyEnabled (the JSON
 // integer 0 or 1).
 func ParseEnabled(jsonValue string) (bool, error) {

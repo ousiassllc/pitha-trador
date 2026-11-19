@@ -43,7 +43,7 @@ const (
 // Actor of a version row: the MCP is the only writer.
 const ActorMCP = "mcp"
 
-// Limits (the CHECKs of migration 000057). Text limits count characters.
+// Limits (the CHECKs of migration 000067). Text limits count characters.
 const (
 	MaxQuestionRunes      = 500
 	MaxHypothesisRunes    = 1000

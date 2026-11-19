@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote/notetool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/testkit"
 )
 
@@ -52,7 +53,7 @@ func TestResearchNotesSectionIsAReadOnlyList(t *testing.T) {
 	t.Cleanup(func() { _ = w.Close() })
 	at := time.Date(2026, 10, 14, 1, 30, 0, 0, time.UTC)
 	w.SetClock(func() time.Time { return at })
-	first, err := w.CreateResearchNote(t.Context(), "100.64.0.9", researchnote.Fields{
+	first, err := notetool.CreateNote(t.Context(), w, "100.64.0.9", researchnote.Fields{
 		Question: "出来高と 30 分リターンの関係", Hypothesis: "出来高が増えると改善する", ResultSummary: "コスト控除後は改善せず",
 		Conclusion: researchnote.ConclusionUnsupported, Tags: []string{"volume", "horizon"},
 		EvidenceLinks: []researchnote.Evidence{{Kind: researchnote.KindExperimentID, Ref: "12"}},
@@ -61,11 +62,11 @@ func TestResearchNotesSectionIsAReadOnlyList(t *testing.T) {
 		t.Fatal(err)
 	}
 	at = at.Add(time.Hour)
-	if _, err := w.CreateResearchNote(t.Context(), "100.64.0.9", researchnote.Fields{Question: "スプレッドとコスト"}); err != nil {
+	if _, err := notetool.CreateNote(t.Context(), w, "100.64.0.9", researchnote.Fields{Question: "スプレッドとコスト"}); err != nil {
 		t.Fatal(err)
 	}
 	at = at.Add(time.Hour)
-	if _, err := w.UpdateResearchNote(t.Context(), "100.64.0.9", first.ID, 1, researchnote.Patch{Conclusion: new(researchnote.ConclusionSupported)}); err != nil {
+	if _, err := notetool.UpdateNote(t.Context(), w, "100.64.0.9", first.ID, 1, researchnote.Patch{Conclusion: new(researchnote.ConclusionSupported)}); err != nil {
 		t.Fatal(err)
 	}
 

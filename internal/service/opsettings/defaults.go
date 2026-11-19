@@ -10,6 +10,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -19,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchonlysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -78,10 +81,13 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		}
 		return strconv.Itoa(researchlabelsettings.DefaultRetentionDays)
 	case researchfxsettings.IsKey(key):
-		if key == researchfxsettings.KeyEnabled {
-			return researchfxsettings.Text(researchfxsettings.DefaultEnabled)
-		}
-		return researchfxsettings.DefaultSymbolsText
+		return researchfxsettings.DefaultText(key)
+	case researchonlysettings.IsKey(key):
+		return researchonlysettings.DefaultText(key)
+	case jquantssettings.IsKey(key):
+		return jquantssettings.DefaultText(key)
+	case disclosuresrcsettings.IsKey(key):
+		return disclosuresrcsettings.DefaultText(key)
 	case watchsettings.IsKey(key):
 		return watchDefaultText(key)
 	case regimesettings.IsKey(key):

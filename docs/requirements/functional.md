@@ -103,6 +103,8 @@ sequenceDiagram
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
 | §4.10〜§4.23（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート・Paper実績MCP・管理ハブ） | `docs/requirements/functional/components-platform.md` |
+| 開示・ニュースの追加の情報源（FR-DISCLOSURE-SRC-1〜6: EDINET の書類一覧・立花ニュースの記録。既定オフ・記録だけ） | `docs/requirements/functional/disclosure-sources.md` |
+| J-Quants の日足・分足の取り込み（FR-JQUANTS-1〜8: 読み取りアダプタ・1日の要求数の上限・研究用ラベルの付け直し・解約時の削除。既定オフ・記録だけ・私的利用） | `docs/requirements/functional/jquants.md` |
 | 改訂履歴（1.0〜。`functional.md`と`functional/`配下の改訂を追記する） | `docs/requirements/functional/history.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）

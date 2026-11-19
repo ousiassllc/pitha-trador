@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment/labelcompare"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment/unrecorded"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/labeltool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 )
 
@@ -152,7 +155,8 @@ var experimentTools = []tool{
 		description: "調整の実験の一覧（新しい順）。状態・期間・変えた変数・前後の取引件数・判定の可否（verdict / judged）つき。" +
 			"判定は 1 取引あたりの純損益（コスト控除後）の平均を前後で Welch の t 検定で比べ、差（後−前）の 95% 信頼区間と最大ドローダウンで決める（勝ち＝improved は、区間の下限が 0 より上かつドローダウンが前以下のときだけ）。" +
 			"前後どちらかの取引件数が min_trades に届かないと insufficient_trades、前の期間か後の期間に対象以外が変わると confounded、宣言した変更前→変更後の切り替えが記録で確認できないと switch_unconfirmed（いずれも判定なし）。1 件の集計に失敗しても一覧は返り、その行に error（limit_exceeded = 期間の取引が 5,000 件超 / failed）が付く（verdict は空）。終了から 1 時間以上たった実験の行は再集計せず、メモリの結果を返す。" +
-			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用",
+			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用。" +
+			unrecorded.DescriptionNote,
 		schema: objectSchema(map[string]any{
 			"status":     map[string]any{"type": "string", "enum": []string{experiment.StatusRunning, experiment.StatusClosed, experiment.StatusAborted}, "description": "状態で絞り込む"},
 			"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": maxExperimentList, "default": defaultExperimentList},
@@ -193,7 +197,11 @@ var experimentTools = []tool{
 					return nil, 0, err
 				}
 				list, err := experiment.SummarizeAll(ctx, e.q, a.Status, limit, e.now, minTrades, capital, e.experiments)
-				return map[string]any{"experiments": list}, len(list), err
+				if err != nil {
+					return nil, 0, err
+				}
+				changes, err := unrecorded.List(ctx, e.q, e.now)
+				return map[string]any{"experiments": list, "unrecorded_changes": changes}, len(list), err
 			}, nil
 		},
 	},
@@ -207,7 +215,8 @@ var experimentTools = []tool{
 			"insufficient_trades（前後どちらかが min_trades 未満。数値は返すが判定しない）/ not_computable（件数は足りるが全取引が同一損益で区間が出ない。判定しない）/ " +
 			"improved（区間の下限が 0 より上、かつ最大ドローダウンが前以下。唯一の勝ち）/ mixed（区間の下限は 0 より上だがドローダウンが悪化。勝ちとは言わない）/ " +
 			"worsened（区間の上限が 0 より下）/ inconclusive（区間が 0 をまたぐ。差があるとも無いとも言えない）。judged は最後の 4 つのとき true。" +
-			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "）で上げるのみ可。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別期間で、因果の証明にはならない。読み取り専用",
+			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "）で上げるのみ可。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別期間で、因果の証明にはならない。読み取り専用。" +
+			labelcompare.DescriptionNote,
 		schema: objectSchema(map[string]any{
 			"experiment_id": map[string]any{"type": "integer", "minimum": 1},
 			"min_trades":    minTradesProp(),
@@ -234,12 +243,7 @@ var experimentTools = []tool{
 				if err != nil {
 					return nil, 0, experimentFailureOf(err)
 				}
-				capital, err := e.paperCapital(ctx)
-				if err != nil {
-					return nil, 0, err
-				}
-				c, err := experiment.Compare(ctx, e.q, exp, e.now, minTrades, capital, true)
-				return c, 2, err
+				return labeltool.Compare(ctx, e.q, exp, e.now, minTrades, e.capitalJPY)
 			}, nil
 		},
 	},

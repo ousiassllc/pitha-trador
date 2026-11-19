@@ -9,6 +9,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
@@ -24,6 +25,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/swagger"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
@@ -75,6 +77,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	performanceHandler.Register(engine)
+	trialresults.New(o.trialResults).Register(engine)
 	orderproposals.NewHandler(o.orderProposals).Register(engine)
 
 	engine.GET("/activity", h.activity.Page)
@@ -86,6 +89,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	if o.operationalSettings != nil {
 		settingsHandler.WithOperationalSettings(o.operationalSettings)
+		if o.researchJobStatus != nil {
+			settingsHandler.WithResearchJobStatus(o.researchJobStatus)
+		}
 		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)
 		engine.DELETE("/ops-settings/:key", settingsHandler.ResetOps)
 	}
@@ -94,12 +100,17 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		mcpHandler := mcpsettings.New(o.mcpSettings)
 		if o.mcpWriteGate != nil {
 			mcpHandler.WithWriteGate(o.mcpWriteGate)
+			settingsHandler.WithMCPExperiments()
 		}
 		mcpHandler.Register(engine)
 	}
 	if o.jevPrompt != nil {
 		settingsHandler.WithJevPromptSettings()
 		jevprompt.New(o.jevPrompt).Register(engine)
+	}
+	if o.aiRoles != nil {
+		settingsHandler.WithAIRoleSettings()
+		airoles.New(o.aiRoles).Register(engine)
 	}
 	if o.jevTrial != nil {
 		settingsHandler.WithJevTrialSettings()

@@ -13,7 +13,7 @@ func TestTextKeepsReadableLongWords(t *testing.T) {
 	for _, in := range []string{
 		"https://github.com/ousiassllc/pitha-trador/issues/1095",
 		"https://github.com/ousiassllc/pitha-trador/pull/1105#issuecomment-123456789",
-		"db/migrations/000057_create_research_notes",
+		"db/migrations/000067_create_research_notes",
 		"internal/service/paperresultsmcp/researchnote/mask/mask_words.go",
 		"jev_evaluation_horizon_30m_cohort_llm_vs_baseline",
 		"123e4567-e89b-12d3-a456-426614174000",

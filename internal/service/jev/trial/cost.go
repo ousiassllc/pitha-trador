@@ -21,6 +21,12 @@ type Cost struct {
 	CountedUSD float64
 }
 
+// SubscriptionCost is what a call of the ChatGPT subscription (Codex CLI) is
+// stored and counted as: no USD at all. USD is nil and CountedUSD is 0, so the USD
+// daily caps count it as 0, whether it answered or failed. It is bounded by the
+// provider's own call and token caps instead (codex.go).
+func SubscriptionCost() Cost { return Cost{Source: jevtrial.CostSubscription} }
+
 // AnsweredCost prices a call that returned an answer set. Order of preference:
 //
 //  1. usage.cost reported by the response: used as is (source reported).
@@ -36,6 +42,9 @@ type Cost struct {
 //     jevtrialsettings.WorstCaseUSDPerMtok so an unpriced arm cannot slip under
 //     a cap as 0 USD.
 func AnsweredCost(arm jevtrialsettings.Arm, resp trialwire.Response, requestBytes int) Cost {
+	if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
+		return SubscriptionCost()
+	}
 	if c := resp.ReportedCostUSD; c != nil && *c >= 0 && !math.IsNaN(*c) && !math.IsInf(*c, 0) {
 		return Cost{USD: new(*c), Source: jevtrial.CostReported, CountedUSD: *c}
 	}

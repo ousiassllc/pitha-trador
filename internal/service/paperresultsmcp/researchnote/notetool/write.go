@@ -2,9 +2,12 @@ package notetool
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strconv"
+	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote"
 )
 
@@ -102,7 +105,7 @@ func createSpec() Spec {
 				if err != nil {
 					return nil, 0, err
 				}
-				note, err := w.CreateResearchNote(ctx, e.Client, f)
+				note, err := CreateNote(ctx, w, e.Client, f)
 				if err != nil {
 					return nil, 0, failureOf(err)
 				}
@@ -142,7 +145,7 @@ func updateSpec() Spec {
 				if err != nil {
 					return nil, 0, err
 				}
-				note, err := w.UpdateResearchNote(ctx, e.Client, id, expected, patch)
+				note, err := UpdateNote(ctx, w, e.Client, id, expected, patch)
 				if err != nil {
 					return nil, 0, failureOf(err)
 				}
@@ -150,4 +153,34 @@ func updateSpec() Spec {
 			}, nil
 		},
 	}
+}
+
+// The note side of the MCP's Writer (issue #1095). Its whole write surface is
+// two transactions: CreateNote (one research_notes INSERT and the version 1
+// INSERT) and UpdateNote (the next version's INSERT and one UPDATE of the
+// note's head row). Both run behind the write switch (mcpset.ErrWriteDisabled
+// while it is off, like settings_set); they touch no setting, audit row,
+// position or signal. The rows carry their own actor and client, so there is no
+// mcp_settings_audit row.
+
+// CreateNote stores f as a new note (version 1). client is the caller's host. f
+// is validated and masked by researchnote.Insert.
+func CreateNote(ctx context.Context, w *mcpset.Writer, client string, f researchnote.Fields) (researchnote.Note, error) {
+	var out researchnote.Note
+	err := w.InTx(ctx, "research note transaction", true, func(tx *sql.Tx, now time.Time) (err error) {
+		out, err = researchnote.Insert(ctx, tx, now, client, f)
+		return err
+	})
+	return out, err
+}
+
+// UpdateNote writes the next version of note id when its current version is
+// expected (researchnote.ErrVersionConflict otherwise). The earlier versions stay.
+func UpdateNote(ctx context.Context, w *mcpset.Writer, client string, id int64, expected int, p researchnote.Patch) (researchnote.Note, error) {
+	var out researchnote.Note
+	err := w.InTx(ctx, "research note update transaction", true, func(tx *sql.Tx, now time.Time) (err error) {
+		out, err = researchnote.Update(ctx, tx, now, client, id, expected, p)
+		return err
+	})
+	return out, err
 }

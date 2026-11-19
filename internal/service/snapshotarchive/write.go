@@ -11,7 +11,8 @@ import (
 )
 
 // selectPageSQL reads one page of date's rows after the keyset (timestamp,
-// id), in the archive's order. Served by market_snapshots_timestamp_idx.
+// id), in the archive's order (Archiver.forTable names the table). Served by
+// the table's timestamp index.
 const selectPageSQL = `SELECT * FROM market_snapshots
 	WHERE timestamp >= ? AND timestamp < ? AND id <= ?
 	  AND (timestamp > ? OR (timestamp = ? AND id > ?))
@@ -104,12 +105,12 @@ func (a *Archiver) scanDay(ctx context.Context, date, next string, maxID int64, 
 	var lastID int64
 	wroteHeader := false
 	for {
-		rows, err := a.db.QueryContext(ctx, selectPageSQL,
+		rows, err := a.db.QueryContext(ctx, a.forTable(selectPageSQL),
 			date, next, maxID, lastTS, lastTS, lastID, a.pageSize)
 		if err != nil {
 			return err
 		}
-		n, ts, id, err := scanPage(rows, emit, &wroteHeader)
+		n, ts, id, err := scanPage(a.table, rows, emit, &wroteHeader)
 		if err != nil {
 			return err
 		}
@@ -122,7 +123,7 @@ func (a *Archiver) scanDay(ctx context.Context, date, next string, maxID int64, 
 
 // scanPage emits every row of rows (closing it) and returns how many, and
 // the (timestamp, id) of the last.
-func scanPage(rows *sql.Rows, emit func(rec []string) error, wroteHeader *bool) (n int, lastTS string, lastID int64, err error) {
+func scanPage(table string, rows *sql.Rows, emit func(rec []string) error, wroteHeader *bool) (n int, lastTS string, lastID int64, err error) {
 	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
@@ -130,7 +131,7 @@ func scanPage(rows *sql.Rows, emit func(rec []string) error, wroteHeader *bool) 
 	}
 	idCol, tsCol := indexOf(cols, "id"), indexOf(cols, "timestamp")
 	if idCol < 0 || tsCol < 0 {
-		return 0, "", 0, fmt.Errorf("%s has no id/timestamp column", Table)
+		return 0, "", 0, fmt.Errorf("%s has no id/timestamp column", table)
 	}
 	if !*wroteHeader {
 		if err := emit(cols); err != nil {
@@ -177,7 +178,7 @@ func (a *Archiver) writeUnion(ctx context.Context, w *fileWriter, date, next str
 		if first {
 			first = false
 			if !slices.Equal(rec, prev.Header) {
-				return fmt.Errorf("columns of %s changed since the archive file was written", Table)
+				return fmt.Errorf("columns of %s changed since the archive file was written", a.table)
 			}
 			return nil
 		}

@@ -47,8 +47,12 @@ func experimentForm(extra url.Values) url.Values {
 func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	a, db := newExperimentsApp(t)
 
-	if body := a.get("/settings/mcp-panel").Body.String(); !strings.Contains(body, `hx-get="/settings/mcp/experiments"`) {
-		t.Errorf("the MCP card does not load the experiments section")
+	// The section is loaded by its own dialog on the Settings page, not by the MCP panel.
+	if body := a.get("/settings/integrations").Body.String(); !strings.Contains(body, `hx-get="/settings/mcp/experiments"`) {
+		t.Errorf("the Settings page does not load the experiments section")
+	}
+	if body := a.get("/settings/mcp-panel").Body.String(); strings.Contains(body, "/settings/mcp/experiments") {
+		t.Errorf("the MCP panel still loads the experiments section")
 	}
 	rec := a.get("/settings/mcp/experiments")
 	body := rec.Body.String()
@@ -56,9 +60,9 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 		!strings.Contains(body, "暫定値") || !strings.Contains(body, "σ は未確認") {
 		t.Fatalf("empty section = %d: %s", rec.Code, body)
 	}
-	// A --bone panel nested in the mcp-panel card is --r-md (issue #987, brand-guide S1/§4).
-	if !strings.Contains(body, `class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments"`) {
-		t.Errorf("the experiments section is not the nested panel shape: %s", body)
+	// The section is a card of its own in its dialog (like mcp-panel), not a panel nested in another card.
+	if !strings.Contains(body, `class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-experiments"`) {
+		t.Errorf("the experiments section is not the dialog card shape: %s", body)
 	}
 
 	// A POST without the CSRF token stores nothing.

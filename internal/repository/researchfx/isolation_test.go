@@ -30,7 +30,7 @@ func TestResearchFXRecordIsReadOnlyByItsRecorderAndTheResearchTools(t *testing.T
 		"internal/repository/researchfx/",                          // the record's own repository
 		"internal/service/researchfx/",                             // the recorder
 		"internal/bootstrap/researchfxjob/",                        // wires the recorder into the maintenance task
-		"internal/bootstrap/services_build.go",                     // registers that task (one line)
+		"internal/bootstrap/researchextrawire/",                    // registers that task (one line)
 		"internal/domain/researchfx/",                              // the record's value types
 		"internal/config/researchfxsettings/",                      // the switch and the pairs
 		"internal/service/fx/gmo/",                                 // the adapter itself
@@ -195,11 +195,21 @@ func TestFXDiagIssuesOnlySelects(t *testing.T) {
 }
 
 // services_build.go is the composition root, where wiring the record into a
-// trading component would most plausibly be added, so it is allow-listed above
-// only for the maintenance task: every line that mentions the FX record must be
-// the researchfxjob import or the one WithMaintenanceTask call.
-func TestServicesBuildOnlyRegistersTheFXMaintenanceTask(t *testing.T) {
-	src, err := os.ReadFile(filepath.Join("..", "..", "bootstrap", "services_build.go"))
+// trading component would most plausibly be added, so it must not mention the
+// FX record at all; the one place that does is researchextrawire, where every
+// line that mentions it must be the researchfxjob import or the one
+// WithMaintenanceTask call.
+func TestOnlyTheResearchWireRegistersTheFXMaintenanceTask(t *testing.T) {
+	build, err := os.ReadFile(filepath.Join("..", "..", "bootstrap", "services_build.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(build), "\n") {
+		if strings.Contains(strings.ToLower(line), "researchfx") {
+			t.Errorf("services_build.go mentions the FX record: %q", strings.TrimSpace(line))
+		}
+	}
+	src, err := os.ReadFile(filepath.Join("..", "..", "bootstrap", "researchextrawire", "researchextrawire.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,10 +220,10 @@ func TestServicesBuildOnlyRegistersTheFXMaintenanceTask(t *testing.T) {
 		}
 		switch {
 		case strings.TrimSpace(line) == `"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchfxjob"`:
-		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchfxjob.New(state.DB, s.Settings).Task())"):
+		case strings.Contains(line, "scheduler.WithMaintenanceTask(researchfxjob.New(w.db, w.settings).Task())"):
 			calls++
 		default:
-			t.Errorf("services_build.go mentions the FX record outside the maintenance task registration: %q", strings.TrimSpace(line))
+			t.Errorf("researchextrawire.go mentions the FX record outside the maintenance task registration: %q", strings.TrimSpace(line))
 		}
 	}
 	if calls != 1 {

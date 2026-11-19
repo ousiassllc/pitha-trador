@@ -16,6 +16,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/disclosuresrcsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jquantssettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
@@ -25,6 +27,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchonlysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -120,8 +123,12 @@ func Keys() []string {
 	keys = append(keys, config.BrokerSettingKeys()...)
 	keys = append(keys, paperbootstrapsettings.Keys()...)
 	keys = append(keys, sleepguardsettings.Keys()...)
-	keys = append(append(keys, researchlabelsettings.Keys()...), researchfxsettings.Keys()...)
+	keys = append(keys, researchlabelsettings.Keys()...)
+	keys = append(keys, researchfxsettings.Keys()...)
+	keys = append(keys, researchonlysettings.Keys()...)
 	keys = append(keys, watchsettings.Keys()...)
+	keys = append(keys, jquantssettings.Keys()...)
+	keys = append(keys, disclosuresrcsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
@@ -161,7 +168,7 @@ func kindOf(key string) kind {
 		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || key == researchfxsettings.KeyEnabled || watchsettings.IsIntegerKey(key):
+	case key == "screener.top_n" || jquantssettings.IsKey(key) || disclosuresrcsettings.IsKey(key) || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || key == researchfxsettings.KeyEnabled || watchsettings.IsIntegerKey(key) || researchonlysettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -296,4 +303,24 @@ func backupDirWarning(dir string) string {
 		return "このパスはディレクトリではありません。バックアップは失敗します。"
 	}
 	return ""
+}
+
+// normalizeSymbols normalizes a symbol-list setting: the research FX pairs
+// (research.fx.symbols, GMO pair names) or the observation-only stock codes.
+func normalizeSymbols(key, raw string) (string, error) {
+	if key == researchfxsettings.KeySymbols {
+		return researchfxsettings.Normalize(raw)
+	}
+	return watchsettings.NormalizeSymbols(raw)
+}
+
+// isResearchFX reports a research FX record key (the switch or the pairs).
+func isResearchFX(key string) bool { return researchfxsettings.IsKey(key) }
+
+// validateResearchFX checks one stored research FX value.
+func validateResearchFX(key, encoded string) error {
+	if err := researchfxsettings.Validate(key, encoded); err != nil {
+		return &InvalidValueError{Reason: err.Error()}
+	}
+	return nil
 }

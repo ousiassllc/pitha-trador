@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/airoleview"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/disclosureskipdiag"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/disclosuresrcdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/entryqualitydiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/evaldiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/fxdiag"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jquantsdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/metalabeldiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchdiag"
@@ -16,10 +19,10 @@ import (
 )
 
 func init() {
-	tools = append(tools, jevModelsTool, entryQualityWhatIfTool, disclosureSkipSummaryTool, trialCompareTool, trialCostTool, jevEvaluationTool, researchHorizonSummaryTool, fxSeriesSummaryTool)
+	tools = append(tools, jevModelsTool, entryQualityWhatIfTool, disclosureSkipSummaryTool, trialCompareTool, trialCostTool, jevEvaluationTool, researchHorizonSummaryTool, aiRolesTool, disclosureSourcesStatusTool, jquantsStatusTool, fxSeriesSummaryTool)
 }
 
-// Read-only tools: jev_models (#849, API §3.24), entry_quality_whatif (#911, §3.30), disclosure_skip_summary (#935, §3.31), jev_trial_compare / jev_trial_cost (#1060, §3.32), jev_evaluation (#1073, §3.33), research_horizon_summary (#1074, §3.34).
+// Read-only tools: jev_models (#849, API §3.24), entry_quality_whatif (#911, §3.30), disclosure_skip_summary (#935, §3.31), jev_trial_compare / jev_trial_cost (#1060, §3.32), jev_evaluation (#1073, §3.33), research_horizon_summary (#1074, §3.34), disclosure_sources_status (#1096, §3.38), jquants_status (#1093, §3.39). The last two only read: their switches (disclosure_src.*, jquants.*) are not on the settings tools' write whitelist.
 var jevModelsTool = diagTool("jev_models", "Jev が実際に応答しているモデル名: 期間内の jev_decisions.model_id ごとの件数と最初・最後に出た時刻（JST）、JST 日別の件数、"+
 	"metalabel.llm_cutoff_model と直近の model_id が完全一致するか（match / mismatch / unset。再学習の cutoff 判定と同じ比較）。secrets は返さない（読み取り専用）",
 	nil, func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {
@@ -51,4 +54,10 @@ var (
 	jevEvaluationTool          = queryTool("jev_evaluation", evaldiag.Description, evaldiag.SchemaProperties(), evaldiag.Run)
 	researchHorizonSummaryTool = queryTool("research_horizon_summary", researchdiag.Description, researchdiag.SchemaProperties(), researchdiag.Run)
 	fxSeriesSummaryTool        = queryTool("fx_series_summary", fxdiag.Description, fxdiag.SchemaProperties(), fxdiag.Run)
+	aiRolesTool                = readTool("ai_roles", airoleview.Description, func(ctx context.Context, e toolEnv) (any, int, error) { // issue #1080, API §3.35
+		v, err := airoleview.Read(ctx, e.q)
+		return v, len(v.Roles), err
+	})
+	disclosureSourcesStatusTool = queryTool("disclosure_sources_status", disclosuresrcdiag.Description, disclosuresrcdiag.SchemaProperties(), disclosuresrcdiag.Run)
+	jquantsStatusTool           = queryTool("jquants_status", jquantsdiag.Description, jquantsdiag.SchemaProperties(), jquantsdiag.Run)
 )

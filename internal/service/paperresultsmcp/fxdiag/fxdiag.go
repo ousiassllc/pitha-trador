@@ -1,6 +1,6 @@
 // Package fxdiag is the read-only analysis behind the Paper results MCP's
 // fx_series_summary tool and the FX join of jev_evaluation (issue #1084,
-// docs/api/endpoints/paper-results-mcp-research-fx.md): what the research FX
+// docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md): what the research FX
 // 1-minute candle record holds per currency pair (count, first and last time, the
 // trading days recorded / market closed / missing, interior gaps), and the
 // at-or-before join of those candles to decision times.

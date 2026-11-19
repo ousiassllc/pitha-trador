@@ -1,5 +1,5 @@
 // Package notetool defines the four research-note MCP tools (issue #1095;
-// docs/api/endpoints/paper-results-mcp-research-notes.md): research_note_create
+// docs/api/endpoints/research-tools/paper-results-mcp-research-notes.md): research_note_create
 // and research_note_update append one note version each through mcpset.Writer
 // (behind the write switch); research_notes_list and research_note_get only
 // read. A note is a record: none of them changes a setting or trading state,

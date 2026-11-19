@@ -2,7 +2,7 @@
 // (issue #1084): research_fx_candles, one row per (pair, minute) with GMO's BID
 // and ASK candles merged, and research_fx_days, the per-trading-day marker that
 // the day was fetched (with candles or, for a closed market, without) (migration
-// 000058).
+// 000068).
 //
 // The record is for research only. Feature Engine, Policy, Risk, order placement,
 // execution, the Paper guard, Live, the Jev prompts, RAG, the meta-model training
