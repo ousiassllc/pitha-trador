@@ -28,6 +28,10 @@ func TestCounterfactualLabelsAreReadOnlyByTrainingAndTheirRecorder(t *testing.T)
 		"internal/service/paperresultsmcp/query/trialquery/load.go",
 		"internal/service/paperresultsmcp/query/trialquery/proxy.go",
 		"internal/service/paperresultsmcp/query/trialquery/types.go",
+		// training_dataset_export (#1094): a local, secret-free export of the counterfactual label next to the decision's other labels; read only, never an input of anything. Listed per file for the same reason.
+		"internal/service/datasetexport/columns.go",
+		"internal/service/datasetexport/read_answers.go",
+		"internal/service/datasetexport/read_labels.go",
 		"internal/repository/metalabel/training_repo.go", // ListTrainingRowsWithSkipped
 		"db/migrations/", // the schema
 	}

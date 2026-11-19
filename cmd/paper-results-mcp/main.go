@@ -11,10 +11,13 @@
 // database file is resolved like the application (PITHA_DB_PATH, else the
 // per-user pitha.db). Reads use a read-only connection; the settings tools'
 // only write path is the narrow writer of internal/service/paperresultsmcp/mcpset.
+// backtest_start (issue #1086) replays stored data through its own read-only
+// handle, opened on the first backtest (backtest.go).
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -23,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtesttool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -83,6 +87,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := paperresultsmcp.New(paperresultsmcp.Options{Settings: cfg, DBPath: dbPath, CapitalJPY: capital, PaperLimits: paper, PolicyThresholds: policy})
-	return srv.Serve(ctx)
+	backtests := &backtestSources{dbPath: dbPath}
+	srv := paperresultsmcp.New(paperresultsmcp.Options{
+		Settings: cfg, DBPath: dbPath, CapitalJPY: capital, PaperLimits: paper, PolicyThresholds: policy,
+		Backtest: backtesttool.Options{Source: backtests.Source},
+	})
+	// Serve returns after the server (and a backtest in flight) has stopped.
+	return errors.Join(srv.Serve(ctx), backtests.Close())
 }

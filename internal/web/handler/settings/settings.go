@@ -53,12 +53,18 @@ func (StaticSecretsStore) Delete(context.Context, string) error              { r
 type SettingsHandler struct {
 	store SecretsStore
 	ops   OperationalSettings // nil until WithOperationalSettings
+	// researchJobs feeds the research-jobs card's status panel (nil until WithResearchJobStatus).
+	researchJobs ResearchJobStatusSource
 	// session is the running broker adapter, for the 立花 card's session
 	// state (nil until WithBrokerSession).
 	session BrokerSession
 	// mcp shows the 外部連携 section's MCP card (issue #792); the panel
 	// itself is served by internal/web/handler/mcpsettings.
 	mcp bool
+	// mcpExperiments shows the 調整の実験 card next to it (modal
+	// `modal-mcp-experiments`); served by the same handler once the MCP write
+	// gate (which holds the experiments) is wired.
+	mcpExperiments bool
 	// jevPrompt shows the Jev prompt card (issue #872); the panel itself is
 	// served by internal/web/handler/jevprompt.
 	jevPrompt bool
@@ -80,6 +86,14 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // screen; call it only when the MCP panel routes are registered.
 func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
 	h.mcp = true
+	return h
+}
+
+// WithMCPExperiments shows the 調整の実験 card (modal `modal-mcp-experiments`)
+// on the Settings screen; call it only when the experiment routes are
+// registered (the MCP write gate is wired).
+func (h *SettingsHandler) WithMCPExperiments() *SettingsHandler {
+	h.mcpExperiments = true
 	return h
 }
 

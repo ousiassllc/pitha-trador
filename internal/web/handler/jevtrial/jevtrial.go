@@ -1,6 +1,7 @@
 // Package jevtrial serves the Settings screen's model-comparison trial
 // section: `GET /settings/jev-trial-panel` and `POST /settings/jev-trial`
-// (switch, arms, overall daily cost cap). Like every POST it passes the session
+// (switch, arms, overall daily cost cap) and the arm form's add / remove row
+// fragments. Like every POST it passes the session
 // cookie and CSRF check. This is the only route that can turn the trial on:
 // nothing in the MCP writes these settings.
 package jevtrial
@@ -39,6 +40,8 @@ func New(svc Service) *Handler { return &Handler{svc: svc} }
 func (h *Handler) Register(engine *gin.Engine) {
 	engine.GET("/settings/jev-trial-panel", h.Panel)
 	engine.POST("/settings/jev-trial", h.Save)
+	engine.POST("/settings/jev-trial/arms/add", h.AddArm)
+	engine.POST("/settings/jev-trial/arms/remove", h.RemoveArm)
 }
 
 // formError is the inline-alert slot of the form (view.Panel): a rejected form
@@ -49,11 +52,22 @@ const formError = "#jev-trial-error"
 func (h *Handler) Panel(c *gin.Context) { h.render(c, "") }
 
 // Save implements `POST /settings/jev-trial`: form `enabled` (a checked checkbox
-// sends a value, an unchecked one nothing), `arms` (a JSON array; blank for no
-// arm) and `cap` (USD; blank restores the default). Invalid input is a 422 and
-// nothing is saved.
+// sends a value, an unchecked one nothing), the arm rows (`arm-<n>-<field>`, see
+// readRows; none for no arm) and `cap` (USD; blank restores the default). The
+// rows become arms that go through the service's one validation. Invalid input
+// is a 422 and nothing is saved.
 func (h *Handler) Save(c *gin.Context) {
-	form := jevtrial.Form{Enabled: c.PostForm("enabled") != "", ArmsJSON: c.PostForm("arms"), CodexEnabled: c.PostForm("codex_enabled") != ""}
+	rows, err := readRows(c)
+	if err != nil {
+		shared.RespondFormError(c, formError, err.Error()+"。保存していません。")
+		return
+	}
+	arms, err := buildArms(rows)
+	if err != nil {
+		shared.RespondFormError(c, formError, err.Error()+"。保存していません。")
+		return
+	}
+	form := jevtrial.Form{Enabled: c.PostForm("enabled") != "", Arms: arms, CodexEnabled: c.PostForm("codex_enabled") != ""}
 	var ok bool
 	if form.CodexCallCap, ok = codexCap(c, "codex_call_cap"); !ok {
 		return
@@ -112,7 +126,7 @@ func props(st jevtrial.State, notice string) view.PanelProps {
 	p := view.PanelProps{
 		TrialRuns: st.TrialRuns, Enabled: st.Enabled,
 		CapUSD: usd(st.CapUSD), CapIsDefault: st.CapIsDefault,
-		ArmsJSON: st.ArmsJSON, ArmsError: st.ArmsError,
+		Editor: editorProps(storedRows(st)), ArmsError: st.ArmsError,
 		KeyKnown: st.KeyKnown, KeySet: st.KeySet,
 		TodayDate: st.TodayDate, TodayCalls: st.Today.Calls, TodayUSD: usd(st.Today.CountedCostUSD),
 		TotalCalls: st.Total.Calls, TotalUSD: usd(st.Total.CountedCostUSD),

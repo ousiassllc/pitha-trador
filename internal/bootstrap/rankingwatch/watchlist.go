@@ -1,6 +1,9 @@
 package rankingwatch
 
-import "sync"
+import (
+	"sort"
+	"sync"
+)
 
 // Watchlist is the symbols the candidate refresh screens, shared between
 // Watcher (writer) and candidates.Refresher.Watch (reader). In the session it
@@ -39,4 +42,21 @@ func (w *Watchlist) Len() int {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return len(w.symbols)
+}
+
+// Symbols returns the watched symbols in code order (a copy; read-only access
+// for the 立花 research recording, which only observes kabu's list). A nil
+// Watchlist (no ranking watch) has none.
+func (w *Watchlist) Symbols() []string {
+	if w == nil {
+		return nil
+	}
+	w.mu.RLock()
+	out := make([]string, 0, len(w.symbols))
+	for s := range w.symbols {
+		out = append(out, s)
+	}
+	w.mu.RUnlock()
+	sort.Strings(out)
+	return out
 }

@@ -35,6 +35,8 @@ var allowedTrialImporters = map[string]string{
 	"internal/web/handler/settings":  "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
 	"internal/service/jev/trial":     "the runner builds its arms from trialwire and codexwire",
 	"internal/service/jev/codexwire": "the Codex client answers with a trialwire.Response and reuses its request state",
+	"internal/service/jevreplay":     "the replay evaluation prices, stores and calls the trial's arms like the runner (issue #1085)",
+	"internal/bootstrap/replaywire":  "wires the replay runner over the trial's arm callers and keys (issue #1085)",
 }
 
 // liveRoots are the live decision path, Risk, order placement, RAG, Calibration

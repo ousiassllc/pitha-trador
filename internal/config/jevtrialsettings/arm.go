@@ -83,6 +83,11 @@ type Arm struct {
 	DataCollection string `json:"data_collection,omitempty"`
 	// ZDR restricts routing to Zero Data Retention endpoints.
 	ZDR bool `json:"zdr,omitempty"`
+	// LLMCutoff is the end of the model's training data as published by its
+	// vendor, "YYYY-MM-DD" (UTC); empty: not published / not verified. Only the
+	// replay evaluation reads it (cutoff.go); the live trial ignores it. A date
+	// must never be guessed: leave it empty until the vendor publishes it.
+	LLMCutoff string `json:"llm_cutoff,omitempty"`
 }
 
 // CapUSD is the arm's effective daily cost cap.
@@ -139,6 +144,7 @@ const (
 	ArmsErrListPrice      = "list_price_usd_per_mtok"
 	ArmsErrProviderOnly   = "provider_only"
 	ArmsErrDataCollection = "data_collection"
+	ArmsErrLLMCutoff      = "llm_cutoff"
 )
 
 // ArmsError is an invalid arms setting. Kind (an ArmsErr* constant) and ArmID
@@ -196,6 +202,9 @@ func (a Arm) Validate() error {
 	if dc := a.DataCollection; dc != "" && dc != DataCollectionDeny && dc != DataCollectionAllow {
 		return armsErr(ArmsErrDataCollection, a.ID, "arm %q: data_collection must be %q or %q", a.ID, DataCollectionDeny, DataCollectionAllow)
 	}
+	if err := a.validateCutoff(); err != nil {
+		return armsErr(ArmsErrLLMCutoff, a.ID, "arm %q: llm_cutoff: %v", a.ID, err)
+	}
 	return nil
 }
 
@@ -213,20 +222,31 @@ func ParseArms(jsonValue string) ([]Arm, error) {
 	if _, err := dec.Token(); err != io.EOF {
 		return nil, armsErr(ArmsErrJSON, "", "%s must hold exactly one JSON array", KeyArms)
 	}
+	if err := ValidateArms(arms); err != nil {
+		return nil, err
+	}
+	return arms, nil
+}
+
+// ValidateArms checks a list of arms: at most MaxArms, each one valid (Arm.Validate)
+// and the ids distinct. It is the one rule set behind ParseArms (the stored JSON)
+// and the Settings form (rows built from the posted fields). The error is an
+// *ArmsError.
+func ValidateArms(arms []Arm) error {
 	if len(arms) > MaxArms {
-		return nil, armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
+		return armsErr(ArmsErrTooMany, "", "%s holds %d arms, at most %d", KeyArms, len(arms), MaxArms)
 	}
 	seen := map[string]bool{}
 	for _, a := range arms {
 		if err := a.Validate(); err != nil {
-			return nil, err
+			return err
 		}
 		if seen[a.ID] {
-			return nil, armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
+			return armsErr(ArmsErrDuplicateID, a.ID, "arm id %q is used twice", a.ID)
 		}
 		seen[a.ID] = true
 	}
-	return arms, nil
+	return nil
 }
 
 // EncodeArms validates arms and renders them as the stored JSON array ("[]" for
@@ -235,12 +255,12 @@ func EncodeArms(arms []Arm) (string, error) {
 	if arms == nil {
 		arms = []Arm{}
 	}
+	if err := ValidateArms(arms); err != nil {
+		return "", err
+	}
 	b, err := json.Marshal(arms)
 	if err != nil {
 		return "", fmt.Errorf("jevtrialsettings: encode %s: %w", KeyArms, err)
-	}
-	if _, err := ParseArms(string(b)); err != nil {
-		return "", err
 	}
 	return string(b), nil
 }

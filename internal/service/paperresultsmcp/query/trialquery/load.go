@@ -26,6 +26,26 @@ type decision struct {
 	rows    []*armRow
 }
 
+// source is where the arm rows are read from: the trial's rows, or one replay
+// run's rows (issue #1085): jev_replay_results has the columns the comparison
+// reads under the same names, so the same metrics apply to both. The table name
+// is one of two constants, never input.
+type source struct {
+	table string
+	runID int64 // the replay run; 0 for the trial
+}
+
+var trialSource = source{table: "jev_trial_decisions"}
+
+// rowFilter is the extra condition (on alias t) and its arguments that select
+// the source's rows within its table.
+func (s source) rowFilter() (clause string, args []any) {
+	if s.runID == 0 {
+		return "", nil
+	}
+	return ` AND t.run_id = ?`, []any{s.runID}
+}
+
 // ValidateArms checks the arm ids of a call: distinct, well-formed ids, at most MaxArms.
 func ValidateArms(arms []string) error {
 	if len(arms) > MaxArms {
@@ -53,11 +73,12 @@ type flatRow struct {
 
 // loadRows reads the trial rows of the live trader decisions of the period
 // (timestamp in [from, to)), of the given arms or of every arm.
-func loadRows(ctx context.Context, q query.Q, from, to string, arms []string) ([]flatRow, error) {
+func loadRows(ctx context.Context, q query.Q, src source, from, to string, arms []string) ([]flatRow, error) {
 	args := []any{from, to}
-	filter := ""
+	filter, runArgs := src.rowFilter()
+	args = append(args, runArgs...)
 	if len(arms) > 0 {
-		filter = ` AND t.arm_id IN (` + placeholders(len(arms)) + `)`
+		filter += ` AND t.arm_id IN (` + placeholders(len(arms)) + `)`
 		for _, a := range arms {
 			args = append(args, a)
 		}
@@ -66,7 +87,7 @@ func loadRows(ctx context.Context, q query.Q, from, to string, arms []string) ([
 	rows, err := q.QueryContext(ctx, `
 SELECT t.jev_decision_id, COALESCE(d.direction, ''), t.arm_id, t.status, t.failure_code, COALESCE(t.direction, ''),
 	COALESCE(t.entry_quality, ''), t.truncation_suspected, t.rag_includes_live_model_answers, t.llm_cutoff_status
-FROM jev_trial_decisions t JOIN jev_decisions d ON d.id = t.jev_decision_id
+FROM `+src.table+` t JOIN jev_decisions d ON d.id = t.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`+filter+`
 ORDER BY t.jev_decision_id, t.arm_id LIMIT ?`, args...)
 	if err != nil {
@@ -129,13 +150,14 @@ type outcomeKey struct{ horizon, labelVersion int }
 // loadOutcomes reads the existing calibration_outcomes records of the live
 // decisions of the period that have a trial row: future_return per slice and
 // decision. A record whose future_return is NULL carries no return and is skipped.
-func loadOutcomes(ctx context.Context, q query.Q, from, to string) (map[outcomeKey]map[int64]float64, error) {
+func loadOutcomes(ctx context.Context, q query.Q, src source, from, to string) (map[outcomeKey]map[int64]float64, error) {
+	filter, runArgs := src.rowFilter()
 	rows, err := q.QueryContext(ctx, `
 SELECT co.jev_decision_id, co.horizon_minutes, co.label_version, co.future_return
 FROM calibration_outcomes co JOIN jev_decisions d ON d.id = co.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?
-	AND EXISTS (SELECT 1 FROM jev_trial_decisions t WHERE t.jev_decision_id = d.id)
-LIMIT ?`, from, to, MaxOutcomeRows+1)
+	AND EXISTS (SELECT 1 FROM `+src.table+` t WHERE t.jev_decision_id = d.id`+filter+`)
+LIMIT ?`, append([]any{from, to}, append(runArgs, MaxOutcomeRows+1)...)...)
 	if err != nil {
 		return nil, fmt.Errorf("query: jev trial outcomes: %w", err)
 	}
@@ -180,13 +202,14 @@ type cfLabel struct {
 
 // loadCounterfactual reads the existing counterfactual_labels of the live
 // decisions of the period that have a trial row, per horizon and decision.
-func loadCounterfactual(ctx context.Context, q query.Q, from, to string) (map[int]map[int64]cfLabel, error) {
+func loadCounterfactual(ctx context.Context, q query.Q, src source, from, to string) (map[int]map[int64]cfLabel, error) {
+	filter, runArgs := src.rowFilter()
 	rows, err := q.QueryContext(ctx, `
 SELECT c.jev_decision_id, c.horizon_minutes, c.barrier_hit, c.net_return_bps
 FROM counterfactual_labels c JOIN jev_decisions d ON d.id = c.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?
-	AND EXISTS (SELECT 1 FROM jev_trial_decisions t WHERE t.jev_decision_id = d.id)
-LIMIT ?`, from, to, MaxOutcomeRows+1)
+	AND EXISTS (SELECT 1 FROM `+src.table+` t WHERE t.jev_decision_id = d.id`+filter+`)
+LIMIT ?`, append([]any{from, to}, append(runArgs, MaxOutcomeRows+1)...)...)
 	if err != nil {
 		return nil, fmt.Errorf("query: jev trial counterfactual labels: %w", err)
 	}

@@ -10,7 +10,18 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 )
 
-const codexArms = `[{"id":"cx-sol","provider":"codex_chatgpt","model":"gpt-6.1-sol","prompt_version":"trader-v3"}]`
+// codexForm is the form rows of one arm of the ChatGPT subscription, plus the
+// fields of extra (the other form fields of the request).
+func codexForm(extra url.Values) url.Values {
+	form := url.Values{
+		"arm-0-id": {"cx-sol"}, "arm-0-provider": {"codex_chatgpt"}, "arm-0-model": {"gpt-6.1-sol"},
+		"arm-0-prompt_version": {"trader-v3"}, "arm-0-data_collection": {"deny"},
+	}
+	for k, v := range extra {
+		form[k] = v
+	}
+	return form
+}
 
 // Issue #1081: the ChatGPT subscription provider is off by default, and nothing
 // but the form that also turns its switch on can save an arm of it.
@@ -30,7 +41,7 @@ func TestCodexProviderIsOffByDefaultOnTheScreen(t *testing.T) {
 
 func TestCodexArmIsRefusedWhileTheProviderSwitchIsOff(t *testing.T) {
 	a := newApp(t)
-	rec := a.post("/settings/jev-trial", url.Values{"enabled": {"on"}, "arms": {codexArms}}, true)
+	rec := a.post("/settings/jev-trial", codexForm(url.Values{"enabled": {"on"}}), true)
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "ChatGPT サブスク（Codex）を有効にする") {
 		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
 	}
@@ -43,7 +54,7 @@ func TestCodexArmIsRefusedWhileTheProviderSwitchIsOff(t *testing.T) {
 
 func TestCodexArmIsSavedWithTheSwitchAndShowsTheSubscriptionRow(t *testing.T) {
 	a := newApp(t)
-	rec := a.post("/settings/jev-trial", url.Values{"enabled": {"on"}, "arms": {codexArms}, "codex_enabled": {"on"}, "codex_call_cap": {"12"}, "codex_token_cap": {"3000"}}, true)
+	rec := a.post("/settings/jev-trial", codexForm(url.Values{"enabled": {"on"}, "codex_enabled": {"on"}, "codex_call_cap": {"12"}, "codex_token_cap": {"3000"}}), true)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("save = %d %s", rec.Code, rec.Body.String())
 	}
@@ -59,10 +70,10 @@ func TestCodexArmIsSavedWithTheSwitchAndShowsTheSubscriptionRow(t *testing.T) {
 		}
 	}
 	// Turning the provider off again keeps the saved arm from running: the arm row says so.
-	if rec := a.post("/settings/jev-trial", url.Values{"arms": {codexArms}}, true); rec.Code != http.StatusUnprocessableEntity {
+	if rec := a.post("/settings/jev-trial", codexForm(nil), true); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("an arm of the provider with its switch off = %d, want 422", rec.Code)
 	}
-	if rec := a.post("/settings/jev-trial", url.Values{"arms": {"[]"}}, true); rec.Code != http.StatusOK {
+	if rec := a.post("/settings/jev-trial", url.Values{}, true); rec.Code != http.StatusOK {
 		t.Fatalf("turn everything off = %d", rec.Code)
 	}
 	if v, _ := a.stored(jevtrialsettings.KeyCodexEnabled); v != "0" {
@@ -76,11 +87,11 @@ func TestCodexArmIsSavedWithTheSwitchAndShowsTheSubscriptionRow(t *testing.T) {
 func TestCodexInvalidCapsAreRejectedAndSaveNothing(t *testing.T) {
 	a := newApp(t)
 	for name, form := range map[string]url.Values{
-		"call cap zero":   {"arms": {"[]"}, "codex_call_cap": {"0"}},
-		"call cap text":   {"arms": {"[]"}, "codex_call_cap": {"many"}},
-		"call cap huge":   {"arms": {"[]"}, "codex_call_cap": {"1000000"}},
-		"token cap zero":  {"arms": {"[]"}, "codex_token_cap": {"0"}},
-		"token cap float": {"arms": {"[]"}, "codex_token_cap": {"1.5"}},
+		"call cap zero":   {"codex_call_cap": {"0"}},
+		"call cap text":   {"codex_call_cap": {"many"}},
+		"call cap huge":   {"codex_call_cap": {"1000000"}},
+		"token cap zero":  {"codex_token_cap": {"0"}},
+		"token cap float": {"codex_token_cap": {"1.5"}},
 	} {
 		if rec := a.post("/settings/jev-trial", form, true); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: status %d, want 422", name, rec.Code)

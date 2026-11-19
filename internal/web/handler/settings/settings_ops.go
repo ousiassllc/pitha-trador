@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/entryqualitypanel"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/researchjobpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -75,6 +76,8 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 	case metaLabelGroup.id:
 		props.Derived = h.metaLabelDerived(ctx)
 		props.DerivedTitle = "LLM cutoff の状態"
+	case researchJobsGroup.id:
+		props.Derived, props.DerivedTitle = h.researchJobsDerived(ctx), researchjobpanel.Title
 	}
 	return props
 }

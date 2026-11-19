@@ -34,6 +34,10 @@ type SettingsProps struct {
 	// MCP shows the MCP card and modal (issue #792); false (no MCP admin
 	// service wired) hides them.
 	MCP bool
+	// MCPExperiments shows the 調整の実験 card and modal next to the MCP card
+	// (they used to sit inside the MCP modal); false (no write gate, which
+	// holds the experiments, wired) hides them.
+	MCPExperiments bool
 	// JevPrompt shows the Jev prompt card and modal (issue #872); false (no
 	// service wired) hides them.
 	JevPrompt bool
@@ -155,6 +159,20 @@ templ SettingsPage(props SettingsProps) {
 					</ul>
 				</section>
 			}
+			if props.MCP && props.MCPExperiments && props.Has("modal-mcp-experiments") {
+				<section aria-labelledby="settings-mcp-experiments-heading">
+					<h2 id="settings-mcp-experiments-heading" class="mb-6 text-2xl font-semibold text-ink">調整の実験</h2>
+					<ul class="flex flex-col gap-3" data-testid="mcp-experiments-list">
+						@molecules.SettingsCard(molecules.SettingsCardProps{
+							ID:          "mcp-experiments",
+							ModalID:     "modal-mcp-experiments",
+							Name:        "調整の実験（前後比較）",
+							ActionLabel: "開く",
+							Status:      settingsHelp("help-settings-mcp-experiments", "調整の実験の説明", "設定などを変える前と後の成績を比べた一覧と判定を見られます。実験は ふだん MCP から記録され、この画面からは予備として手で記録できます。"),
+						})
+					</ul>
+				</section>
+			}
 			if props.JevPrompt && props.Has("modal-jev-prompt") {
 				<section aria-labelledby="settings-jev-prompt-heading">
 					<h2 id="settings-jev-prompt-heading" class="mb-6 text-2xl font-semibold text-ink">Jev プロンプト</h2>
@@ -267,32 +285,9 @@ templ SettingsPage(props SettingsProps) {
 			}
 			<script type="module" src="/static/dist/js/migration/pitha-migration.js"></script>
 		}
-		if props.MCP && props.Has("modal-mcp") {
-			@molecules.Modal("modal-mcp", "MCP") {
-				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
-				// on load, so the reachability probe never slows the page;
-				// the panel's forms swap this element's content in place.
-				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
-			}
-			<script type="module" src="/static/dist/js/copy-button/pitha-copy-button.js"></script>
-		}
+		@mcpModals(props)
 		@aiRolesModal(props)
-		if props.JevPrompt && props.Has("modal-jev-prompt") {
-			@molecules.Modal("modal-jev-prompt", "Jev プロンプトの版とシャドー比較") {
-				// Filled in by `GET /settings/jev-prompt-panel`
-				// (internal/web/organisms/jevprompt) on load; its forms swap this
-				// element's content in place.
-				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
-			}
-		}
-		if props.JevTrial && props.Has("modal-jev-trial") {
-			@molecules.Modal("modal-jev-trial", "モデル比較トライアル") {
-				// Filled in by `GET /settings/jev-trial-panel`
-				// (internal/web/organisms/jevtrial) on load; its form swaps this
-				// element's content in place.
-				<div id="jev-trial-panel" hx-get="/settings/jev-trial-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
-			}
-		}
+		@jevModals(props)
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 	}
 }
