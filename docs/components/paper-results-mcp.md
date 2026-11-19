@@ -7,7 +7,7 @@
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、設定ツールが呼ばれたときだけ、`runtime_settings` と監査表だけを書く狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
-- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 26 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ、研究用の状況 1 つ、リプレイ 5 つ、データセットの書き出し 1 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
+- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 26 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ、研究用の状況 1 つ、リプレイ 5 つ、データセットの書き出し 1 つ、バックテストと仮想 Paper 6 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
 ## 2. パッケージ
 
@@ -127,4 +127,5 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.23 | 2026-11-15 | §2 に`research_daily_bars_status`（`researchbarsdiag`・`researchbarstests`。登録は`research_bars_tool.go`）を追加。引数なし（期間なし）の読み取り専用ツールで、立花の日足の研究用収集の状態・`daily_bars` の銘柄数と日付の範囲・埋め戻しの割合・直近の夜・日ごとの本数を返す。ツールは合計 40（読み取り 20 + 研究用の状況 1。`research_quote_source_compare` #1083 を含む）。MCP が書けるキーは増えない | issue #1082・#1083 |
 | 1.24 | 2026-11-15 | §2 に`research_quote_source_compare`（`researchquotediag`・`researchquotetests`。登録は`research_quotes_tool.go`）を追加。立花の研究用の時価の記録と kabu の`market_snapshots`を並べる、期間指定の読み取り専用ツール。MCP が書けるキーは増えない | issue #1083 |
 | 1.25 | 2026-11-15 | §2 に研究用の評価・比較ツール 5 つ（`slicediag`・`trenddiag`・`ledgerdiag`・`promotiondiag`・`exportdiag` と各テスト）を追加（登録は `research_tools.go`）。ホワイトリストを 24 → 27 キーにした（既定オフのスイッチ 3 つ） | issue #1089・#1090・#1091・#1092・#1094 |
-| 1.26 | 2026-11-19 | §2 のホワイトリストの内訳に、立花の研究用収集のスイッチ 2 つ（`research.tachibana_bars.enabled` / `research.tachibana_quotes.enabled`）を明記した（27 キーの数え方は変えない）。1.23・1.24 の「MCP が書けるキーは増えない」は、この 2 スイッチの分は誤りで、実装（`mcpwritesettings`）は 1.23・1.24 の時点からこの 2 キーを含む | issue #1120 |
+| 1.26 | 2026-11-15 | §2 にバックテスト（`backtestlab`・`backtestjob`・`backtestview`・`backtesttests`。登録は`ext_tools.go`（定義は`backtesttool`））と仮想 Paper（`virtualpaper`・`virtualpapertests`。登録は`ext_tools.go`（定義は`virtualpapertool`））、実験のラベルベース比較（`experiment/labelcompare`・`experiment/unrecorded`・`experimentlabeltests`）を追加。読み取りのツールは 26 つのまま、バックテストと仮想 Paper で 6 つ増えて合計 58。MCP が書けるキーは増えない | issue #1086 / #1087 / #1088 |
+| 1.27 | 2026-11-19 | §2 のホワイトリストの内訳に、立花の研究用収集のスイッチ 2 つ（`research.tachibana_bars.enabled` / `research.tachibana_quotes.enabled`）を明記した（27 キーの数え方は変えない）。1.23・1.24 の「MCP が書けるキーは増えない」は、この 2 スイッチの分は誤りで、実装（`mcpwritesettings`）は 1.23・1.24 の時点からこの 2 キーを含む | issue #1120 |

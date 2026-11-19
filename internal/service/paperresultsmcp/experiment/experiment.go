@@ -233,7 +233,3 @@ func (e Experiment) windows(now time.Time) (before, after query.Range) {
 	start, end := e.window(now)
 	return query.Range{From: start.Add(-end.Sub(start)), To: start}, query.Range{From: start, To: end}
 }
-
-// Windows is windows for a reader that works on the trades of the two periods itself (the promotion
-// checklist's per-day figures), so that it reads the very instants Compare does.
-func (e Experiment) Windows(now time.Time) (before, after query.Range) { return e.windows(now) }

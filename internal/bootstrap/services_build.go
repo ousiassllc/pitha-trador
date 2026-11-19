@@ -24,6 +24,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchlabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchquotejob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/virtualpaperjob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -215,7 +216,7 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0, logging.WithRetentionSource(logsettings.RetentionSource(s.Settings)))),
 		scheduler.WithDataPurger(retention.NewWithSnapshotArchive(state.DB, retention.Policy{}, state.Paths.DBPath)), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings, state.Paths.DBPath)),
 		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()), scheduler.WithMaintenanceTask(researchlabeljob.New(state.DB, s.Settings).Task()), scheduler.WithMaintenanceTask(researchquotejob.New(state.DB, s.Settings, state.Paths.DBPath).Task()), s.researchExtra.Option(), // J-Quants (#1093), EDINET (#1096)
-		scheduler.WithMaintenanceTask(nightlyjobs.EvaluationTask(state.DB, s.Settings)), scheduler.WithMaintenanceTask(nightlyjobs.ModelTask(state.DB, s.Settings)), // #1089, #1092
+		scheduler.WithMaintenanceTask(nightlyjobs.EvaluationTask(state.DB, s.Settings)), scheduler.WithMaintenanceTask(nightlyjobs.ModelTask(state.DB, s.Settings)), scheduler.WithMaintenanceTask(virtualpaperjob.New(state.DB, state.Strategy, state.Risk).Task()), // #1089, #1092, #1087
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.LogDestination(context.Background(), s.Settings, state.Paths.DBPath)

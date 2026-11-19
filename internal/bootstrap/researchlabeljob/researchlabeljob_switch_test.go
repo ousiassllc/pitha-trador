@@ -158,7 +158,7 @@ func TestRunner_BackfillIsOneDayPerChunkAndBackupAndPurgeRunBetweenChunks(t *tes
 	job.now = func() time.Time { return now }
 
 	var (
-		requestedAt time.Time // set by the gap hook just before it asks for the lock
+		requestedAt time.Time // set by the gap hook just before it asks for the lock (once per task: the purge's wait excludes the backup's run time)
 		lockWaits   []time.Duration
 		backups     int
 		purges      int
@@ -186,6 +186,7 @@ func TestRunner_BackfillIsOneDayPerChunkAndBackupAndPurgeRunBetweenChunks(t *tes
 		}
 		requestedAt = time.Now()
 		runner.RunNow(ctx, "database_backup")
+		requestedAt = time.Now()
 		runner.RunNow(ctx, "data_retention_purge")
 		requestedAt = time.Time{}
 	}))

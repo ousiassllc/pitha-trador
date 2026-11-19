@@ -150,6 +150,25 @@ func TestSwitchOffAndUnsetCredentialsSendNoRequestToTheBroker(t *testing.T) {
 	}
 }
 
+// advanceKeepingTheFeedAlive moves the manual clock by d in steps well under the
+// feed's 15 s EVENT keep-alive window. Before each step it sends a KP and waits
+// for the feed to re-arm its watchdog, so the feed is never silent for a whole
+// window on the manual clock (otherwise the watchdog fires and the feed
+// reconnects whenever the connection happens to be up before the clock moves,
+// which depends on how fast the machine is).
+func (b *brokerRig) advanceKeepingTheFeedAlive(conn *tt.EventConn, d time.Duration) {
+	b.t.Helper()
+	const step = 5 * time.Second
+	for left := d; left > 0; left -= step {
+		created := b.clk.Created()
+		if err := conn.Send(tt.KP(1)); err != nil {
+			b.t.Fatalf("send KP: %v", err)
+		}
+		b.clk.WaitCreated(b.t, created)
+		b.clk.Advance(min(step, left))
+	}
+}
+
 // The feed's REST interval bounds the assist: a symbol without a value asks
 // Latest every minute, but the broker is asked at most once per interval; and
 // the feed's daily connection budget governs the subscription (one connection
@@ -164,9 +183,13 @@ func TestRestAssistIsLimitedByTheFeedsIntervalAndSubscriptionIsOneConnection(t *
 		return http.StatusOK, map[string]any{"sCLMID": "CLMMfdsGetMarketPrice", "p_errno": "0", "sResultCode": "0", "aCLMMfdsMarketPrice": []map[string]string{}}
 	})
 	b.kabu = []string{"0001"} // the broker has no price for it
-	for i := 0; i < 5; i++ {  // 09:30:05 .. 09:34:05
+	var conn *tt.EventConn
+	for range 5 { // 09:30:05 .. 09:34:05
 		b.tick(b.clk.Now())
-		b.clk.Advance(time.Minute)
+		if conn == nil {
+			conn = b.fb.WaitEvent(t, 1)
+		}
+		b.advanceKeepingTheFeedAlive(conn, time.Minute)
 	}
 	if quotes != 1 {
 		t.Errorf("REST 時価 requests = %d after 5 minutes, want 1 (interval 300 s)", quotes)
@@ -178,7 +201,6 @@ func TestRestAssistIsLimitedByTheFeedsIntervalAndSubscriptionIsOneConnection(t *
 	if n := b.rows(); n != 0 {
 		t.Errorf("rows = %d, want none for a symbol without a price", n)
 	}
-	b.fb.WaitEvent(t, 1)
 	if n := b.feed.ConnectionsToday(); n != 1 {
 		t.Errorf("connections today = %d, want 1 for an unchanged plan", n)
 	}
