@@ -67,6 +67,8 @@ func TestParseArms_RejectsInvalidArms(t *testing.T) {
 		"cap above max":       {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","daily_cost_cap_usd":1000}]`, "daily_cost_cap_usd"},
 		"negative list price": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","list_price_usd_per_mtok":-1}]`, "list_price"},
 		"bad data collection": {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","data_collection":"maybe"}]`, "data_collection"},
+		"unknown endpoint":    {`[{"id":"a","provider":"openrouter","model":"m","prompt_version":"trader-v3","endpoint":"/v1/other"}]`, "endpoint"},
+		"codex endpoint":      {`[{"id":"a","provider":"codex_chatgpt","model":"m","prompt_version":"trader-v3","endpoint":"/alpha/decisions"}]`, "endpoint"},
 		"trailing data":       {`[` + valid + `] garbage`, "exactly one"},
 		"stray closer":        {`[` + valid + `] ]`, "exactly one"},
 		"stray brace":         {`[` + valid + `]}`, "exactly one"},
@@ -84,6 +86,26 @@ func TestParseArms_RejectsInvalidArms(t *testing.T) {
 	}
 	if arms, err := jevtrialsettings.ParseArms(`[]`); err != nil || len(arms) != 0 {
 		t.Errorf("ParseArms([]) = %v, %v, want no arms and no error", arms, err)
+	}
+}
+
+// endpoint is optional (empty is /v1/systemone) and survives a round trip; an
+// arm without one stores nothing, so the stored JSON of existing arms is unchanged.
+func TestArms_EndpointIsOptionalAndRoundTrips(t *testing.T) {
+	enc, err := jevtrialsettings.EncodeArms([]jevtrialsettings.Arm{
+		{ID: "plain", Provider: "openrouter", Model: "m", PromptVersion: "trader-v3"},
+		{ID: "sys", Provider: "custom", Model: "m", PromptVersion: "trader-v3", Endpoint: jevtrialsettings.EndpointSystemOne},
+		{ID: "dec", Provider: "openrouter", Model: "m", PromptVersion: "trader-v3", Endpoint: jevtrialsettings.EndpointDecisions},
+	})
+	if err != nil {
+		t.Fatalf("EncodeArms: %v", err)
+	}
+	if strings.Count(enc, `"endpoint"`) != 2 {
+		t.Errorf("encoded = %s, want endpoint only on the two arms that set one", enc)
+	}
+	out, err := jevtrialsettings.ParseArms(enc)
+	if err != nil || len(out) != 3 || out[0].Endpoint != "" || out[1].Endpoint != "/v1/systemone" || out[2].Endpoint != "/alpha/decisions" {
+		t.Errorf("round trip = %+v, %v", out, err)
 	}
 }
 

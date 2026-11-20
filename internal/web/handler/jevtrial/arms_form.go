@@ -28,6 +28,7 @@ const (
 	fieldProviderOnly   = "provider_only"
 	fieldDataCollection = "data_collection"
 	fieldZDR            = "zdr"
+	fieldEndpoint       = "endpoint"
 )
 
 // rowsError is a reason a posted row cannot be read, worded for the screen.
@@ -98,6 +99,8 @@ func setField(row *view.ArmField, field, value string) bool {
 		row.DataCollection = value
 	case fieldZDR:
 		row.ZDR = value != ""
+	case fieldEndpoint:
+		row.Endpoint = value
 	default:
 		return false
 	}
@@ -133,7 +136,7 @@ func buildArms(rows []view.ArmField) ([]jevtrialsettings.Arm, error) {
 		arms = append(arms, jevtrialsettings.Arm{
 			ID: r.ID, Provider: r.Provider, Model: r.Model, PromptVersion: r.PromptVersion,
 			DailyCostCapUSD: capUSD, ListPriceUSDPerMtok: price,
-			ProviderOnly: splitProviders(r.ProviderOnly), DataCollection: dataCollection, ZDR: r.ZDR,
+			ProviderOnly: splitProviders(r.ProviderOnly), DataCollection: dataCollection, ZDR: r.ZDR, Endpoint: r.Endpoint,
 		})
 	}
 	return arms, nil
@@ -206,7 +209,7 @@ func storedRows(st jevtrial.State) []view.ArmField {
 		rows = append(rows, view.ArmField{
 			ID: arm.ID, Provider: arm.Provider, Model: arm.Model, PromptVersion: arm.PromptVersion,
 			DailyCap: number(arm.DailyCostCapUSD), ListPrice: number(arm.ListPriceUSDPerMtok),
-			ProviderOnly: strings.Join(arm.ProviderOnly, ", "), DataCollection: arm.DataCollectionOrDefault(), ZDR: arm.ZDR,
+			ProviderOnly: strings.Join(arm.ProviderOnly, ", "), DataCollection: arm.DataCollectionOrDefault(), ZDR: arm.ZDR, Endpoint: arm.Endpoint,
 		})
 	}
 	return rows

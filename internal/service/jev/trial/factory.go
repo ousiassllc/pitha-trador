@@ -91,6 +91,7 @@ func NewCallers(keys Keys) func(jevtrialsettings.Arm) Caller {
 			BaseURL:    ep.BaseURL,
 			APIKey:     ep.APIKey,
 			Model:      arm.Model,
+			Endpoint:   arm.Endpoint, // empty: trialwire.DefaultEndpoint (/v1/systemone)
 			Provider:   providerFor(arm),
 			HTTPClient: &http.Client{Timeout: armHTTPTimeout},
 		})
