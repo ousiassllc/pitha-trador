@@ -6,8 +6,8 @@
 //
 // Transport: MCP "Streamable HTTP" implemented as a small JSON-RPC 2.0
 // handler (POST only, every response a single application/json body). It
-// has nine read tools (tools.go), the settings tools (settings_tools.go) and
-// the order-proposal tools (order_proposal_tools.go, issue #827). The only
+// has nine read tools (tools.go), the settings tools (settingstool) and the
+// order-proposal tools (proposaltool, issue #827). The only
 // write path is mcpset.Writer: a whitelisted runtime_settings upsert plus its
 // audit row, the write switch, one order_proposals row plus its first event,
 // and the order-proposal switch turned off. The read connection is mode=ro

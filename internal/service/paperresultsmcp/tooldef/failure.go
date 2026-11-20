@@ -11,6 +11,15 @@ const (
 	CodeInvalidValue        = "invalid_value"
 	CodeBacktestNotFound    = "backtest_not_found"
 	CodeBacktestUnavailable = "backtest_unavailable"
+
+	CodeKeyNotAllowed        = "key_not_allowed"
+	CodeProposalsDisabled    = "proposals_disabled"
+	CodeIdempotencyConflict  = "idempotency_conflict"
+	CodeProposalNotFound     = "proposal_not_found"
+	CodeNotCancellable       = "not_cancellable"
+	CodeMultipleVariables    = "multiple_variables"
+	CodeExperimentNotFound   = "experiment_not_found"
+	CodeExperimentNotRunning = "experiment_not_running"
 )
 
 // Failure is a failure with a spec code. Cause is for the server log only;
