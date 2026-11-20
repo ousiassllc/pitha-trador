@@ -57,3 +57,18 @@ func TestHelpMark_TooltipFadesOutFasterThanItFadesIn(t *testing.T) {
 		t.Errorf("the closed state must not carry the entrance transition: %s", body)
 	}
 }
+
+// issue #1145: a floating surface has a 1px --line-soft frame. The 「?」 button
+// keeps its own --border ring; only the tooltip bubble is the floating surface.
+func TestHelpMark_TooltipFrameIsLineSoft(t *testing.T) {
+	body := renderWithLabel(t, atoms.HelpMark(atoms.HelpMarkProps{ID: "help-x", Label: "説明"}), "詳しい説明")
+
+	i := strings.Index(body, `role="tooltip"`)
+	if i < 0 {
+		t.Fatalf("no tooltip in %s", body)
+	}
+	bubble := body[i:]
+	if !strings.Contains(bubble, "border border-line-soft") || strings.Contains(bubble, "border-border") {
+		t.Errorf("tooltip frame must be `border border-line-soft`: %s", bubble)
+	}
+}
