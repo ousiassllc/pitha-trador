@@ -17,6 +17,9 @@
 - チップ（ステータスのピル・バッジ）は枠なしの `rounded-pill tone-* px-3 py-1 text-note`。ボタンはピル（`rounded-pill`・`text-item font-semibold`）で、主は `bg-accent` 塗り、サブは枠なしの静かな `bg-surface-sel` ピル（ホバー `bg-surface-sel-hover`）、ゴーストは透明（ホバー `bg-surface-sel`）。ナビ・タブは `text-item font-semibold text-ink`・`min-h-10 px-4` で、選択中は `rounded-pill bg-surface-sel` のピル、ほかは透明（ホバー `bg-surface-sel`）。下線（`border-b-2`）もタブ行の `border-b` も無い
 - 表は見出し行に下線を引かず（`text-note font-normal text-mute`）、本文の行を `border-b border-line-soft` で区切る（最終行は線なし。`last:border-b-0`）。行ホバーは `hover:bg-surface-sel`、表を囲む面は `rounded-card bg-surface`（カードの中なら囲まない）
 - 枠を残す例外: 入力・セレクト・テキストエリア・チェックボックス・スイッチのトラック（`border-border`）、`:focus-visible` の輪、danger のバナー（40%）、浮かぶ面（モーダルは `border border-line-soft` で、見出し行・フッターの区切りも `border-line-soft`。ツールチップも 1px の枠）。カード・表・サブナビ・バナーに 1px の枠を足さない
+- 入力欄（input・select・textarea）の角は 8px（`rounded-md`）。ピルにしない（チェックボックスだけ 18px の箱なので `rounded-sm`）
+- Kill ボタンは `--danger` の塗りのピル。Jev の「この版をライブに昇格」など、ほかの主操作は `--accent` の主ボタン（`bg-accent text-bone`）
+- 浮いている面（モーダル・ポップオーバー・メニュー）は `--line-soft` の 1px の枠を付ける。ink 塗りのトースト（`bg-ink`）は枠を付けない
 - この節の範囲外: #1039 / #1042 / #1043 は、ブランドガイドの追補待ちのため含めない
 
 ## フォントとタイポグラフィ（issue #941）
