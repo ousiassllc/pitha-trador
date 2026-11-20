@@ -49,8 +49,35 @@ Grok Bot（あおい）が、期間と売買の条件（エントリーの規則
 
 古い行は**自動では消さない**。一覧は件数を絞って返す（既定 20・最大 50）。1 行の結果は、組 12 × （日別 31 件 + 感度 6 行）ほどの JSON で、数十 KB 以下 [INFERENCE: 日別 1 行 60 バイト前後として]。件数が増えて困るようになったら、保持日数の設定と削除を別の issue で足す。
 
+## 7. 実データ規模での確認と所要時間（issue #1128）
+
+本物の `backtestsource`（`NewForDB` を `sqlitedb.OpenReadOnly` の接続に載せたもの。MCP と同じ配線）を、実 DB に近い形の合成履歴で最後まで再生する統合テストと、最大構成の所要時間の計測がある（どちらも `internal/bootstrap/backtestsource`、一時ディレクトリの SQLite だけ。本番 DB・外部 API・有料 API には触れない）。
+
+- **通常の CI**: `TestSource_RealSourceReplaysStoredHistoryWithoutWriting`。3 銘柄 × 立会 4 日（期間 3 日 + 前の金曜 1 日の warm-up。1 分足 330 本/日）の `market_snapshots` と、Trader（2 本に 1 回）・Scout（5 本に 1 回）の `jev_decisions` を保存し、最大の要求（組 12・追加コスト 6 行）を `backtestlab.Run` で再生する。取引が出ること・組の上書きが結果を変えること・保存した行数と範囲を検査し、実行の前後で `runtime_settings`（Paper の資金設定を含む）・`mcp_settings_audit`・`paper_orders`・`positions`・`order_proposals` / `order_proposal_events`・`virtual_paper_*`・`backtest_runs` の**行の中身**（件数と全行のダイジェスト）が同じことを固定する。時間は検査しない（ログに出すだけ）。
+- **計測の再現**: `TestSource_MaxConfigurationAtDatabaseScale` は環境変数 `PITHA_BACKTEST_SCALE` が無いとスキップする（CI では走らない）。実行は次のとおり。所要時間の値は assert せず、10 分（`backtestjob.DefaultRunTimeout`）の `context` の中で終わらなければ失敗とするだけ。
+
+  ```
+  PITHA_BACKTEST_SCALE=1 go test -run TestSource_MaxConfigurationAtDatabaseScale -v -count=1 -timeout 30m ./internal/bootstrap/backtestsource/
+  ```
+
+### 計測値（2026-11-20、2 回）
+
+- **フィクスチャ**: ランキング監視の最大（45 銘柄、FR-SCAN-3）× 期間 31 日（立会 21 日）+ 前 3 日の warm-up = 立会 24 日。`market_snapshots` 356,400 行（期間内 311,850 本）、`jev_decisions` 249,480 行（Trader 178,200・Scout 71,280）、DB ファイル約 298 MiB。価格は銘柄ごとに種を固定した乱数の歩み、特徴量はライブと同じく直近足から計算して保存する。
+- **要求**: 期間 31 日・組 12（エントリーの EV 下限・損切り/利確/トレーリング/保有時間・スリッページ/手数料を重ねたもの）・追加コスト 6 行（`MaxExtraCostPoints`）。取引は全組で計 3,352 件（baseline 300 件）。
+- **機械**: AMD Ryzen 9 5950X（16 コア / 32 スレッド）、Linux 6.8、Go 1.26.11、他のプロセスも動く共用ホスト（計測中の load average 5〜9）、一時ディレクトリは NVMe 上。
+
+| 回 | 履歴の読み込み（`RunConfigs`） | 全体（`backtestlab.Run`: 読み込み + 12 組の再生） | 10 分に対する割合 |
+|---|---|---|---|
+| 1 | 4.2 秒 | 115.8 秒（1 分 55 秒） | 19.3% |
+| 2 | 4.6 秒 | 119.5 秒（1 分 59 秒） | 19.9% |
+
+1 組の再生は約 9.3〜9.6 秒（全体から読み込みを引いて 12 で割った値）で、全体の約 96% は組ごとの再生が占める。最大構成でも**上限の 10 分の約 2 割**で終わり、約 5 倍の余裕がある。上限は変えない（同時 1 件・1 回 10 分・組 12・期間 31 日）。
+
+注意: 数字は上のフィクスチャと機械の値で、実 DB の値ではない。実 DB で Trader の判断の間隔が違う、取引が多い、ホストが重い、といった場合は変わりうる [INFERENCE: 取引の少ないフィクスチャ（全組で 3,352 件）のため、取引が多い実データでは 1 組あたりが長くなる可能性がある]。10 分を超えた実行は `timed_out` で止まり（§4）、取引処理には影響しない。
+
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規 | issue #1086 |
+| 1.1 | 2026-11-20 | §7 を追加（本物の `backtestsource` を実 DB 規模のフィクスチャで通す統合テストと、最大構成の所要時間の実測） | issue #1128 |
