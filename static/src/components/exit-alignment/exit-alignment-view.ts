@@ -155,11 +155,11 @@ export function renderComparison(c: Comparison | undefined) {
       <dt>ラベルの到達（TP / SL / timeout）</dt>
       <dd data-testid="exit-alignment-label-hits">${c.label_tp_count} / ${c.label_sl_count} / ${c.label_timeout_count}</dd>
       <dt>再生の決済理由</dt>
-      <dd data-testid="exit-alignment-replay-exits">${reasonList(c.replay_exits)}</dd>
+      <dd class="text" data-testid="exit-alignment-replay-exits">${reasonList(c.replay_exits)}</dd>
       <dt>Paper の決済理由</dt>
-      <dd data-testid="exit-alignment-paper-exits">${reasonList(c.paper_exits)}</dd>
+      <dd class="text" data-testid="exit-alignment-paper-exits">${reasonList(c.paper_exits)}</dd>
       <dt>再生できない出口</dt>
-      <dd>${c.not_evaluated_exits.map(exitReasonLabel).join(' / ')}</dd>
+      <dd class="text">${c.not_evaluated_exits.map(exitReasonLabel).join(' / ')}</dd>
       <dt>再生時のコスト（LONG / SHORT）</dt>
       <dd>${c.cost_long_bps} / ${c.cost_short_bps} bps</dd>
     </dl>

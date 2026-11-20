@@ -222,7 +222,7 @@ func TestExperimentFormHypothesisDrawsTheFocusRing(t *testing.T) {
 		t.Fatalf("no textarea in the section: %s", body)
 	}
 	textarea := body[i : i+strings.Index(body[i:], ">")]
-	for _, want := range []string{`name="hypothesis"`, "focus-visible:border-focus", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+	for _, want := range []string{`name="hypothesis"`, "focus-visible:outline-2", "focus-visible:outline-focus"} {
 		if !strings.Contains(textarea, want) {
 			t.Errorf("hypothesis textarea lacks %q: %s", want, textarea)
 		}

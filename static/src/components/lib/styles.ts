@@ -107,8 +107,8 @@ export const noticeStyles = css`
 export const lightDomErrorClass = 'text-sm text-danger';
 export const lightDomWsNoticeClass = 'text-sm text-warning';
 
-// Light-DOM form control class (brand-guide C3/O8): the same --surface ground, border, disabled look (opacity .5), --focus
-// edge and 2px --ring that atoms.Select draws (internal/web/atoms/input.templ),
+// Light-DOM form control class (brand-guide C3/O8): the same --surface ground, border, disabled look (opacity .5) and
+// 2px --focus outline that atoms.Select draws (internal/web/atoms/input.templ),
 // for a bare <select>/<input> a Lit component renders itself.
 export const lightDomFieldClass =
-  'h-10 rounded-md border border-border bg-surface px-3 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';
+  'h-10 rounded-md border border-border bg-surface px-3 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';

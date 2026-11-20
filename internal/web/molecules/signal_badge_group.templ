@@ -15,7 +15,7 @@ templ SignalBadgeGroup(direction *string, confidence *float64, entryQuality *str
 	} else {
 		<span class="inline-flex items-center gap-2">
 			@atoms.Badge(toDirection(*direction))
-			<span class="text-xs text-mute">{ atoms.FormatConfidence(confidence) }</span>
+			<span class="text-xs font-mono tabular-nums text-mute">{ atoms.FormatConfidence(confidence) }</span>
 			<span class="text-xs text-ink">{ formatEntryQuality(entryQuality) }</span>
 		</span>
 	}

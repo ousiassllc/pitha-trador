@@ -94,6 +94,7 @@ type ProposalField struct {
 	Label, Value, Help string
 	// Sign colours a pnl value: "gain", "loss" or "".
 	Sign string
+	Text bool // wording (買い / 通過, a reason), not a number: text font, not Mono
 }
 
 // ProposalDetailProps is the 詳細 page.

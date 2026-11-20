@@ -34,7 +34,7 @@ templ Codex(props CodexProps) {
 			<label for="jev-trial-codex-tokens" class="text-ink">トークン数の上限（入力＋出力）</label>
 			@atoms.Input(atoms.InputProps{ID: "jev-trial-codex-tokens", Name: "codex_token_cap", Class: "w-auto", Attrs: codexCapAttrs(props.TokenCap, props.TokenCapIsDefault, "jev-trial-codex-token-cap")})
 		</div>
-		<span class="text-sm text-mute" data-testid="jev-trial-codex-today">今日: <span class="font-mono tabular-nums text-ink">{ itoa(props.CallsToday) } 回・{ itoa(props.TokensToday) } トークン</span></span>
+		<span class="text-sm text-mute" data-testid="jev-trial-codex-today">今日: <span class="text-ink"><span class="font-mono tabular-nums">{ itoa(props.CallsToday) }</span> 回・<span class="font-mono tabular-nums">{ itoa(props.TokensToday) }</span> トークン</span></span>
 		<span class="text-sm text-mute" data-testid="jev-trial-codex-login">ログイン: { props.LoginNote }</span>
 		if props.StopNote != "" {
 			<span class="text-warning" role="status" data-testid="jev-trial-codex-stop">{ props.StopNote }</span>

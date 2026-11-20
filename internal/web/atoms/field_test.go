@@ -107,7 +107,7 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	for _, want := range []string{
 		`type="checkbox"`, `role="switch"`, `name="enabled"`, `value="on"`, ` checked`, `data-testid="sw"`,
 		"peer sr-only", "h-5 w-9 shrink-0 rounded-full", "after:h-3.5 after:w-3.5", "peer-checked:bg-accent", "peer-checked:after:bg-bone",
-		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-[15px]", "有効にする",
+		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-base font-normal", "有効にする",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Switch lacks %q: %s", want, body)
@@ -116,9 +116,9 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	if strings.Contains(body, "font-medium") || strings.Contains(body, "font-semibold") {
 		t.Errorf("the switch label must be Regular: %s", body)
 	}
-	// Disabled form parts are opacity .5 (brand-guide §4), the label with the track (issue #961).
-	if n := strings.Count(body, "peer-disabled:opacity-50"); n != 2 || strings.Contains(body, "opacity-40") {
-		t.Errorf("track and label should both be peer-disabled:opacity-50: %s", body)
+	// A disabled switch is opacity .4, like a button and a checkbox; only a text field is .5 (issue #1139). The label goes with the track (issue #961).
+	if n := strings.Count(body, "peer-disabled:opacity-40"); n != 2 || strings.Contains(body, "opacity-50") {
+		t.Errorf("track and label should both be peer-disabled:opacity-40: %s", body)
 	}
 	// Tailwind's default easing differs from the guide's --ease-out (brand-guide M1, issue #1016).
 	for _, want := range []string{"transition-colors duration-base ease-out", "after:transition-transform after:duration-base after:ease-out"} {
@@ -140,14 +140,14 @@ func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
 	}
 }
 
-// Input and Select draw the guide's focus state (brand-guide C3): --focus
-// border and a 2px --ring, instead of the UA's default ring.
-func TestInputAndSelect_DrawFocusRing(t *testing.T) {
+// Input and Select draw a 2px --focus outline (offset 2), not a border plus a
+// 40% halo (issue #1139).
+func TestInputAndSelect_DrawFocusOutline(t *testing.T) {
 	for name, body := range map[string]string{
 		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{Name: "n"}), ""),
 		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), ""),
 	} {
-		for _, want := range []string{"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+		for _, want := range []string{"focus-visible:outline", "focus-visible:outline-2", "focus-visible:outline-offset-2", "focus-visible:outline-focus"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s missing %q: %s", name, want, body)
 			}
@@ -162,7 +162,7 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 
 	for _, want := range []string{
 		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 p-3",
-		"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40", `>text</textarea>`,
+		"focus-visible:outline", "focus-visible:outline-2", "focus-visible:outline-offset-2", "focus-visible:outline-focus", `>text</textarea>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Textarea lacks %q: %s", want, body)

@@ -92,7 +92,7 @@ function renderCriteria(a: MetaModelAdoption) {
   if (c === undefined) return '';
   return html`
     <dt>採用基準</dt>
-    <dd data-testid="calibration-metamodel-criteria">
+    <dd class="text" data-testid="calibration-metamodel-criteria">
       OOS ${c.min_oos_samples} 件以上・take ${c.min_takes} 件以上・${c.min_oos_days} 営業日以上、
       EV の${confidenceLabel(c.alpha)}の下限 &gt; ${formatBps(c.min_ev_lower_bps)}、AUC の下限 &gt;
       ${c.min_auc_lower.toFixed(2)}
@@ -113,7 +113,7 @@ function renderComparison(a: MetaModelAdoption) {
         候補 ${formatBps(c.candidate_bps)} / 現行 ${formatBps(c.active_bps)} /
         差 ${formatBps(c.diff_bps)}（${bpsInterval(c.diff_ci)}）`
     : html`採用中 ${c.active_version} と比較できないため現行を維持（${c.note}）`;
-  return html`<dt>現行モデルとの比較</dt><dd data-testid="calibration-metamodel-comparison">${body}</dd>`;
+  return html`<dt>現行モデルとの比較</dt><dd class="text" data-testid="calibration-metamodel-comparison">${body}</dd>`;
 }
 
 function renderForward(a: MetaModelAdoption) {
@@ -129,7 +129,7 @@ function renderForward(a: MetaModelAdoption) {
         text: '採用した後（学習後）の判断で測った成績です。採用判断には使いません。',
       })}
     </dt>
-    <dd data-testid="calibration-metamodel-forward">
+    <dd class="text" data-testid="calibration-metamodel-forward">
       学習後の判断 ${f.samples} 件・take ${f.takes} 件・${f.days} 営業日: EV ${ev}
       ${f.degraded ? html`<span role="alert" class="pitha-calibration-heatmap-emphasis">— 損失が続いています</span>` : ''}
     </dd>
@@ -144,7 +144,7 @@ export function renderAdoption(model: MetaModelAdoption) {
     <dt>OOS EV の信頼区間</dt>
     <dd data-testid="calibration-metamodel-ev-ci">${bpsInterval(model.oos_ev_ci)}</dd>
     <dt>OOS EV の判定</dt>
-    <dd data-testid="calibration-metamodel-ev-verdict">
+    <dd class="text" data-testid="calibration-metamodel-ev-verdict">
       ${evVerdictText(model)}
       ${renderHelpMark({
         id: 'help-calibration-metamodel-ev-verdict',
@@ -158,7 +158,7 @@ export function renderAdoption(model: MetaModelAdoption) {
     ${
       model.gate
         ? html`<dt>変更頻度の制限</dt>
-            <dd data-testid="calibration-metamodel-gate">${model.gate.detail}（${model.gate.until} まで採用しません）</dd>`
+            <dd class="text" data-testid="calibration-metamodel-gate">${model.gate.detail}（${model.gate.until} まで採用しません）</dd>`
         : ''
     }
     ${renderForward(model)}

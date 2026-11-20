@@ -108,4 +108,9 @@ export const heatmapStyles = css`
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
   }
+  /* A value that is wording (a verdict, a reason) is set in the text font, not Mono. */
+  .pitha-calibration-heatmap-summary dd.text {
+    font-family: inherit;
+    font-variant-numeric: normal;
+  }
 `;

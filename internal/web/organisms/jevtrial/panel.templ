@@ -146,7 +146,7 @@ templ Panel(props PanelProps) {
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(a.TodayCalls) }</td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">
 									if a.Subscription {
-										サブスク（USD なし）
+										<span class="font-sans">サブスク（USD なし）</span>
 									} else {
 										{ a.TodayUSD } / { a.CapUSD }
 									}

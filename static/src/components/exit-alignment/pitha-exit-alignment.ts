@@ -54,6 +54,11 @@ export class PithaExitAlignment extends LitElement {
         font-family: "JetBrains Mono", ui-monospace, monospace;
         font-variant-numeric: tabular-nums;
       }
+      /* A value that is wording (a reason) is set in the text font, not Mono. */
+      .summary dd.text {
+        font-family: inherit;
+        font-variant-numeric: normal;
+      }
       h2 {
         margin: 0.75rem 0 1.5rem;
         font-size: 2rem;
