@@ -27,6 +27,8 @@ func TestResearchQuoteSamplesAreReadOnlyByTheirRecorderRetentionAndTheResearchTo
 		"internal/service/snapshotarchive/",                        // archives the table before the task deletes it
 		"internal/service/paperresultsmcp/researchquotediag/",      // the read-only MCP query
 		"internal/service/paperresultsmcp/research_quotes_tool.go", // registers that tool
+		"internal/repository/researchindex/",                       // the index record copies the index codes' rows (SELECT only; its isolation test pins that it writes only its own tables)
+		"internal/service/paperresultsmcp/indexdiag/",              // the read-only MCP query counts those rows (SELECT only)
 		"internal/bootstrap/researchwire/",                         // wires the recorder (research-only, with the daily bars)
 		"internal/bootstrap/services.go",                           // holds it
 		"internal/bootstrap/services_build.go",                     // registers the retention task (one line)

@@ -56,16 +56,44 @@ type FxContext struct {
 func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*FxContext, error) {
 	lookback := FxLookbackMinutes * time.Minute
 	staleness := FxStalenessMinutes * time.Minute
+	buckets, err := splitByReturn(rows, lookback, func(times []time.Time) ([]*float64, error) {
+		quotes, err := fxdiag.AtOrBefore(ctx, q, symbol, times, staleness)
+		if err != nil {
+			return nil, err
+		}
+		mids := make([]*float64, len(quotes))
+		for i, qt := range quotes {
+			if qt != nil {
+				mid := qt.MidOpen()
+				mids[i] = &mid
+			}
+		}
+		return mids, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &FxContext{
+		Symbol: symbol, LookbackMinutes: FxLookbackMinutes, StalenessMinutes: FxStalenessMinutes,
+		Return: "判断の時刻以前の最新の足の始値の BID/ASK 平均（mid）の、60 分前の時刻以前の最新の足に対する変化の符号（up＝上昇、flat＝変化なし、down＝下落）", Buckets: buckets,
+	}, nil
+}
+
+// splitByReturn splits the llm arm of rows by the sign of the change of a price
+// series over lookback before each decision. price returns, for the given times,
+// the series' price known at each (nil: unmatched). A row is unmatched when either
+// the price at its time or the one lookback earlier is.
+func splitByReturn(rows []evalRow, lookback time.Duration, price func(times []time.Time) ([]*float64, error)) ([]FxBucket, error) {
 	at := make([]time.Time, len(rows))
 	start := make([]time.Time, len(rows))
 	for i, r := range rows {
 		at[i], start[i] = r.at, r.at.Add(-lookback)
 	}
-	now, err := fxdiag.AtOrBefore(ctx, q, symbol, at, staleness)
+	now, err := price(at)
 	if err != nil {
 		return nil, err
 	}
-	before, err := fxdiag.AtOrBefore(ctx, q, symbol, start, staleness)
+	before, err := price(start)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +102,7 @@ func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*
 	for i, r := range rows {
 		bucket := FxUnmatched
 		if now[i] != nil && before[i] != nil {
-			switch d := now[i].MidOpen() - before[i].MidOpen(); {
+			switch d := *now[i] - *before[i]; {
 			case d > 0:
 				bucket = FxUp
 			case d < 0:
@@ -86,17 +114,14 @@ func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*
 		counts[bucket]++
 		sums[bucket] += r.net[iLLM]
 	}
-	out := &FxContext{
-		Symbol: symbol, LookbackMinutes: FxLookbackMinutes, StalenessMinutes: FxStalenessMinutes,
-		Return: "判断の時刻以前の最新の足の始値の BID/ASK 平均（mid）の、60 分前の時刻以前の最新の足に対する変化の符号（up＝上昇、flat＝変化なし、down＝下落）", Buckets: []FxBucket{},
-	}
+	out := []FxBucket{}
 	for _, b := range fxBuckets {
 		fb := FxBucket{Bucket: b, N: counts[b]}
 		if counts[b] > 0 {
 			mean := sums[b] / float64(counts[b])
 			fb.MeanNetBps = &mean
 		}
-		out.Buckets = append(out.Buckets, fb)
+		out = append(out, fb)
 	}
 	return out, nil
 }

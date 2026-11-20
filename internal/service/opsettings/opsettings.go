@@ -25,9 +25,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
-	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchonlysettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchrecordsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -124,7 +124,7 @@ func Keys() []string {
 	keys = append(keys, paperbootstrapsettings.Keys()...)
 	keys = append(keys, sleepguardsettings.Keys()...)
 	keys = append(keys, researchlabelsettings.Keys()...)
-	keys = append(keys, researchfxsettings.Keys()...)
+	keys = append(keys, researchrecordsettings.Keys()...)
 	keys = append(keys, researchonlysettings.Keys()...)
 	keys = append(keys, watchsettings.Keys()...)
 	keys = append(keys, jquantssettings.Keys()...)
@@ -146,7 +146,7 @@ const (
 	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
 	kindSource     // a 立花 監視銘柄ソース setting validated by tachibanasource.NormalizeTachibanaSourceSetting
 	kindMetaLabel  // a meta-labeling setting (JSON string, or the minimum EV number) validated by metalabelsettings
-	kindWatch      // a symbol list (JSON string): the observation-only symbols (watchsettings) or the research FX pairs (researchfxsettings)
+	kindWatch      // a symbol list (JSON string): the observation-only symbols (watchsettings) or the research FX pairs or index codes (researchrecordsettings)
 	kindLog        // the log level (JSON string) or the log retention in days (JSON integer), validated by logsettings
 )
 
@@ -164,11 +164,11 @@ func kindOf(key string) kind {
 		return kindMetaLabel
 	case logsettings.IsKey(key):
 		return kindLog
-	case key == watchsettings.KeyObservationSymbols || key == researchfxsettings.KeySymbols:
+	case key == watchsettings.KeyObservationSymbols || researchrecordsettings.IsSymbolsKey(key):
 		return kindWatch
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || jquantssettings.IsKey(key) || disclosuresrcsettings.IsKey(key) || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || key == researchfxsettings.KeyEnabled || watchsettings.IsIntegerKey(key) || researchonlysettings.IsIntegerKey(key):
+	case key == "screener.top_n" || jquantssettings.IsKey(key) || disclosuresrcsettings.IsKey(key) || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key) || researchlabelsettings.IsKey(key) || researchrecordsettings.IsSwitchKey(key) || watchsettings.IsIntegerKey(key) || researchonlysettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -305,21 +305,22 @@ func backupDirWarning(dir string) string {
 	return ""
 }
 
-// normalizeSymbols normalizes a symbol-list setting: the research FX pairs
-// (research.fx.symbols, GMO pair names) or the observation-only stock codes.
+// normalizeSymbols normalizes a symbol-list setting: the research FX pairs or
+// index codes (research.fx.symbols, research.index.symbols) or the
+// observation-only stock codes.
 func normalizeSymbols(key, raw string) (string, error) {
-	if key == researchfxsettings.KeySymbols {
-		return researchfxsettings.Normalize(raw)
+	if researchrecordsettings.IsSymbolsKey(key) {
+		return researchrecordsettings.Normalize(key, raw)
 	}
 	return watchsettings.NormalizeSymbols(raw)
 }
 
-// isResearchFX reports a research FX record key (the switch or the pairs).
-func isResearchFX(key string) bool { return researchfxsettings.IsKey(key) }
+// isResearchRecord reports a research record key (FX or index: the switch or the symbols).
+func isResearchRecord(key string) bool { return researchrecordsettings.IsKey(key) }
 
-// validateResearchFX checks one stored research FX value.
-func validateResearchFX(key, encoded string) error {
-	if err := researchfxsettings.Validate(key, encoded); err != nil {
+// validateResearchRecord checks one stored research record value (FX or index).
+func validateResearchRecord(key, encoded string) error {
+	if err := researchrecordsettings.Validate(key, encoded); err != nil {
 		return &InvalidValueError{Reason: err.Error()}
 	}
 	return nil

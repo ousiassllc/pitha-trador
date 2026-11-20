@@ -51,7 +51,7 @@ var replayTools = []string{"replay_estimate", "replay_start", "replay_stop", "re
 var exportTools = []string{"training_dataset_export"}                                                             // #1094: writes files, not rows; pinned in exporttests
 // researchTools (issues #1086 / #1087): backtest_start and the virtual Paper profile create / stop write one research row each; the rest read.
 var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_compare"}
-var researchNoteTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary"} // #1095 / #1084: two notes writes, two reads, the FX summary
+var researchNoteTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary", "index_series_summary"} // #1095 / #1084: two notes writes, two reads, the FX and index summaries
 
 // writingTools are the tools that change state; every other tool is annotated read-only.
 var writingTools = []string{

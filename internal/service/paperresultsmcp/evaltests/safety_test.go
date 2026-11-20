@@ -100,7 +100,7 @@ func TestToolIsReadOnlyAndWritesNothing(t *testing.T) {
 			props = append(props, p)
 		}
 		slices.Sort(props)
-		if strings.Join(props, ",") != "from,fx_symbol,horizon_minutes,model_id,prompt_version,to" {
+		if strings.Join(props, ",") != "from,fx_symbol,horizon_minutes,index_symbol,model_id,prompt_version,to" {
 			t.Errorf("arguments = %v", props)
 		}
 	}

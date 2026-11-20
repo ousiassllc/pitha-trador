@@ -8,6 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchindexsettings"
 )
 
 // Description is the tool's description (docs/api/endpoints/paper-results-mcp-jev-evaluation.md §3.33).
@@ -30,6 +31,7 @@ func SchemaProperties() map[string]any {
 		"prompt_version": map[string]any{"type": "string", "maxLength": jevshadowsettings.MaxVersionLen, "description": "この版（question_version。例: trader-v4）の trader 判断だけを数える。省略は全版（版ごとに別集計）"},
 		"model_id":       map[string]any{"type": "string", "maxLength": MaxModelIDLen, "description": "この model_id の判断だけを数える。省略は全モデル（モデルごとに別集計）"},
 		"fx_symbol":      map[string]any{"type": "string", "pattern": "^[A-Z]{3}_[A-Z]{3}$", "description": FxSymbolDescription},
+		"index_symbol":   map[string]any{"type": "string", "pattern": "^[0-9A-Za-z]{1,8}$", "description": IndexSymbolDescription},
 	}
 }
 
@@ -43,6 +45,7 @@ type Request struct {
 	PromptVersion  string  `json:"prompt_version"`
 	ModelID        string  `json:"model_id"`
 	FXSymbol       string  `json:"fx_symbol"`
+	IndexSymbol    string  `json:"index_symbol"`
 }
 
 // UnmarshalJSON decodes strictly and validates, so the dispatcher's decode of a
@@ -72,6 +75,9 @@ func (r Request) Validate() error {
 	}
 	if r.FXSymbol != "" && !researchfxsettings.ValidSymbol(r.FXSymbol) {
 		return fmt.Errorf("evaldiag: fx_symbol %q is not a currency pair like USD_JPY", r.FXSymbol)
+	}
+	if r.IndexSymbol != "" && !researchindexsettings.ValidSymbol(r.IndexSymbol) {
+		return fmt.Errorf("evaldiag: index_symbol %q is not an index code like 101", r.IndexSymbol)
 	}
 	return nil
 }
