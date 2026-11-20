@@ -1,0 +1,144 @@
+package mcp
+
+import (
+	"net/url"
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// ResearchNoteRow is one row of the research-note list, already formatted for
+// the screen. Conclusion is the stored code (the data attribute).
+type ResearchNoteRow struct {
+	ID              int64
+	Question        string
+	Hypothesis      string
+	ResultSummary   string
+	Conclusion      string
+	ConclusionLabel string
+	Tags            []string
+	EvidenceCount   int
+	Version         int
+	Updated         string
+}
+
+// ResearchNotesProps is ResearchNotes' input. Query, Tag and Conclusion are the
+// filter as applied (the form shows them again); Filtered is whether any is set,
+// Capped whether the list stopped at Limit (so more may match).
+type ResearchNotesProps struct {
+	Rows       []ResearchNoteRow
+	Query      string
+	Tag        string
+	Conclusion string
+	Filtered   bool
+	Capped     bool
+	Limit      int
+}
+
+// researchNotesURL is the read-only list's route; every filter is a query.
+const researchNotesURL = "/settings/mcp/research-notes"
+
+// researchNoteFieldClass is the filter form's layout for atoms.Input/atoms.Select
+// (stacked under a label, so no flex-1).
+const researchNoteFieldClass = "mt-2 text-sm"
+
+// researchNoteTagURL is the list narrowed to one tag (a tag chip's link).
+func researchNoteTagURL(tag string) templ.SafeURL {
+	return templ.SafeURL(researchNotesURL + "?tag=" + url.QueryEscape(tag))
+}
+
+templ researchNoteOption(value, label string, selected bool) {
+	<option value={ value } selected?={ selected }>{ label }</option>
+}
+
+func conclusionClass(code string) string {
+	switch code {
+	case "supported":
+		return "border-success text-success"
+	case "unsupported":
+		return "border-danger text-danger"
+	}
+	return "border-border text-mute"
+}
+
+// ResearchNotes renders the research-note section of the MCP card
+// (`GET /settings/mcp/research-notes`): the newest notes with their conclusion,
+// tags and update time, each expandable to its hypothesis, result and how many
+// versions it has. A GET form narrows the list by a search word, a tag and a
+// conclusion the way the MCP's research_notes_list does (nothing is saved). It
+// is read-only: notes are written by the AI through the MCP and change no
+// setting.
+templ ResearchNotes(props ResearchNotesProps) {
+	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-research-notes">
+		<div class="flex items-center gap-2">
+			<h4 class="text-lg font-semibold text-ink">研究ノート</h4>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-research-notes", Label: "研究ノートの説明"}) {
+				AI が調べたこと（問い・仮説・やったこと・結果の要約・結論・根拠へのリンク）の記録です。更新すると前の版は残り、版の数を表示します。記録だけで、設定や取引には影響しません。ここでは読むだけで、書き込みは MCP から行います。
+			}
+		</div>
+		<form class="flex flex-wrap items-end gap-3 text-sm" method="get" action={ templ.SafeURL(researchNotesURL) } hx-get={ researchNotesURL } hx-target="#mcp-research-notes" hx-swap="innerHTML" hx-trigger="submit, change from:#mcp-research-notes-conclusion" data-testid="mcp-research-notes-filter">
+			<label class="flex flex-col text-sm text-mute">
+				検索語
+				@atoms.Input(atoms.InputProps{ID: "mcp-research-notes-q", Name: "q", Type: "search", Class: researchNoteFieldClass, Attrs: templ.Attributes{"value": props.Query, "maxlength": "200"}})
+			</label>
+			<label class="flex flex-col text-sm text-mute">
+				タグ
+				@atoms.Input(atoms.InputProps{ID: "mcp-research-notes-tag", Name: "tag", Type: "search", Class: researchNoteFieldClass, Attrs: templ.Attributes{"value": props.Tag, "maxlength": "40"}})
+			</label>
+			<label class="flex flex-col text-sm text-mute">
+				結論
+				@atoms.Select(atoms.SelectProps{ID: "mcp-research-notes-conclusion", Name: "conclusion", Class: researchNoteFieldClass}) {
+					@researchNoteOption("", "すべて", props.Conclusion == "")
+					@researchNoteOption("supported", "支持", props.Conclusion == "supported")
+					@researchNoteOption("unsupported", "不支持", props.Conclusion == "unsupported")
+					@researchNoteOption("pending", "保留", props.Conclusion == "pending")
+				}
+			</label>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Type: "submit", Attrs: templ.Attributes{"id": "mcp-research-notes-filter-submit"}}) {
+				絞り込む
+			}
+			<div id="mcp-research-notes-filter-error" class="w-full" data-testid="mcp-research-notes-filter-error"></div>
+		</form>
+		if len(props.Rows) == 0 {
+			if props.Filtered {
+				<span class="text-sm text-mute" data-testid="mcp-research-notes-empty">条件に合う研究ノートはありません。</span>
+			} else {
+				<span class="text-sm text-mute" data-testid="mcp-research-notes-empty">研究ノートはありません。</span>
+			}
+		} else {
+			<ul class="flex flex-col gap-2" aria-label="研究ノートの一覧" data-testid="mcp-research-notes-list">
+				for _, row := range props.Rows {
+					<li data-testid="mcp-research-note-row" data-note-id={ strconv.FormatInt(row.ID, 10) } data-conclusion={ row.Conclusion }>
+						<details class="flex flex-col gap-1">
+							<summary class="flex cursor-pointer flex-wrap items-center gap-2">
+								<span class={ "rounded-sm border px-2 py-0.5 text-xs", conclusionClass(row.Conclusion) } data-testid="mcp-research-note-conclusion">{ row.ConclusionLabel }</span>
+								<span class="text-ink" data-testid="mcp-research-note-question">{ row.Question }</span>
+								<span class="text-xs text-mute" data-testid="mcp-research-note-updated">{ row.Updated }</span>
+								<span class="text-xs text-mute" data-testid="mcp-research-note-version">版 { strconv.Itoa(row.Version) }</span>
+							</summary>
+							<div class="flex flex-col gap-1 pl-6 text-sm">
+								if row.Hypothesis != "" {
+									<span>仮説: { row.Hypothesis }</span>
+								}
+								if row.ResultSummary != "" {
+									<span>結果: { row.ResultSummary }</span>
+								}
+								<span class="text-mute">根拠リンク { strconv.Itoa(row.EvidenceCount) } 件・版 { strconv.Itoa(row.Version) }（更新のたびに前の版が残ります）</span>
+								if len(row.Tags) > 0 {
+									<span class="flex flex-wrap gap-1" data-testid="mcp-research-note-tags">
+										for _, tag := range row.Tags {
+											<a class="text-accent underline decoration-mute" href={ researchNoteTagURL(tag) } hx-get={ string(researchNoteTagURL(tag)) } hx-target="#mcp-research-notes" hx-swap="innerHTML" data-testid="mcp-research-note-tag-link"><code class="rounded-sm bg-surface px-2">{ tag }</code></a>
+										}
+									</span>
+								}
+							</div>
+						</details>
+					</li>
+				}
+			</ul>
+			if props.Capped {
+				<span class="text-xs text-mute" data-testid="mcp-research-notes-capped">更新の新しい順に { strconv.Itoa(props.Limit) } 件まで表示しています。検索語・タグ・結論で絞り込めます。</span>
+			}
+		}
+	</section>
+}

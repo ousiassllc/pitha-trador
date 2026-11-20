@@ -58,13 +58,25 @@ func cutoffOf(ctx context.Context, q query.Q) (Cutoff, time.Time, error) {
 	return c, day, nil
 }
 
-// Run evaluates every trader LONG/SHORT decision of [r.From, r.To) against the
-// baselines and returns the data and the number of decisions read. It reads
-// only; the clock is not used (the signature matches the other analyses).
-func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request) (any, int, error) {
+// collected is what one pass over the period's decisions yields: the cohorts
+// (oldest first) with their evaluated rows, and the settings they were
+// evaluated with. Run turns it into the jev_evaluation data, Rows hands the
+// rows to the other research tools.
+type collected struct {
+	base      barriersettings.Barriers
+	legs      legs
+	horizon   int
+	cutoff    Cutoff
+	decisions int
+	order     []*cohortAcc
+}
+
+// collect reads the decisions and bars of [r.From, r.To) and labels every one on
+// every arm. It reads only.
+func collect(ctx context.Context, q query.Q, r query.Range, req Request) (*collected, error) {
 	base, l, err := loadLegs(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	horizon := base.TimeoutMinutes()
 	if req.HorizonMinutes != nil {
@@ -72,17 +84,17 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 	}
 	cutoff, cutoffStart, err := cutoffOf(ctx, q)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	from, to := r.Bounds()
 	decisions, err := listDecisions(ctx, q, from, to, horizon, req)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 
 	bars, err := openBars(ctx, q, from, to, horizon, req)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer bars.close()
 	accs := map[cohortKey]*cohortAcc{}
@@ -92,7 +104,7 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 		acc := accs[key]
 		if acc == nil {
 			if len(accs) >= MaxCohorts {
-				return nil, 0, query.ErrLimitExceeded
+				return nil, query.ErrLimitExceeded
 			}
 			acc = &cohortAcc{key: key, firstAt: d.at, reasons: map[string]int{}}
 			accs[key], order = acc, append(order, acc)
@@ -102,7 +114,7 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 		acc.storedAll.add(d.storedNet)
 		window, err := bars.window(d.id) // every decision, in list order, even one that is then left out
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		if cutoff.Applied && d.at.Before(cutoffStart) {
 			acc.beforeCutoff++
@@ -124,11 +136,23 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 	slices.SortStableFunc(order, func(a, b *cohortAcc) int {
 		return cmp.Or(a.firstAt.Compare(b.firstAt), cmp.Compare(a.key.model, b.key.model), cmp.Compare(a.key.version, b.key.version))
 	})
+	return &collected{base: base, legs: l, horizon: horizon, cutoff: cutoff, decisions: len(decisions), order: order}, nil
+}
+
+// Run evaluates every trader LONG/SHORT decision of [r.From, r.To) against the
+// baselines and returns the data and the number of decisions read. It reads
+// only; the clock is not used (the signature matches the other analyses).
+func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request) (any, int, error) {
+	c, err := collect(ctx, q, r, req)
+	if err != nil {
+		return nil, 0, err
+	}
+	base, l, horizon, cutoff, decisions, order := c.base, c.legs, c.horizon, c.cutoff, c.decisions, c.order
 
 	out := Data{
 		From: r.From.In(query.JST).Format(time.DateOnly), To: r.To.In(query.JST).Format(time.DateOnly),
 		HorizonMinutes: horizon, PromptVersion: req.PromptVersion, ModelID: req.ModelID, Notice: notice,
-		Decisions: len(decisions), LLMCutoff: cutoff,
+		Decisions: decisions, LLMCutoff: cutoff,
 		LabelAssumptions: LabelAssumptions{
 			LabelVersion: domain.CalibrationLabelVersionTripleBarrier, HorizonMinutes: horizon,
 			TakeProfitBps: base.TakeProfitBps, StopLossBps: base.StopLossBps, BarrierCostBps: base.CostBps,
@@ -140,9 +164,20 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 		Caveats:     caveats(cutoff),
 	}
 	for _, acc := range order {
-		out.Cohorts = append(out.Cohorts, acc.cohort(horizon))
+		c := acc.cohort(horizon)
+		if req.FXSymbol != "" {
+			if c.FXContext, err = fxContext(ctx, q, req.FXSymbol, acc.rows); err != nil {
+				return nil, 0, err
+			}
+		}
+		if req.IndexSymbol != "" {
+			if c.IndexContext, err = indexContext(ctx, q, req.IndexSymbol, acc.rows); err != nil {
+				return nil, 0, err
+			}
+		}
+		out.Cohorts = append(out.Cohorts, c)
 	}
-	return out, len(decisions), nil
+	return out, decisions, nil
 }
 
 // labelDecision labels one decision on every arm with the Labeler's own
@@ -176,7 +211,7 @@ func labelDecision(d decisionRow, window []domain.Snapshot, horizon int, l legs)
 
 	long, short := nets[domain.JevDirectionLong], nets[domain.JevDirectionShort]
 	row := evalRow{
-		day: d.at.In(query.JST).Format(time.DateOnly), dir: d.direction, entered: d.entered, stored: d.storedNet,
+		id: d.id, at: d.at, day: d.at.In(query.JST).Format(time.DateOnly), dir: d.direction, entered: d.entered, stored: d.storedNet, attrs: d.attrs,
 	}
 	row.net[iLLM] = nets[d.direction]
 	row.net[iRandom] = (long + short) / 2

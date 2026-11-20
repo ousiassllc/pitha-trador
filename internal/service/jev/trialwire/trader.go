@@ -87,9 +87,16 @@ func (c *Client) Trader(ctx context.Context, req jev.TraderRequest) (Response, t
 	return mapResult(res), latency, requestBytes, nil
 }
 
+// StateOf is the "state" of the request Trader sends for req: the same
+// {"market", "similar_past_cases"} value, for a client that puts the state in
+// another wire format (the Codex CLI's prompt).
+func StateOf(req jev.TraderRequest) any {
+	return state{Market: req.State, SimilarPastCases: req.RAGContext}
+}
+
 func buildRequest(model string, provider *systemone.Provider, questions map[string]systemone.Question, req jev.TraderRequest) systemone.Request {
 	return systemone.Request{
-		State:     state{Market: req.State, SimilarPastCases: req.RAGContext},
+		State:     StateOf(req),
 		Model:     model,
 		Questions: questions,
 		Provider:  provider,
@@ -110,6 +117,10 @@ func RequestBytes(model string, provider *systemone.Provider, req jev.TraderRequ
 	}
 	return len(body), nil
 }
+
+// FromResult maps a validated trial answer set onto a Response (the same mapping
+// Trader applies to an OpenRouter answer).
+func FromResult(res systemone.Result) Response { return mapResult(res) }
 
 func mapResult(res systemone.Result) Response {
 	resp := Response{

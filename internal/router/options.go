@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/airoles"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
@@ -18,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/trialresults"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -46,13 +48,16 @@ type options struct {
 	orderProposals      orderproposals.Source
 	watchlistSource     watchlist.Source
 	homeSource          home.Source
-	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
-	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
-	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
-	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
-	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
-	jevPrompt           jevprompt.Service            // nil until WithJevPromptSettings: no Jev prompt card
-	jevTrial            jevtrial.Service             // nil until WithJevTrialSettings: no model-comparison trial card
+	trialResults        trialresults.Source
+	secretsStore        settings.SecretsStore            // nil until WithSecretsStore; also gates the Setup Guard
+	operationalSettings settings.OperationalSettings     // nil until WithOperationalSettings: no 運用設定 section
+	brokerSession       settings.BrokerSession           // nil until WithBrokerSession: no 立花 session state
+	mcpSettings         mcpsettings.Admin                // nil until WithMCPSettings: no MCP card
+	mcpWriteGate        mcpsettings.WriteGate            // nil until WithMCPWriteGate: no write section
+	jevPrompt           jevprompt.Service                // nil until WithJevPromptSettings: no Jev prompt card
+	jevTrial            jevtrial.Service                 // nil until WithJevTrialSettings: no model-comparison trial card
+	aiRoles             airoles.Service                  // nil until WithAIRoleSettings: no 役割ごとのモデル card
+	researchJobStatus   settings.ResearchJobStatusSource // nil until WithResearchJobStatus: no 夜間タスクの状態 panel
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -170,12 +175,6 @@ func WithWatchlistSource(source watchlist.Source) Option {
 	return func(o *options) { o.watchlistSource = source }
 }
 
-// WithHomeSource backs the read-only Home screen (`GET /`, issue #896) with its
-// database reads (handler/home.Source); cmd/* pass bootstrap/homeview's Reader.
-func WithHomeSource(source home.Source) Option {
-	return func(o *options) { o.homeSource = source }
-}
-
 // WithBacktestRunner overrides `GET /performance`'s backing
 // internal/web/handler/performance.BacktestRunner. cmd/desktop and cmd/server pass
 // internal/bootstrap/backtestsource's Source; the empty
@@ -204,11 +203,10 @@ func WithOperationalSettings(ops settings.OperationalSettings) Option {
 	return func(o *options) { o.operationalSettings = ops }
 }
 
-// WithMCPSettings enables the Settings screen's MCP card (`modal-mcp`) and
-// the `GET /settings/mcp-panel`, `POST /settings/mcp` and `POST
-// /settings/mcp/key` routes, backed by admin (issue #792); without it the card
-// is hidden and the routes answer 404. cmd/desktop and cmd/server pass
-// internal/bootstrap's *admin.Service over the MCP's settings file.
+// WithMCPSettings enables the Settings screen's MCP card (`modal-mcp`) and the `GET /settings/mcp-panel`,
+// `POST /settings/mcp` and `POST /settings/mcp/key` routes, backed by admin (issue #792); without it the
+// card is hidden and the routes answer 404. cmd/desktop and cmd/server pass internal/bootstrap's
+// *admin.Service over the MCP's settings file.
 func WithMCPSettings(admin mcpsettings.Admin) Option {
 	return func(o *options) { o.mcpSettings = admin }
 }
@@ -220,11 +218,10 @@ func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
 	return func(o *options) { o.mcpWriteGate = gate }
 }
 
-// WithJevPromptSettings enables the Settings screen's Jev prompt card
-// (`modal-jev-prompt`: live version, shadow switch, candidate, daily cost cap,
-// cost, promotion; issue #872) and its `GET /settings/jev-prompt-panel`, `POST
-// /settings/jev-prompt/shadow` and `POST /settings/jev-prompt/promote` routes;
-// without it the card is hidden and the routes answer 404.
+// WithJevPromptSettings enables the Settings screen's Jev prompt card (`modal-jev-prompt`: live version, shadow
+// switch, candidate, daily cost cap, cost, promotion; issue #872) and its `GET /settings/jev-prompt-panel`,
+// `POST /settings/jev-prompt/shadow` and `POST /settings/jev-prompt/promote` routes; without it the card is
+// hidden and the routes answer 404.
 func WithJevPromptSettings(svc jevprompt.Service) Option {
 	return func(o *options) { o.jevPrompt = svc }
 }

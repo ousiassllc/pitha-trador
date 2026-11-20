@@ -2,7 +2,7 @@
 // (issue #920): while the market is open it reads how many symbols the
 // in-memory watch list holds (rankingwatch.Watchlist.Len, a read-only count)
 // once a minute and stores that count with its source in
-// watch_list_runtime_days (migration 000057). It never stores a symbol and
+// watch_list_runtime_days (migration 000070). It never stores a symbol and
 // takes no part in the ranking fetch, the Scout input, the broker selection or
 // the watch list generation: it only observes, and a failed write is logged and
 // retried at the next tick, never a reason to stop trading.

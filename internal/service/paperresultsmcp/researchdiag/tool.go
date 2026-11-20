@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/evaldiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -19,6 +20,7 @@ const Description = "研究用のホライズンラベル（30 分・60 分・�
 	"cost_vs_spread に、ラベルが置くコストと実際のスプレッド（その足の spread_bps）の平均・中央値、gross から spread/2 を引いた net_after_spread_bps、" +
 	"スプレッドがコストを超えた行の割合。coverage に期間内のスナップショット（または判断）と記録済みの行の数・日別の記録状況、recorded_through に記録済みの最新の日。" +
 	"scope: snapshots（既定。全スナップショット）/ trader / scout（その判断のあった足。判断自身の方向で集計し、NONE は除く。direction で LONG/SHORT に絞れる）。" +
+	"fx_symbol（任意）を指定すると、各ホライズン・各側の行をラベルの対象時刻の直前 60 分の為替の mid 変化の向き（up / flat / down / unmatched）で分けた記述的な fx_context を足す（省略時は出力は変わらない）。" +
 	"ラベル・学習データ・取引は変えない。しきい値の判定・採用の推奨は返さない"
 
 // SchemaProperties are the tool's own arguments besides the period.
@@ -32,6 +34,7 @@ func SchemaProperties() map[string]any {
 			"type": "string", "enum": []string{domain.JevDirectionLong, domain.JevDirectionShort},
 			"description": "trader / scout のとき判断の方向で絞る。scope が snapshots のときは指定できない（両側を返す）",
 		},
+		"fx_symbol": map[string]any{"type": "string", "pattern": "^[A-Z]{3}_[A-Z]{3}$", "description": FXSymbolDescription},
 	}
 }
 
@@ -43,6 +46,7 @@ type Request struct {
 	To        *string `json:"to"`
 	Scope     string  `json:"scope"`
 	Direction string  `json:"direction"`
+	FXSymbol  string  `json:"fx_symbol"`
 }
 
 // UnmarshalJSON decodes strictly and validates, so the dispatcher's decode of a
@@ -72,6 +76,9 @@ func (r Request) Validate() error {
 		}
 	default:
 		return fmt.Errorf("researchdiag: direction %q is not LONG or SHORT", r.Direction)
+	}
+	if r.FXSymbol != "" && !evaldiag.ValidFxSymbol(r.FXSymbol) {
+		return fmt.Errorf("researchdiag: fx_symbol %q is not a currency pair like USD_JPY", r.FXSymbol)
 	}
 	return nil
 }

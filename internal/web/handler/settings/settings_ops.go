@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/costpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/entryqualitypanel"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/researchjobpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -76,10 +77,12 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 	case "policy-long", "policy-short":
 		props.Derived, props.DerivedTitle = entryqualitypanel.Load(ctx, h.ops, group.id), entryqualitypanel.Title
 	case costGroup.id, tripleBarrierGroupID:
-		props.Derived, props.DerivedTitle = h.costDerived(ctx), costpanel.Title
+		props.Derived, props.DerivedTitle = costpanel.Derived(ctx, h.ops), costpanel.Title
 	case metaLabelGroup.id:
 		props.Derived = h.metaLabelDerived(ctx)
 		props.DerivedTitle = "LLM cutoff の状態"
+	case researchJobsGroup.id:
+		props.Derived, props.DerivedTitle = h.researchJobsDerived(ctx), researchjobpanel.Title
 	}
 	return props
 }

@@ -57,7 +57,7 @@ const (
 var opsGroups = slices.Concat([]opsGroup{
 	brokerGroup,
 	tachibanaGroup,
-}, tachibanaSourceGroups, []opsGroup{
+}, tachibanaSourceGroups, researchTachibanaGroups, []opsGroup{
 	paperRiskGroup,
 	bucketGroup,
 	dailyGuardGroup,
@@ -67,6 +67,11 @@ var opsGroups = slices.Concat([]opsGroup{
 	paperBootstrapGroup,
 	sleepGuardGroup,
 	researchLabelGroup,
+	researchFXGroup,
+	researchJobsGroup,
+	promotionGroup,
+	jquantsGroup,
+	disclosureSrcGroup,
 	watchGroup,
 	{
 		id:          "backup",

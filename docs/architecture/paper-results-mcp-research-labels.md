@@ -44,6 +44,7 @@
 - 集計: `snapshots` scope は `research_label_day_stats`（日ごとの和）から平均・勝率・コスト・スプレッドを出し、日ごとの和をそのままブートストラップの 1 まとまり（JST 日）にする（`internal/service/metaablation/stats` の `Cluster` / `Bootstrap`）。行を全部読まないので、数百万行でも 3 秒の読み取りに収まる（合成データ 300 万行・40 日で約 1 秒）。`trader` / `scout` は判断（`jev_decisions`）と行を `(instrument_id, snapshot_at)` で結んだ行を読んで集計する（判断は足より少ない）。
 - 中央値は和から出せないので行を読む: ホライズンの行が 10 万を超えると、`sample_bucket`（`snapshot_id` の混ぜ関数）が k 未満の k% だけを、日・ホライズンごとに索引の範囲で読む。標本のとき `median_sample_percent` が 100 未満になる。平均・勝率・件数・区間は常に全行。
 - 区間と「検出できる最小差」は記述であり、採用のしきい値ではない。`notice` を毎回返し、しきい値の判定・推奨は返さない。
+- 任意の引数 `fx_symbol`（issue #1134。`jev_evaluation` の同名の引数、#1084 と同じ区分）: 指定すると、集計に入った行を、対象時刻（スナップショットの時刻。`trader` / `scout` では判断のあった足）の直前 60 分の mid 価格の変化の符号（`up` / `flat` / `down` / `unmatched`）で分け、ホライズン・側ごとに件数と平均 net bps を `fx_context` として返す。区分と足の結合は `evaldiag.FxTrailingBuckets`（`fxdiag.AtOrBefore` による at-or-before の結合）を共有し、複製しない。`research_fx_candles` を SELECT で読むだけで、記述のみ（しきい値なし・取引には使わない）。**指定しなければ `fx_context` というキーはなく、出力は引数が無かった頃とバイト単位で同じ**（`researchtests` の `TestWithoutFXSymbolTheOutputIsByteIdentical` が、引数の追加前の `main` で取った scope ごとの応答（`testdata/`）と一致すること、指定時は `fx_context` 以外の値が同じで何も書かれないことを固定する）。記録のスイッチ（`research.fx.enabled`）には触れず、記録が無い・止まっているときは該当の行が `unmatched` に入る。実装は `researchdiag/fx.go`（行ごとの対象時刻と net を `snapshot_at` 別に足し込み、集計の最後に 1 回だけ結合する）。中央値の標本（ホライズンの行が 10 万超の `snapshots`）では、区分も同じ標本の行を数える（`sample_percent`）。
 - 期間の上限は標準の 366 日で足りる（日ごとの読みは最大 366 日 × 3 ホライズン）。
 
 ## 5. 保持と量
@@ -60,3 +61,4 @@
 |---|---|---|---|
 | 1.0 | 2026-11-14 | 新規 | issue #1074 |
 | 1.1 | 2026-11-15 | 記録を Settings の `research.labels.enabled`（既定オフ。MCP `settings_set` でも変更可）の下に置き、オフの間は何も書かないことを追記。取り込みを 1 日ずつのチャンクにし、`maintenance.ErrMore` でランナーが `mu` を放す間（バックアップ・保持パージを待たせない）を追記。§5 を、保持期間 `research.labels.retention_days`（既定 90 日・研究用の表だけを削除）の実装に書き換え | issue #1073 / #1074（PR #1077 の直し） |
+| 1.2 | 2026-11-20 | §4 に任意の引数 `fx_symbol`（`fx_context`。#1084 と同じ区分を `evaldiag.FxTrailingBuckets` で共有。省略時は出力不変）を追記 | issue #1134 |

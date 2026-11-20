@@ -74,7 +74,7 @@
 
 ## 3.29.4 `settings_set` のシャドーの 2 キー（issue #929）
 
-`jev.shadow.enabled` と `jev.shadow.candidate_version` は `settings_set`（`paper-results-mcp.md` §3.12）で書ける。値は文字列で、`jev.shadow.enabled` は `"true"` / `"false"` / `"1"` / `"0"`（JSON の数値 1 / 0 も可。JSON の真偽値は `invalid_argument`）。検証は Settings 画面と同じ（`jevprompt.Service` が使う。候補の版は `jevprompt.ValidateCandidate`）。登録のない版・ライブの版と同じ版・空の候補は `invalid_value`（空は「値が空です」）。候補が設定済みでないときに `jev.shadow.enabled` を `true` にするのも `invalid_value`（MCP だけの規則。Settings 画面のフォームは許すが、そのときシャドーは何もしない）。`false` はいつでも保存できる。処理の順は `settings_set` のとおり（ホワイトリスト → 書き込み許可 → 値）。変更は監査 1 行と同じトランザクションで保存し、`settings_audit` / `settings_diff` に出る（`actor` は `mcp`）。Settings 画面でのこの 2 キーの変更は監査に残らないので、その間に変えられると `settings_diff` の `before` が古いことがある。
+`jev.shadow.enabled` と `jev.shadow.candidate_version` は `settings_set`（`paper-results-mcp.md` §3.12）で書ける。値は文字列で、`jev.shadow.enabled` は `"true"` / `"false"` / `"1"` / `"0"`（JSON の数値 1 / 0 も可。JSON の真偽値は `invalid_argument`）。検証は Settings 画面と同じ（`jevprompt.Service` が使う。候補の版は `jevprompt.ValidateCandidate`）。登録のない版・ライブの版と同じ版・空の候補は `invalid_value`（空は「値が空です」）。候補が設定済みでないときに `jev.shadow.enabled` を `true` にするのも `invalid_value`（MCP だけの規則。Settings 画面のフォームは許すが、そのときシャドーは何もしない）。`false` はいつでも保存できる。処理の順は `settings_set` のとおり（ホワイトリスト → 書き込み許可 → 値）。変更は監査 1 行と同じトランザクションで保存し、`settings_audit` / `settings_diff` に出る（`actor` は `mcp`）。Settings 画面でのこの 2 キーの変更も、同じ表に `actor=gui` で残る（issue #1113）ので、`settings_diff` / `settings_audit` / 実験の `switch_check` に出る。
 
 ## 受け入れ条件
 

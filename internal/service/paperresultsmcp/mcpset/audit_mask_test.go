@@ -11,13 +11,13 @@ import (
 )
 
 // Masking policy: a secret-class (or unknown) key's values never reach the
-// audit table, whoever wrote the row. Only recordOn can be given such a key
+// audit table, whoever wrote the row. Only RecordGUIChange can be given such a key
 // (Audited records whitelisted keys only), so this test is in-package.
 func TestAuditMasksSecretClassKeys(t *testing.T) {
 	ctx := context.Background()
 	_, db := testkit.NewMigratedDB(t)
 	before, after := opsettings.Value{Current: "old-secret", Overridden: true}, opsettings.Value{Current: "new-secret", Overridden: true}
-	if err := recordOn(ctx, db, time.Date(2026, 10, 18, 3, 0, 0, 0, time.UTC), "broker.tachibana.password", before, after, false); err != nil {
+	if err := RecordGUIChange(ctx, db, time.Date(2026, 10, 18, 3, 0, 0, 0, time.UTC), "broker.tachibana.password", before, after, false); err != nil {
 		t.Fatal(err)
 	}
 	var b, a string

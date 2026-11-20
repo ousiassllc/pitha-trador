@@ -69,6 +69,7 @@ func (h *Handler) Register(engine *gin.Engine) {
 		engine.POST("/settings/mcp/experiments", h.CreateExperiment)
 		engine.GET("/settings/mcp/experiments/:id", h.CompareExperiment)
 		engine.POST("/settings/mcp/experiments/:id/close", h.CloseExperiment)
+		h.registerResearchNotes(engine)
 	}
 }
 

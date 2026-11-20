@@ -60,4 +60,8 @@
 | 1.61 | 2026-11-14 | 「Settings画面で設定する運用項目」に、`market_snapshots`の削除前退避先（DBと同じ階層の`snapshot_archive/`。設定項目なし・同じPC内のみ・DBバックアップ対象外・容量の目安）を追記 | issue #1072 |
 | 1.62 | 2026-11-14 | 「PC 移行」節と手順書`setup/pc-migration.md`を追加（旧PCで書き出し→新PCへインストール→Setup→取り込み→再起動→秘密・バックアップ先の入れ直し。安全コピーからの戻し方、別フォルダ`backups/`・`snapshot_archive/`の扱い）。バックアップ先の項の「PC移行は#1075」を手順書への参照に | issue #1075 |
 | 1.63 | 2026-11-15 | `setup/pc-migration.md`の除外設定に立花の接続先URL（`base_url`）を追加し、「確認の有効期限」の原因から事実と異なる「アプリの再起動」を改め、展開サイズの上限と、予約後にデータが増えた場合の失敗を追記 | issue #1075 |
-| 1.64 | 2026-11-15 | 自動更新の署名確認を必須にした（`ci.md`のリリース署名）: 公開鍵が埋め込まれていないビルドは署名を確認できないため更新しない（新バージョンの検知は続ける）。リリース前に`RELEASE_SIGNING_PUBLIC_KEY`変数と`RELEASE_SIGNING_KEY`シークレットの両方が設定されている前提を明記 | issue #891 |
+| 1.64 | 2026-11-15 | AI のプロバイダー（独自 API／OpenRouter）と役割ごとのモデルの設定手順`setup/ai-providers.md`を追加し、`setup.md`から参照 | issue #1080 |
+| 1.65 | 2026-11-15 | 環境変数`PITHA_CODEX_HOME`・`PITHA_CODEX_BIN`と、ChatGPT のサブスク（Codex CLI のログイン）をトライアルのアームに使う手順を`setup/ai-providers.md`に追加 | issue #1081 |
+| 1.66 | 2026-11-15 | 「J-Quants の取り込み」節と手順書`setup/jquants.md`を追加（API キー`JQUANTS_API_KEY`・契約の内容・1日の要求数の上限・解約時の削除）。環境変数の許可キー一覧に`JQUANTS_API_KEY`を追記 | issue #1093 |
+| 1.67 | 2026-11-18 | `setup/ai-providers.md`の ChatGPT のサブスクの節に、運用手順の詳細（A: 専用`CODEX_HOME`へのデバイスコードのログイン、B: `auth.json`の扱い、C: 子プロセスの環境変数の許可リストと確認、D: キーリング保存でないことの確認、E: アカウント側のクレジット残高・自動リロードの確認、F: モデル退役時の直し方）を追加。既存の最小手順は変えていない | issue #1110 |
+| 1.68 | 2026-11-15 | 自動更新の署名確認を必須にした（`ci.md`のリリース署名）: 公開鍵が埋め込まれていないビルドは署名を確認できないため更新しない（新バージョンの検知は続ける）。リリース前に`RELEASE_SIGNING_PUBLIC_KEY`変数と`RELEASE_SIGNING_KEY`シークレットの両方が設定されている前提を明記 | issue #891 |

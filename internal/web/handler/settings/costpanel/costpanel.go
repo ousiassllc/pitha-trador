@@ -7,18 +7,41 @@
 package costpanel
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"math"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/exitalign"
+	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 // Title is the panel's title.
 const Title = "ラベルと約定モデルのコスト整合"
+
+// Getter reads the effective value of one runtime setting (the Settings screen's
+// OperationalSettings satisfies it).
+type Getter interface {
+	Get(ctx context.Context, key string) (opsettings.Value, error)
+}
+
+// Derived is the panel as the Settings groups show it: Load over ops. A read
+// failure is logged and shown as such instead of failing the screen.
+func Derived(ctx context.Context, ops Getter) []molecules.SettingDerivedItem {
+	items, err := Load(func(key string) (string, error) {
+		v, err := ops.Get(ctx, key)
+		return v.Current, err
+	})
+	if err != nil {
+		slog.Error("settings: read the cost settings for the consistency panel; showing it as unreadable", "error", err)
+		return []molecules.SettingDerivedItem{{Key: "error", Label: "コスト整合を読み取れませんでした", Off: true}}
+	}
+	return items
+}
 
 // Load reads the effective barrier and cost settings with get (the effective
 // value of one runtime_settings key, as text) and renders them with Items. The

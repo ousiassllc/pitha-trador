@@ -82,6 +82,10 @@ type Task struct {
 	Name  string
 	Label string
 	Run   func(ctx context.Context) error
+	// TrackFailure also persists the task's last failure (day and a short
+	// reason, see Status) under its name, for a screen that shows it. It is
+	// off for the housekeeping tasks, whose failures go to the Notifier.
+	TrackFailure bool
 }
 
 // Runner executes Tasks with catch-up, retry and failure notification.
@@ -229,6 +233,7 @@ func (r *Runner) run(ctx context.Context, task Task, now time.Time) (more bool) 
 		// Progress: the failure streak is over, but the day is not done.
 		delete(r.failures, task.Name)
 		delete(r.retryAt, task.Name)
+		r.clearFailure(ctx, task, now)
 		return ctx.Err() == nil
 	}
 	if errors.Is(err, ErrSkipped) {
@@ -239,6 +244,7 @@ func (r *Runner) run(ctx context.Context, task Task, now time.Time) (more bool) 
 		delete(r.failures, task.Name)
 		delete(r.retryAt, task.Name)
 		r.recordSuccess(ctx, task.Name, now)
+		r.clearFailure(ctx, task, now)
 		return false
 	}
 	if ctx.Err() != nil {
@@ -247,6 +253,7 @@ func (r *Runner) run(ctx context.Context, task Task, now time.Time) (more bool) 
 	r.failures[task.Name]++
 	n := r.failures[task.Name]
 	r.retryAt[task.Name] = now.Add(r.retryDelay)
+	r.recordFailure(ctx, task, now, err)
 	slog.Error("scheduler: maintenance task failed", "task", task.Name, "consecutive_failures", n, "error", err)
 	if n == FailureNotifyThreshold && r.notifier != nil {
 		if nerr := r.notifier.MaintenanceFailed(ctx, task.Label, n, err); nerr != nil {

@@ -11,22 +11,19 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// periodTools are the tools taking the from/to period arguments (seventeen since
-// metalabel_training_readiness / jev_models, issues #848 / #849,
-// session_diagnostics, issue #850, entry_quality_whatif, issue #911, and
-// disclosure_skip_summary, issue #935, jev_trial_compare / jev_trial_cost, issue #1060,
-// jev_evaluation #1073, research_horizon_summary #1074); health_today (#808) takes none (healthToday).
+// periodTools take the from/to period (issues #848-#1096, twenty-three); health_today (#808) and promotion_checklist (#1091, needs a candidate) take none.
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
 	"metalabel_training_readiness", "jev_models", "session_diagnostics", "entry_quality_whatif", "disclosure_skip_summary", "jev_trial_compare", "jev_trial_cost",
-	"jev_evaluation", "research_horizon_summary",
+	"jev_evaluation", "research_horizon_summary", "research_quote_source_compare", "disclosure_sources_status", "jquants_status",
+	"jev_evaluation_slices", "jev_evaluation_trend", "candidate_ledger",
 }
 
 const healthToday = "health_today"
 
-// allTools is every tool of the dispatch table.
-var allTools = append(slices.Clone(periodTools), healthToday)
+// allTools is every read tool of the dispatch table; ai_roles (#1080) and promotion_checklist (#1091) take no period either.
+var allTools = append(slices.Clone(periodTools), healthToday, "ai_roles", "promotion_checklist")
 
 // settingsTools are the tools of issues #806 / #807: the read tools of the
 // whitelisted settings and the only tools that write (settings_set and the
@@ -44,21 +41,25 @@ var proposalTools = []string{
 	"order_proposals_list", "order_proposal_get", "order_proposal_summary",
 }
 
-// experimentTools are the tools of issue #871: record a tuning experiment and
-// end it (these two write one row each), and list / compare them (read only).
+// experimentTools (issue #871): create / close write one row each; list / compare only read.
 var experimentTools = []string{"experiment_create", "experiment_close", "experiments_list", "experiment_compare"}
 
-// jevShadowTools are the tools of issue #872: the shadow comparison and its
-// cost (reads) and the explicit promotion of a prompt version (the one write).
+// jevShadowTools (issue #872): two reads and the one explicit write (promoting a prompt version).
 var jevShadowTools = []string{"jev_shadow_compare", "jev_shadow_cost", "jev_prompt_promote"}
+var researchStatusTools = []string{"research_daily_bars_status"}                                                  // #1082: read-only, no period
+var replayTools = []string{"replay_estimate", "replay_start", "replay_stop", "replay_progress", "replay_results"} // #1085; two write, pinned in replaytests
+var exportTools = []string{"training_dataset_export"}                                                             // #1094: writes files, not rows; pinned in exporttests
+// researchTools (issues #1086 / #1087): backtest_start and the virtual Paper profile create / stop write one research row each; the rest read.
+var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed", "virtual_paper_compare"}
+var researchNoteTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary", "index_series_summary"} // #1095 / #1084: two notes writes, two reads, the FX and index summaries
 
-// writingTools are the tools that change state; every other tool is annotated
-// read-only.
+// writingTools are the tools that change state; every other tool is annotated read-only.
 var writingTools = []string{
 	"settings_set", "settings_write_enable", "settings_write_disable",
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 	"experiment_create", "experiment_close",
-	"jev_prompt_promote",
+	"jev_prompt_promote", "replay_start", "replay_stop", "training_dataset_export", "research_note_create", "research_note_update",
+	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {
@@ -82,9 +83,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the eighteen read tools, the six settings tools, the
-// six order-proposal tools, the four experiment tools and the three Jev prompt tools
-// (37 in all); only the nine writing tools are not marked read-only.
+// tools/list returns exactly the twenty-six read tools, the six settings, six order-proposal, four experiment and three Jev prompt tools, the research status tool,
+// the five replay tools, the export tool, the six research tools and the five research-note / FX tools (63 in all); only the seventeen writing tools are not read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -112,12 +112,12 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools)
+	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchStatusTools, replayTools, exportTools, researchTools, researchNoteTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchStatusTools)+len(replayTools)+len(exportTools)+len(researchTools)+len(researchNoteTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -132,8 +132,8 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) {
-			continue // their reach is pinned in settingstests and proposaltests
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) || slices.Contains(replayTools, name) || slices.Contains(exportTools, name) || slices.Contains(researchTools, name) || slices.Contains(researchNoteTools, name) {
+			continue // their reach is pinned in settingstests, proposaltests, replaytests and exporttests
 		}
 		if !slices.Contains(allTools, name) {
 			t.Errorf("dispatch table has unexpected tool %q", name)

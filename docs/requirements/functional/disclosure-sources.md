@@ -1,0 +1,10 @@
+# 機能要件: 開示・ニュースの追加の情報源（EDINET・立花ニュース）
+
+`docs/requirements/functional.md` §4 の分割章（行数上限のため別ファイル）。issue #1096（関連: #935、#725）。設計は `docs/architecture/overview/integrations-disclosure-sources.md`、表は `docs/architecture/er/tables-disclosure-sources.md`、MCP は `docs/api/endpoints/paper-results-mcp-disclosure-sources.md`。
+
+- FR-DISCLOSURE-SRC-1（EDINET の書類一覧の記録）: アプリは EDINET API v2 の書類一覧（`documents.json?type=2`）の、提出日時・書類管理番号・書類種別コード・証券コード（5 桁の secCode を、`disclosure_items.symbol` と同じ 4 桁へ正規化）・提出者名・書類の説明を、研究用の表 `research_edinet_documents` に記録する。**書類の本文は取得しない**（書類取得の API を呼ばない）。API キー（`EDINET_API_KEY`）が未設定のあいだは要求を 1 回も送らない。キーは URL（クエリ）に載るため、ログ・エラー・記録のどこにも URL を残さない。要求は 1 日（JST）の上限（`disclosure_src.edinet.daily_request_cap`、既定 30、1〜1000）まで。
+- FR-DISCLOSURE-SRC-2（立花ニュースの記録）: 立花 e支店 API のニュースの見出し・時刻・関連銘柄を `research_tachibana_news` に記録する部品を持つ。取得は `NewsFetcher` インターフェースの向こうで、認証情報が未設定（`CredentialHolder.Configured()` が偽）なら何もしない。**立花の実機計測（#725）が終わるまで本番には繋がない**（本番の起動に `NewsFetcher` の実装もタスクの登録も無い）。
+- FR-DISCLOSURE-SRC-3（既定オフ・Settings だけ）: `disclosure_src.edinet.enabled` / `disclosure_src.tachibana_news.enabled`（`runtime_settings`、JSON 整数 0/1、**既定 0＝オフ**）、各 `daily_request_cap`、`disclosure_src.edinet.lookback_days`（既定 7）、`disclosure_src.retention_days`（既定 1095、30〜3650）は、Settings 画面の運用設定「開示・ニュースの追加の情報源（EDINET・立花）」（`disclosure-src`、`/settings/integrations#modal-disclosure-src`）だけで変える。Paper 実績 MCP の `settings_set` の許可リストには入れない。オフ・キー未設定の間は外部への要求 0 回・書き込み 0 件（メンテナンスの実行日の記録も書かない）。オンにするのはマージ後に運用者が行う。
+- FR-DISCLOSURE-SRC-4（記録だけ）: 記録した行は、ゲート・Policy・Risk・発注・執行・Paper ガード・Live・Jev・RAG の索引・Calibration・メタモデルの学習・自己改善・既存の開示見送りルールの入力にしない。`disclosure_items`・`jev_decisions`・`jev_shadow_decisions`・`jev_trial_decisions`・`market_snapshots`・`daily_bars` へは書かない。
+- FR-DISCLOSURE-SRC-5（結合）: 記録した行は、銘柄（4 桁の証券コード）と時刻（UTC・RFC3339 の小数 9 桁固定）で `disclosure_items` と結合できる（読み取り用のビュー `research_disclosure_source_events_v`）。
+- FR-DISCLOSURE-SRC-6（状況の読み取り）: 読み取り専用の MCP ツール `disclosure_sources_status` が、情報源ごとの記録件数・最終取得時刻・要求数・失敗件数・最後の失敗の固定コード・今日の要求数と上限を返す。API キー・認証情報・URL・エラー本文・見出し・書類の表題は返さない。

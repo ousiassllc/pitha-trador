@@ -1,0 +1,121 @@
+package trialresults
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+const (
+	sectionClass = "mt-12 rounded-lg border border-border bg-surface p-6"
+	tableClass   = "w-full border-collapse text-left text-sm"
+	headRowClass = "border-b border-border text-xs font-semibold text-mute"
+	thClass      = "px-3 py-2.5"
+	thRightClass = "px-3 py-2.5 text-right"
+	cellClass    = "px-3 py-2.5"
+	numClass     = "px-3 py-2.5 text-right font-mono tabular-nums"
+)
+
+// Panel is the お試し tab's body: the period links, then either the error, the
+// empty state or the sections (arms, skips, cost by source, proxy figures).
+// Everything is read-only: there is no form or button.
+templ Panel(props Props) {
+	@periodLinks(props.Periods)
+	if props.Error != "" {
+		<p class="mt-8 rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="trial-error">{ props.Error }</p>
+	} else if props.Empty {
+		<section class={ sectionClass } data-testid="trial-empty">
+			<p class="text-ink">
+				お試しの記録はまだありません。
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-empty", Label: "お試しの記録の説明"}) {
+					お試しは、ライブの判断と同じ入力を別のモデル（アーム）にも送って答えを比べる試験です。オンにするのは設定画面だけで、この画面では何も変更しません。記録ができると、ここに集計が出ます。
+				}
+			</p>
+		</section>
+	} else {
+		@armsSection(props)
+		if len(props.SkipReasons) > 0 {
+			@skipSection(props.SkipReasons)
+		}
+		@costSection(props.Cost)
+		@proxySection(props.Proxy)
+	}
+}
+
+templ periodLinks(links []PeriodLink) {
+	<ul class="mt-6 flex flex-wrap gap-2 text-sm" aria-label="集計する期間" data-testid="trial-periods">
+		for _, l := range links {
+			<li>
+				<a
+					class={ "inline-flex min-h-8 items-center rounded-md border px-3", templ.KV("border-accent text-ink", l.Current), templ.KV("border-border text-mute hover:text-ink", !l.Current) }
+					href={ templ.SafeURL(l.Href) }
+					if l.Current {
+						aria-current="true"
+					}
+				>{ l.Label }</a>
+			</li>
+		}
+	</ul>
+}
+
+templ armsSection(props Props) {
+	<section class={ sectionClass } data-testid="trial-arms">
+		<h2 class="mb-6 text-2xl font-semibold text-ink">
+			アームごとの呼び出し
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-arms", Label: "アームごとの呼び出しの説明"}) {
+				欠測率は、失敗・拒否・一部だけ答えた呼び出しの割合です。分母は呼び出した回数で、見送りは入れていません。見送りは、同時実行枠・最短間隔・日次上限などで呼ばなかった回数です。順位や勝者は出していません。
+			}
+		</h2>
+		<table class={ tableClass } aria-label="アームごとの呼び出し">
+			<thead>
+				<tr class={ headRowClass }>
+					<th scope="col" class={ thClass }>アーム</th>
+					<th scope="col" class={ thRightClass }>呼び出し</th>
+					<th scope="col" class={ thRightClass }>欠測率</th>
+					<th scope="col" class={ thRightClass }>見送り</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, a := range props.Arms {
+					<tr class="border-b border-border" data-arm={ a.ID }>
+						<th scope="row" class="px-3 py-2.5 font-mono font-normal">{ a.ID }</th>
+						<td class={ numClass } data-metric="calls">{ itoa(a.Calls) }</td>
+						<td class={ numClass } data-metric="missing_rate">{ missingText(a) }</td>
+						<td class={ numClass } data-metric="skipped">{ itoa(a.Skipped) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<p class="mt-4 text-sm text-mute" data-testid="trial-cohort">
+			全アームに聞けた判断: { itoa(props.CohortSize) } 件
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-cohort", Label: "全アームに聞けた判断の説明"}) {
+				選んだアームすべてに聞いた、ライブの判断の数です。どれかのアームが見送った判断は入りません。成績の良い局面だけが残ることがあるため、見送りの件数も合わせて見てください。
+			}
+		</p>
+	</section>
+}
+
+templ skipSection(rows []SkipRow) {
+	<section class={ sectionClass } data-testid="trial-skips">
+		<h2 class="mb-6 text-2xl font-semibold text-ink">
+			見送りの理由
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-skips", Label: "見送りの理由の説明"}) {
+				お試しが呼ばなかった判断の理由別の件数です。見送りには答えも費用もありません。
+			}
+		</h2>
+		<table class={ tableClass } aria-label="見送りの理由">
+			<thead>
+				<tr class={ headRowClass }>
+					<th scope="col" class={ thClass }>アーム</th>
+					<th scope="col" class={ thClass }>理由</th>
+					<th scope="col" class={ thRightClass }>件数</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, r := range rows {
+					<tr class="border-b border-border">
+						<th scope="row" class="px-3 py-2.5 font-mono font-normal">{ r.ArmID }</th>
+						<td class={ cellClass }>{ r.Reason }</td>
+						<td class={ numClass }>{ itoa(r.Count) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}

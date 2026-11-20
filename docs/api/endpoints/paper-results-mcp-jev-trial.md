@@ -88,7 +88,11 @@
 
 **`CostBlock`**: `calls`・`reported`（`calls`・`usd`: 応答が報告した `usage.cost` の合計・`counted_usd`: 上限に数えた額。`usd` と同じ）・`list_price_estimate`（`calls`・`usd`: 定価×入力トークンの推定の合計・`counted_usd`: 上限に数えた額。処理先を固定していないアームは定価と最悪単価の高い方で数えるので `usd` 以上になる）・`unknown`（下記）・`counted_total_usd`（上限の判定に数えた額の合計 = 1 日の上限の基準。`reported.counted_usd` + `list_price_estimate.counted_usd` + `unknown.unknown_counted_usd`）。
 
+**`subscription`**（ChatGPT のサブスク。issue #1081）: `calls`・`input_tokens`・`output_tokens`。**USD は無い**（`cost_usd` は NULL・上限に数えた額は 0 なので、`reported` / `list_price_estimate` / `unknown` / `counted_total_usd` のどの USD の数字にも入らない。`CostBlock.calls`には入る）。
+
 **`unknown`**: `calls`・`actual_usd`（常に `null`。実費は分からない。0 円ではない）・`unknown_counted_usd`（上限の判定に数えた額。最悪値側の単価で数えた**上限の見積り**で、`reported` / `list_price_estimate` の合計には混ぜない。0 に丸めない）・`counted_as_zero_calls`（課金されない前提の 4xx（413 を除く）・529 応答を 0 と数えた件数。低い `unknown_counted_usd` を「無料」と読まないために出す）・`basis`（`cap_counting_upper_bound`）。
+
+**`limits.codex`**（ChatGPT のサブスクのプロバイダー。読み取りのみ）: `enabled`（`jev.trial.codex.enabled`）・`login`（`state`＝`chatgpt` / `logged_out` / `other_auth` / `unavailable` / 空＝まだ確認していない、`checked_at`。アプリが呼ぶ前に確かめた最後の結果）・`calls_today`・`daily_call_cap`・`tokens_today`・`daily_token_cap`（USD ではない）・`min_call_interval_seconds`・`halt`（`reason`＝`usage_limit` / `failed` / `call_cap` / `token_cap`、`at`、`until`＝再開の時刻、`until_known`＝CLI が時刻を示した（false は JST のその日の終わり）、`active`＝いま止まっている）。理由コードと時刻だけで、CLI の文面・認証情報・パスは返さない。
 
 **`limits`**: `enabled`（トライアルの有効。読み取りのみ）・`today`（JST の日）・`arms_config_invalid`（保存されたアーム設定が読めない。理由の文は返さない）・`overall_daily_cap_usd`・`overall_cap_source`（`default` / `stored`）・`overall_counted_today_usd`・`skipped_today`（今日の見送り＝呼ばなかった比較の理由別件数。全アーム。全理由が入る。呼び出し数・費用には入らない）・`halt`（全体の止まりの記録 `{date, reason, active_today}`。無ければ `null`。`reason` は `daily_cost_cap` / `payment_required` など固定コード）・`failure_cap`・`throttle_cooldown_seconds`・`min_call_interval_seconds`・`worst_case_usd_per_mtok`（unknown を数える単価）・`arms[]`（設定されたアームごと: `arm_id`・`model`・`prompt_version`・`daily_cap_usd`・`list_price_known`・`counted_today_usd`・`skipped_today`（今日の見送りの理由別件数。全理由が入る）・`failures_today`・`halt`（`{date, reason, active_today}` または `null`）・`throttle`（`{date, reason, active}` または `null`。429/529 の止まり））。止まりの記録は理由と日だけで、金額・時刻・ステータス・本文は返さない。
 
@@ -96,7 +100,7 @@
 
 - 両ツールが `tools/list` に出て `readOnlyHint: true`。書き込み・発注・設定変更の手段が無く、`jev.trial.*` は `settings_set` が `key_not_allowed`（403）で拒否する
 - 共通の成功数（`common_success_count`）と欠測率（`missing_rate`。分母に失敗・拒否・一部拒否を含む）が出る。成功した行だけの集計で順位を作らない（失敗の多いアームは上位にならない）
-- 費用は出所別（`reported` / `list_price_estimate` / `unknown`）・アーム別・日別。unknown は 0 円にならず（`actual_usd` は `null`）、他の合計に混ざらない
+- 費用は出所別（`reported` / `list_price_estimate` / `unknown` / `subscription`）・アーム別・日別。unknown は 0 円にならず（`actual_usd` は `null`）、他の合計に混ざらない
 - 出力のどの階層にも、多数決・合議・勝者・推奨・昇格の項目が無い（テストが出力の全キーを走査する）
 - NONE は当たり外れに数えず、反実仮想は `counterfactual_proxy`（`proxy: true`）に別に出る。切り詰め疑い・RAG フラグの行は除外せず件数で出る
 - 応答本文・エラーの抜粋・API キーが出力に無い。取引・Risk・発注・ライブ Jev・既存のシャドー・学習の経路は変わらない
@@ -107,3 +111,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-13 | 新規 | issue #1060 |
+| 1.1 | 2026-11-15 | `jev_trial_cost`に`subscription`（呼び出し数・トークン。USD なし）と`limits.codex`（スイッチ・ログイン状態・回数／トークンの上限と今日の数・停止の理由コードと再開時刻）を追加 | issue #1081 |

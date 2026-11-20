@@ -66,6 +66,12 @@ type Confounder struct {
 	Values []string `json:"values,omitempty"`
 }
 
+// Windows are the two periods Compare reads for exp at now (before is the same
+// length of time just before the start): the exact instants, for the readers that
+// must cover the very same windows: the label-based comparison (labelcompare) and
+// the promotion checklist's per-day figures.
+func (e Experiment) Windows(now time.Time) (before, after query.Range) { return e.windows(now) }
+
 // Comparison is experiment_compare's data.
 type Comparison struct {
 	Experiment Experiment `json:"experiment"`

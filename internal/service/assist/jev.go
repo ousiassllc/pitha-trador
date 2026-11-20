@@ -35,11 +35,20 @@ func useJev(client *Client, jev Asker) (bool, error) {
 	return false, ErrNotConfigured
 }
 
+// Backend resolves, for one call, a role's override client and its Jev-protocol
+// fallback (see useJev). Luna, Sol and Opus ask it at call time, so a provider
+// or model saved on the Settings screen applies to the next call without a
+// restart. An error means the role cannot be served right now: the call is
+// skipped (the error wraps ErrNotConfigured) instead of moving to a backend
+// the operator did not choose.
+type Backend func(ctx context.Context) (*Client, Asker, error)
+
 // Option configures Luna, Sol or Opus.
 type Option func(*options)
 
 type options struct {
-	jev Asker
+	jev     Asker
+	backend Backend
 }
 
 // WithJev makes the role fall back to Jev (issue #273) whenever its own
@@ -48,10 +57,32 @@ func WithJev(jev Asker) Option {
 	return func(o *options) { o.jev = jev }
 }
 
-func applyOptions(opts []Option) options {
+// WithBackend makes the role resolve its client and fallback on every call
+// instead of using the ones given at construction (client and WithJev are then
+// not used; client may be nil).
+func WithBackend(b Backend) Option {
+	return func(o *options) { o.backend = b }
+}
+
+// backendFor is the role's Backend: WithBackend's, else the fixed client and
+// WithJev's fallback.
+func backendFor(client *Client, opts []Option) Backend {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return o
+	if o.backend != nil {
+		return o.backend
+	}
+	return func(context.Context) (*Client, Asker, error) { return client, o.jev, nil }
+}
+
+// pick resolves b for one call and says how to serve it (see useJev).
+func pick(ctx context.Context, b Backend) (client *Client, jev Asker, viaJev bool, err error) {
+	client, jev, err = b(ctx)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	viaJev, err = useJev(client, jev)
+	return client, jev, viaJev, err
 }

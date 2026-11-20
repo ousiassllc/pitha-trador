@@ -8,7 +8,7 @@
 
 既存の 10 分・10bps のラベル（`calibration_outcomes`）に優位性が見えない（コスト前で +1〜2bps）ことを受け、保有時間を **30 分・60 分・引け**に変えたときの bps を、コスト前（gross）・コスト後（net = gross − 既存ラベルが置くコスト）で返す。対象は取引した判断だけでなく、scout の判断と**全スナップショット**（後から何でも評価できるように）。ラベルが仮定するコストを、実際のスプレッド（`market_snapshots.spread_bps`）と並べて見せる。**研究専用**で、取引の入力ではない。しきい値の判定・採用の推奨・優劣の結論は返さない。
 
-引数: `from` / `to`（他のツールと同じ期間。省略は直近 30 日。最大 366 日）、`scope`（任意。`snapshots`（既定）/ `trader` / `scout`）、`direction`（任意。`LONG` / `SHORT`。`trader` / `scout` のときだけ指定でき、判断自身の方向で絞る。`snapshots` で指定すると `invalid_argument`）。未知のキー・型違い・上記以外の値は `invalid_argument`、期間の不備は `invalid_period`。
+引数: `from` / `to`（他のツールと同じ期間。省略は直近 30 日。最大 366 日）、`scope`（任意。`snapshots`（既定）/ `trader` / `scout`）、`direction`（任意。`LONG` / `SHORT`。`trader` / `scout` のときだけ指定でき、判断自身の方向で絞る。`snapshots` で指定すると `invalid_argument`）、`fx_symbol`（任意。通貨ペア `^[A-Z]{3}_[A-Z]{3}$`、例 `USD_JPY`。指定すると `data` に `fx_context` を足す。下記）。未知のキー・型違い・上記以外の値は `invalid_argument`、期間の不備は `invalid_period`。
 
 `scope`:
 
@@ -28,6 +28,7 @@
 | `recorded_through` | 記録を終えた最新の JST 日（`YYYY-MM-DD`）。無ければ `null`。期間によらない |
 | `horizons[]` | `30m` / `60m` / `close` の順に 1 要素ずつ。下の表 |
 | `coverage` | 記録の網羅（下の表） |
+| `fx_context` | `fx_symbol` を指定したときだけ付く。下の「`fx_context`」。**指定しなければこのキーは出ず、応答は引数が無かった頃とバイト単位で同じ** |
 | `definitions` | 各数値の定義（`entry` / `exit`（ホライズン別）/ `cost` / `net` / `spread` / `scope`（scope 別）/ `intervals`） |
 | `notice` | 常に返す固定文: 研究専用で取引の入力ではない・しきい値の判定・採用の推奨・優劣の結論は含まない |
 
@@ -74,7 +75,22 @@
 
 引け（`close`）の出口は、同じ JST 日の最後の足（15:30 以前）が 15:25 JST 以降のときだけ。それより早く足が止まった日・15:25 以降のエントリーには `close` の行が無い。`30m` / `60m` は、目標時刻以前の最後の足が目標から 2 分以内のときだけ行があり、昼休み・引け・欠測をまたぐ窓は行が無い（短い窓を記録しない。ライブのラベルと同じ規則）。出口は出口の足の `price` で、出口側のスプレッドは含まない。
 
-エラー: `invalid_argument`（上記）、`invalid_period`、`query_timeout`（3 秒を超えたとき）、`db_locked` / `db_unavailable`（共通）。応答に行単位の識別子・価格・応答本文は含まない。
+#### `fx_context`（`fx_symbol` を指定したとき）
+
+`jev_evaluation` の `fx_context`（`paper-results-mcp-jev-evaluation.md` §3.33）と同じ区分を、ホライズン・側ごとの行に当てる。研究用の為替 1 分足の記録（`research_fx_candles`。`docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md`）を**読むだけ**で、記述のみ（しきい値なし・取引には使わない）。記録が無い・`research.fx.enabled` がオフで記録が止まっている場合も、エラーにせず該当の行が `unmatched` に入る（スイッチは変えない）。`fx_context` 以外の値は、指定してもしなくても変わらない。
+
+| キー | 内容 |
+|---|---|
+| `symbol` | 指定した通貨ペア |
+| `lookback_minutes` / `staleness_minutes` | 60 / 5。固定値 |
+| `return` | 変化の定義の説明文 |
+| `horizons[]` | `30m` / `60m` / `close` の順に 1 要素ずつ（`data.horizons[]` と同じ順） |
+
+`horizons[]` の要素: `horizon` / `sample_percent`（区分に使った行の割合（%）。100 = `long` / `short` の全行。ホライズンの行が 10 万を超える `snapshots` では `median_sample_percent` と同じ標本の行。decision の scope は常に 100）/ `long` / `short`（`data.horizons[]` と同じく、その側の行が 1 件も無いと `null`）。`long` / `short` は `buckets[]`: `up` / `flat` / `down` / `unmatched` の 4 要素（この順。0 件も出す）の `{bucket, n, mean_net_bps}`。`mean_net_bps` は、その区分の行の**コスト控除後**（net = gross − その行のコスト）の平均 bps（0 件は `null`）。4 区分の `n` の合計は、`sample_percent` が 100 のとき `long` / `short` の `rows` に等しい。
+
+区分は、行の**対象時刻**（エントリーのスナップショットの時刻。`trader` / `scout` では判断のあった足の時刻）`t` の mid 価格の、60 分前の mid 価格に対する**変化の符号**: `up`（上昇）/ `flat`（変化なし）/ `down`（下落）。mid・足の選び方・`unmatched` の条件は `jev_evaluation` と同じ（`t` 以前で最新の BID・ASK の両方がある足の始値の平均。足の開始から 5 分以内のものだけ。`t` と `t − 60 分` のどちらかに足が無ければ `unmatched`。`fxdiag.AtOrBefore`）。判断の時刻より後の価格は見ない。
+
+エラー: `invalid_argument`（上記。`fx_symbol` が通貨ペアの形でないときも）、`invalid_period`、`query_timeout`（3 秒を超えたとき）、`db_locked` / `db_unavailable`（共通）。応答に行単位の識別子・価格・応答本文は含まない。
 
 例（要点だけ）:
 
@@ -101,3 +117,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-14 | 新規 | issue #1074 |
+| 1.1 | 2026-11-20 | 任意の引数 `fx_symbol`（研究用の為替 1 分足を対象時刻に合わせて結合し、ホライズン・側ごとの行を直前 60 分の mid 変化の符号で分けた `fx_context` を足す。指定しなければ出力は変わらない）を、引数と「`fx_context`」の節に追記 | issue #1134 |

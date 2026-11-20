@@ -32,7 +32,7 @@ func isJevShadowKey(key string) bool {
 // from store.
 func getSetting(ctx context.Context, store opsettings.Store, svc *opsettings.Service, key string) (opsettings.Value, error) {
 	if isJevShadowKey(key) {
-		return jevShadowValue(ctx, store, key)
+		return JevShadowValue(ctx, store, key)
 	}
 	return svc.Get(ctx, key)
 }
@@ -46,11 +46,11 @@ func saveSetting(ctx context.Context, store opsettings.Store, svc *opsettings.Se
 	return svc.Save(ctx, key, raw)
 }
 
-// jevShadowValue reads a shadow key the way the shadow itself does
+// JevShadowValue reads a shadow key the way the shadow itself does
 // (jevshadowsettings.Load): a stored row that does not parse counts as the
 // default (switch off, no candidate), so a damaged row cannot show the shadow
-// as on.
-func jevShadowValue(ctx context.Context, store opsettings.Store, key string) (opsettings.Value, error) {
+// as on. mcpset/jevaudit (the Settings screen's audit) reads through it too.
+func JevShadowValue(ctx context.Context, store opsettings.Store, key string) (opsettings.Value, error) {
 	raw, stored, err := store.Get(ctx, key)
 	if err != nil {
 		return opsettings.Value{}, fmt.Errorf("mcpset: read %s: %w", key, err)
@@ -116,7 +116,7 @@ func saveJevShadow(ctx context.Context, store opsettings.Store, key, raw string,
 			return &opsettings.InvalidValueError{Reason: fmt.Sprintf("%q は真偽として読めません。true / false（1 / 0 も可）で指定してください", raw)}
 		}
 		if on {
-			cand, err := jevShadowValue(ctx, store, jevshadowsettings.KeyCandidateVersion)
+			cand, err := JevShadowValue(ctx, store, jevshadowsettings.KeyCandidateVersion)
 			if err != nil {
 				return err
 			}

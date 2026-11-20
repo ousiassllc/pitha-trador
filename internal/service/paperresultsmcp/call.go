@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net"
 	"net/http"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jsonrpc"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -18,7 +19,7 @@ type callParams struct {
 
 // handleToolCall validates the call, takes a concurrency slot and runs the
 // tool in one read-only transaction under the 3 s budget.
-func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest) {
+func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req jsonrpc.Request) {
 	start := s.now()
 	toolName := ""
 	var rng query.Range
@@ -71,7 +72,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcR
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.QueryTimeout)
 	defer cancel()
-	data, n, err := s.execute(ctx, run, rng, clientHost(r))
+	data, n, err := s.execute(ctx, run, rng, mcpset.ClientHost(r.RemoteAddr))
 	if err != nil {
 		finish(classify(ctx, err))
 		return
@@ -85,7 +86,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcR
 		writeError(w, req.ID, CodeInternal)
 		return
 	}
-	writeResult(w, req.ID, map[string]any{
+	jsonrpc.WriteResult(w, req.ID, map[string]any{
 		"content":           []map[string]any{{"type": "text", "text": string(text)}},
 		"structuredContent": body,
 		"isError":           false,
@@ -108,16 +109,6 @@ func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range, clie
 	defer func() { _ = tx.Rollback() }()
 	return run(ctx, toolEnv{
 		q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now(),
-		client: client, paperLimits: s.opts.PaperLimits, policy: s.opts.PolicyThresholds, writer: s.Writer, experiments: s.experiments,
+		client: client, paperLimits: s.opts.PaperLimits, policy: s.opts.PolicyThresholds, writer: s.Writer, experiments: s.experiments, backtests: s.backtests,
 	})
-}
-
-// clientHost is the caller's host for the audit log: the IP of the TCP peer,
-// never a header value (headers are caller-controlled).
-func clientHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

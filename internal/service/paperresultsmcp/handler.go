@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jsonrpc"
 )
 
 const (
@@ -41,7 +43,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		writeRPCError(w, http.StatusBadRequest, nil, rpcInvalidRequest, "リクエストが不正です。")
+		jsonrpc.WriteError(w, http.StatusBadRequest, nil, jsonrpc.InvalidRequest, "リクエストが不正です。")
 		return
 	}
 	s.handleRPC(w, r, raw)
@@ -83,49 +85,20 @@ func secretEqual(got, want string) bool {
 	return subtle.ConstantTimeCompare(g[:], w[:]) == 1
 }
 
-// JSON-RPC 2.0 error codes.
-const (
-	rpcParseError     = -32700
-	rpcInvalidRequest = -32600
-	rpcMethodNotFound = -32601
-	rpcInvalidParams  = -32602
-	rpcServerError    = -32000 // spec error codes ride in error.data.code
-)
-
-type rpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params"`
-}
-
-type rpcErrorBody struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
-}
-
-type rpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id"`
-	Result  any             `json:"result,omitempty"`
-	Error   *rpcErrorBody   `json:"error,omitempty"`
-}
-
 func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, raw []byte) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) > 0 && trimmed[0] == '[' {
 		// Batching was removed from MCP in 2025-06-18; not supported.
-		writeRPCError(w, http.StatusBadRequest, nil, rpcInvalidRequest, "リクエストが不正です。")
+		jsonrpc.WriteError(w, http.StatusBadRequest, nil, jsonrpc.InvalidRequest, "リクエストが不正です。")
 		return
 	}
-	var req rpcRequest
+	var req jsonrpc.Request
 	if err := json.Unmarshal(trimmed, &req); err != nil {
-		writeRPCError(w, http.StatusBadRequest, nil, rpcParseError, "リクエストを解釈できません。")
+		jsonrpc.WriteError(w, http.StatusBadRequest, nil, jsonrpc.ParseError, "リクエストを解釈できません。")
 		return
 	}
 	if req.JSONRPC != "2.0" || req.Method == "" {
-		writeRPCError(w, http.StatusBadRequest, req.ID, rpcInvalidRequest, "リクエストが不正です。")
+		jsonrpc.WriteError(w, http.StatusBadRequest, req.ID, jsonrpc.InvalidRequest, "リクエストが不正です。")
 		return
 	}
 	if len(req.ID) == 0 {
@@ -135,39 +108,15 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, raw []byte) {
 	}
 	switch req.Method {
 	case "initialize":
-		writeResult(w, req.ID, initializeResult(req.Params))
+		jsonrpc.WriteResult(w, req.ID, jsonrpc.InitializeResult(req.Params, "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取りツールと、ホワイトリストにある基本設定を読む・変更する settings_* ツール、Paper の注文案を出して状態を読む order_proposal* ツールを提供します。注文案は受け付けて記録するだけで、発注するのはアプリです（Risk check のあと）。Live の発注・送金・Kill Switch の操作・Live の値・秘密情報は扱えません。"))
 	case "ping":
-		writeResult(w, req.ID, map[string]any{})
+		jsonrpc.WriteResult(w, req.ID, map[string]any{})
 	case "tools/list":
-		writeResult(w, req.ID, map[string]any{"tools": toolList()})
+		jsonrpc.WriteResult(w, req.ID, map[string]any{"tools": toolList()})
 	case "tools/call":
 		s.handleToolCall(w, r, req)
 	default:
-		writeRPCError(w, http.StatusOK, req.ID, rpcMethodNotFound, "未対応のメソッドです。")
-	}
-}
-
-// supportedVersions are the MCP protocol revisions this server speaks, the
-// newest first. The tool JSON is identical in all of them.
-var supportedVersions = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
-
-func initializeResult(params json.RawMessage) map[string]any {
-	version := supportedVersions[0]
-	var p struct {
-		ProtocolVersion string `json:"protocolVersion"`
-	}
-	if json.Unmarshal(params, &p) == nil {
-		for _, v := range supportedVersions {
-			if v == p.ProtocolVersion {
-				version = v
-			}
-		}
-	}
-	return map[string]any{
-		"protocolVersion": version,
-		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-		"serverInfo":      map[string]any{"name": "paper-results-mcp", "version": "1.1.0"},
-		"instructions":    "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取りツールと、ホワイトリストにある基本設定を読む・変更する settings_* ツール、Paper の注文案を出して状態を読む order_proposal* ツールを提供します。注文案は受け付けて記録するだけで、発注するのはアプリです（Risk check のあと）。Live の発注・送金・Kill Switch の操作・Live の値・秘密情報は扱えません。",
+		jsonrpc.WriteError(w, http.StatusOK, req.ID, jsonrpc.MethodNotFound, "未対応のメソッドです。")
 	}
 }
 
@@ -182,29 +131,6 @@ func toolList() []map[string]any {
 		}
 	}
 	return list
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	body, err := json.Marshal(v)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_, _ = w.Write(body)
-}
-
-func writeResult(w http.ResponseWriter, id json.RawMessage, result any) {
-	writeJSON(w, http.StatusOK, rpcResponse{JSONRPC: "2.0", ID: id, Result: result})
-}
-
-func writeRPCError(w http.ResponseWriter, status int, id json.RawMessage, code int, message string) {
-	if len(id) == 0 {
-		id = json.RawMessage("null")
-	}
-	writeJSON(w, status, rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcErrorBody{Code: code, Message: message}})
 }
 
 // writeError answers with a spec error: the HTTP status of the errors
@@ -226,13 +152,13 @@ func writeFailure(w http.ResponseWriter, id json.RawMessage, te *toolError) {
 	if te.detail != "" {
 		data["detail"] = te.detail
 	}
-	writeJSON(w, info.status, map[string]any{
+	jsonrpc.WriteJSON(w, info.status, map[string]any{
 		"jsonrpc": "2.0",
 		"id":      id,
 		"code":    string(code),
 		"message": info.message,
-		"error": rpcErrorBody{
-			Code:    rpcServerError,
+		"error": jsonrpc.ErrorBody{
+			Code:    jsonrpc.ServerError,
 			Message: info.message,
 			Data:    data,
 		},

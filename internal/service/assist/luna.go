@@ -43,20 +43,19 @@ type Classification struct {
 // Luna AI API instead. Its output is auxiliary context for Jev only
 // (FR-LUNA-5).
 type Luna struct {
-	client *Client
-	jev    Asker
+	backend Backend
 }
 
 // NewLuna returns a Luna adapter that calls client, or Jev (WithJev) when
-// client is not configured.
+// client is not configured. With WithBackend both are resolved on every call.
 func NewLuna(client *Client, opts ...Option) *Luna {
-	return &Luna{client: client, jev: applyOptions(opts).jev}
+	return &Luna{backend: backendFor(client, opts)}
 }
 
 // Configured reports whether Classify can reach a backend; News Ingest is
 // not started otherwise.
 func (l *Luna) Configured() bool {
-	_, err := useJev(l.client, l.jev)
+	_, _, _, err := pick(context.Background(), l.backend)
 	return err == nil
 }
 
@@ -65,16 +64,16 @@ func (l *Luna) Configured() bool {
 // error, not a best-effort guess: FR-LUNA-4 treats any Luna failure as "no
 // news flag".
 func (l *Luna) Classify(ctx context.Context, item NewsItem) (Classification, error) {
-	viaJev, err := useJev(l.client, l.jev)
+	client, jev, viaJev, err := pick(ctx, l.backend)
 	if err != nil {
 		return Classification{}, fmt.Errorf("assist: luna classify %q: %w", item.Symbol, err)
 	}
 	var out Classification
 	if viaJev {
-		out, err = l.classifyWithJev(ctx, item)
+		out, err = classifyWithJev(ctx, jev, item)
 	} else {
 		req := LunaRequest{Symbol: item.Symbol, Headline: item.Headline, Body: item.Body, PublishedAt: item.PublishedAt}
-		err = l.client.PostJSON(ctx, LunaClassifyPath, req, &out)
+		err = client.PostJSON(ctx, LunaClassifyPath, req, &out)
 	}
 	if err != nil {
 		return Classification{}, fmt.Errorf("assist: luna classify %q: %w", item.Symbol, err)

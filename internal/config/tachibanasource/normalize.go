@@ -150,6 +150,9 @@ type TachibanaSourceSettings struct {
 	Screen                 []TachibanaScreenIndicator // in TachibanaScreenIndicators order
 	EventMaxConnectsPerDay int
 	RestQuote              TachibanaRestQuoteSettings
+	// Research are the research-only collections (research.go); they are off
+	// by default and never a trading input.
+	Research TachibanaResearchSettings
 }
 
 // BuildTachibanaSource assembles the settings from the text of every
@@ -189,6 +192,7 @@ func BuildTachibanaSource(text map[string]string) TachibanaSourceSettings {
 			RequestsPerRound:   integer(KeyTachibanaRestQuoteRequestsPerRound),
 		},
 	}
+	s.Research = buildResearch(get, integer, list)
 	for _, ind := range TachibanaScreenIndicators {
 		s.Screen = append(s.Screen, TachibanaScreenIndicator{
 			Name: ind, Weight: num(TachibanaScreenWeightKey(ind)), TopN: integer(TachibanaScreenTopNKey(ind)),

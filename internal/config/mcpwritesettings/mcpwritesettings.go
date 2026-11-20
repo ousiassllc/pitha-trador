@@ -15,7 +15,14 @@
 // those two; the shadow's cost cap, failure cap, halt and throttle records and
 // the live prompt version are not on it) and the research horizon labels'
 // recording switch (researchlabelsettings.KeyEnabled, issue #1073: only the
-// switch; its retention is not on it). It never holds a Live value
+// switch; its retention is not on it), the research FX candle record's
+// recording switch (researchfxsettings.KeyEnabled, issue #1084: only the
+// switch; its pairs are not on it), the research index record's recording switch
+// (researchindexsettings.KeyEnabled, issue #1084: only the switch; its codes are
+// not on it) and the on/off switches of the research
+// daily evaluation record, the research model training and the training-dataset
+// export (researchjobsettings, issues #1089, #1092, #1094: only the switches; the
+// retentions and the promotion criteria are not on it). It never holds a Live value
 // (policy.long|short.min_entry_quality, the Live thresholds, are not on it),
 // the Paper bootstrap switch, a secret, or anything that orders, moves money or
 // releases the Kill Switch - those have no key in runtime_settings the MCP
@@ -40,7 +47,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchindexsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/researchjobsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/researchlabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
 // KeyWriteEnabled is the runtime_settings key of the write switch: the JSON
@@ -103,6 +114,10 @@ const bucketConstraint = "0 以上 1 兆円以下の整数。株と債券ETFの�
 // recording switch (the opsettings integer 0 / 1).
 const researchLabelEnabledConstraint = "1（オン）または 0（オフ）"
 
+// researchSwitchConstraint is the accepted values of the two 立花 research
+// collection switches (issues #1082, #1083; the opsettings integer 0 / 1).
+const researchSwitchConstraint = "1（オン）または 0（オフ）"
+
 // The accepted values of the two Jev shadow keys (issue #929). The write is
 // validated by mcpset with the Settings screen's own check
 // (jevprompt.ValidateCandidate); this text only tells a client what to send.
@@ -134,6 +149,13 @@ var specs = []Spec{
 	{jevshadowsettings.KeyEnabled, UnitText, "Jev のお試し判断（シャドー）のオン・オフ。オンでも取引には使わず、結果は別表に残すだけ。既定 false（オフ）。1 日の費用上限・失敗回数の上限・呼び出し間隔・429/529 での停止はこの API から変えられない", shadowEnabledConstraint, false},
 	{jevshadowsettings.KeyCandidateVersion, UnitText, "シャドーが動かす候補の Trader の版。ライブの版の切り替え（昇格）ではない。既定は未設定（候補なし）。未設定のままオンにはできない", shadowCandidateConstraint, false},
 	{researchlabelsettings.KeyEnabled, UnitText, "研究用ホライズンラベル（30 分・60 分・引けまでのコスト前後の bps）の日次記録のオン・オフ。記録は研究専用の表に書くだけで取引には使わない。既定 0（オフ）で、オフの間は日次タスクが何も書かない。保持期間（research.labels.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{researchfxsettings.KeyEnabled, UnitText, "研究用の為替 1 分足（USD_JPY など）の記録のオン・オフ。GMOコイン 外国為替FX の公開 API から 1 分足を取り、研究専用の表に書くだけで取引には使わない。既定 0（オフ）で、オフの間は外部への要求も書き込みもない。通貨ペア（research.fx.symbols）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{researchindexsettings.KeyEnabled, UnitText, "研究用の指数（日経平均・TOPIX など）の 1 分値の記録のオン・オフ。立花の日中の時価の記録（#1083）に残っている指数の値を、研究専用の表へ写すだけで、どこにも要求を出さず、取引には使わない。既定 0（オフ）で、オフの間は読み書きもない。指数コード（research.index.symbols）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{tachibanasource.KeyResearchBarsEnabled, UnitText, "立花の日足を夜間に daily_bars へ記録する研究用収集（ブローカーが kabu のままでも動く）のオン・オフ。記録だけで取引には使わない。既定 0（オフ）で、オフまたは立花の認証情報が未設定の間は立花へ何も要求しない。取得速度・時刻・市場区分は変えられない", researchSwitchConstraint, false},
+	{tachibanasource.KeyResearchQuotesEnabled, UnitText, "立花の日中の時価を kabu と並べて研究用の別テーブルに記録するもの（最大 120 銘柄）のオン・オフ。記録だけで取引には使わない。既定 0（オフ）で、オフまたは認証情報が未設定の間は立花へ接続も要求もしない。銘柄・接続回数・REST 間隔・保持期間はこの API から変えられない", researchSwitchConstraint, false},
+	{researchjobsettings.KeyEvalEnabled, UnitText, "Jev の評価の主な数字（日ごと・モデルと版ごとの和と件数）を毎日の引け後に研究専用の表へ 1 行ずつ残す日次記録のオン・オフ。取引には使わない。既定 0（オフ）で、オフの間は何も書かない。保持期間（research.eval.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{researchjobsettings.KeyModelEnabled, UnitText, "特徴量だけで学習する研究用モデル（AI を使わない）の夜間の学習と予測の記録のオン・オフ。予測は研究専用の表に残すだけで取引には使わない。既定 0（オフ）で、オフの間は学習が動かず何も書かない。保持期間（research.model.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
+	{researchjobsettings.KeyExportEnabled, UnitText, "training_dataset_export（学習用データセットの書き出し。ローカルのフォルダへ書くだけで外へは送らない）のオン・オフ。既定 0（オフ）で、オフの間はツールが何も書き出さない", researchLabelEnabledConstraint, false},
 }
 
 // Specs returns the whitelist in display order. The slice is a copy.

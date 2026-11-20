@@ -22,13 +22,21 @@ func WithSecrets(secrets ...string) Option {
 }
 
 // allowCall reports whether arm may call its API now: at least minInterval
-// after the arm's previous call. It books the call, so concurrent comparisons
-// of one arm cannot both pass. Pacing is per arm: arms have their own keys.
-func (t *Trial) allowCall(arm string) bool {
+// after the arm's previous call (at least floor, for a provider with a longer
+// interval, unless pacing is off: minInterval 0). It books the call, so
+// concurrent comparisons of one arm cannot both pass. Pacing is per arm: arms
+// have their own keys.
+func (t *Trial) allowCall(arm string, floor ...time.Duration) bool {
 	t.paceMu.Lock()
 	defer t.paceMu.Unlock()
 	now := t.pace()
-	if last, ok := t.lastCall[arm]; ok && t.minInterval > 0 && now.Sub(last) < t.minInterval {
+	interval := t.minInterval
+	if interval > 0 {
+		for _, f := range floor {
+			interval = max(interval, f)
+		}
+	}
+	if last, ok := t.lastCall[arm]; ok && interval > 0 && now.Sub(last) < interval {
 		return false
 	}
 	t.lastCall[arm] = now

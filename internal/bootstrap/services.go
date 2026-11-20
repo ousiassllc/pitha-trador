@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/airolewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
@@ -22,6 +23,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchextrawire"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -100,21 +103,23 @@ type Services struct {
 	Updater      *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
 	strategy           *config.StrategyConfig
+	aiRoles            airolewire.Roles // each AI role's connection, resolved at start-up (issue #1080)
 	wg                 sync.WaitGroup
 	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 
-	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
-	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.
+	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the defaults unless 立花 is selected); the nightly daily-bar batch reads them.
 	tachibana tachibanasource.TachibanaSourceSettings
 
-	newsEnabled bool
-	candidates  *candidates.Refresher
+	newsEnabled   bool
+	researchExtra *researchextrawire.Wire // J-Quants, EDINET and replay (issues #1093, #1096, #1085)
+	candidates    *candidates.Refresher
 	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true (rankingwatch_start.go);
 	// tachibanaMonitor is the 立花 counterpart, set whenever 立花 is selected (watchlist_start.go).
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
 	watchListSizes   *watchlistruntime.Repository // kabu runtime watch list size per day (issue #920)
+	research         *researchwire.Wire           // the 立花 research-only collections, off by default
 	proposalExec     proposalexec.Processor       // the Paper results MCP's order proposals (issue #828)
 }
 
@@ -196,8 +201,9 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 
 	svc := &Services{strategy: state.Strategy, watchListSizes: watchlistruntime.New(state.DB)}
 	svc.buildRepositories(state.DB)
+	svc.researchExtra = researchextrawire.New(state.DB, svc.Settings, secrets, state.Paths.DBPath)
 	svc.wireActivity()
-	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
+	svc.buildExternalClients(state.DB, secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy, secrets)
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)
@@ -207,6 +213,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
 	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker, svc.Settings)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
+	svc.research = researchwire.Build(researchwire.Deps{DB: state.DB, Settings: svc.Settings, Secrets: secrets, Broker: cfg.brokerSettings, DailyBars: svc.DailyBars, Watchlist: svc.watchlist, InSession: marketcalendarOpen})
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
@@ -216,3 +223,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 
 	return svc
 }
+
+// NewsIngestEnabled reports whether Start launches the News Ingest polling
+// loop: the feed is not switched off and Luna (Jev or LUNA_*) is available.
+func (s *Services) NewsIngestEnabled() bool { return s.newsEnabled }

@@ -69,6 +69,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				</span>
 			}
 		</div>
+		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		<div class="flex flex-col gap-1">
 			<div class="flex items-center gap-2">
 				if len(props.Options) > 0 {
@@ -114,7 +115,6 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 					}
 				}
 			</div>
-			<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		</div>
 		<div id={ SettingErrorID(props.Key) } class="empty:hidden" data-testid={ "error-" + props.Key }></div>
 		if props.OnOff && props.Unreadable {
