@@ -47,7 +47,7 @@ export const helpMarkStyles = css`
     background: var(--surface);
     color: var(--mute);
     font: inherit;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     line-height: 1;
     cursor: help;
@@ -75,11 +75,11 @@ export const helpMarkStyles = css`
     width: 18rem;
     max-width: 80vw;
     padding: 0.375rem 0.625rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--line-soft);
     border-radius: var(--r-sm);
     background: var(--surface);
     color: var(--ink);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 400;
     line-height: 1.6;
     text-align: left;

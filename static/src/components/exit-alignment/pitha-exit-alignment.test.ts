@@ -168,30 +168,30 @@ describe('pitha-exit-alignment summary', () => {
   });
 });
 
-// Issue #966: heading gaps follow the spacing recipe (h2 below 24, h3 below 12), not 4px.
+// Issue #966: heading gaps follow the spacing recipe (h2 below 16, h3 below 12), not 4px.
 describe('pitha-exit-alignment heading spacing', () => {
-  test('puts 24px below the h2 and 12px below the h3', async () => {
+  test('puts 16px below the h2 and 12px below the h3', async () => {
     const el = await mount(body());
     const css = (
       el.constructor as unknown as { elementStyles: { cssText: string }[] }
     ).elementStyles
       .map((s) => s.cssText)
       .join('');
-    expect(css).toMatch(/h2\s*\{[^}]*margin:\s*0\.75rem 0 1\.5rem;/);
+    expect(css).toMatch(/h2\s*\{[^}]*margin:\s*0\.75rem 0 1rem;/);
     expect(css).toMatch(/h3\s*\{[^}]*margin:\s*0\.75rem 0;/);
   });
 });
 
-// Issues #969, #993: the headings step down the guide's scale by tag (h2 = 2xl 32px / 1.4, h3 = xl 24px / 1.5).
+// Brand-guide #app-ui: section headings (h2 and h3 alike) are the 15px / 600 item step.
 describe('pitha-exit-alignment heading sizes', () => {
-  test('sets the h2 to 2rem and the h3 to 1.5rem', async () => {
+  test('sets the h2 and the h3 to 0.9375rem semibold', async () => {
     const el = await mount(body());
     const css = (
       el.constructor as unknown as { elementStyles: { cssText: string }[] }
     ).elementStyles
       .map((s) => s.cssText)
       .join('');
-    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*2rem;[^}]*line-height:\s*1\.4;/);
-    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*1\.5rem;[^}]*line-height:\s*1\.5;/);
+    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*0\.9375rem;[^}]*font-weight:\s*600;/);
+    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*0\.9375rem;[^}]*font-weight:\s*600;/);
   });
 });

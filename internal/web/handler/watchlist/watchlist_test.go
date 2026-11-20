@@ -60,7 +60,7 @@ func TestPage_ShowsTheListsWithTheirOriginsAndIndicators(t *testing.T) {
 		`data-symbol="7203" data-origin="held"`, `data-symbol="6758" data-origin="screen"`,
 		"値上がり率・出来高急増", "保有・注文中", "基準日（日足）",
 		`data-list-date="2026-10-08" data-source="carried_over" data-active="false"`, `data-testid="watchlist-fallback"`,
-		"ml-2 rounded-full border tone-success", "ml-2 rounded-full border tone-warning",
+		"ml-2 rounded-pill tone-success", "ml-2 rounded-pill tone-warning",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -75,10 +75,10 @@ func TestPage_SourceErrorIs500WithoutLeakingIt(t *testing.T) {
 	}
 }
 
-// An empty state is a dashed --r-lg (12px) box with 48/24 padding (brand-guide §3).
+// An empty state is a surface-sel ground --r-card (16px) box with 48/24 padding and no frame (brand-guide app UI).
 func TestPage_EmptyStateUsesTheGuideShape(t *testing.T) {
 	_, body := get(t, fakeSource{view: domain.WatchListView{Enabled: true}})
-	if !strings.Contains(body, "rounded-lg border border-dashed border-border px-6 py-12") {
+	if !strings.Contains(body, "rounded-card bg-surface-sel px-6 py-12") || strings.Contains(body, "border-dashed") {
 		t.Errorf("empty state shape wrong: %s", body)
 	}
 }

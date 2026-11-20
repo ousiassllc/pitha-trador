@@ -68,7 +68,7 @@ func TestBacktestForm_ExplainsFieldsInHelpMarksOutsideTheLabel(t *testing.T) {
 func TestBacktestForm_FieldWrapperIsNotMute(t *testing.T) {
 	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10}))
 
-	if !strings.Contains(html, `class="flex flex-col text-sm text-ink"`) || strings.Contains(html, "flex flex-col text-sm text-mute") {
+	if !strings.Contains(html, `class="flex flex-col text-item font-semibold text-ink"`) || strings.Contains(html, "flex flex-col text-item font-semibold text-mute") {
 		t.Errorf("backtest field wrapper must be text-ink: %s", html)
 	}
 }

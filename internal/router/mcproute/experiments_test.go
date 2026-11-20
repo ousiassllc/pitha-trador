@@ -61,7 +61,7 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 		t.Fatalf("empty section = %d: %s", rec.Code, body)
 	}
 	// The section is a card of its own in its dialog (like mcp-panel), not a panel nested in another card.
-	if !strings.Contains(body, `class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-experiments"`) {
+	if !strings.Contains(body, `class="flex flex-col gap-4 rounded-card bg-surface p-card text-item text-ink" data-testid="mcp-experiments"`) {
 		t.Errorf("the experiments section is not the dialog card shape: %s", body)
 	}
 

@@ -43,7 +43,7 @@ type SettingFieldRowProps struct {
 // button is rendered only while a value is stored.
 templ SettingFieldRow(props SettingFieldRowProps) {
 	<form
-		class="flex flex-col gap-2 text-sm text-ink"
+		class="flex flex-col gap-2 text-item text-ink"
 		method="post"
 		action={ templ.SafeURL("/ops-settings/" + props.Key) }
 		hx-post={ "/ops-settings/" + props.Key }
@@ -53,11 +53,11 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 	>
 		<input type="hidden" name={ props.CSRFField } value={ props.CSRFToken }/>
 		<div class="flex items-center gap-1">
-			<label class="flex flex-col gap-1" for={ "setting-input-" + props.Key }>
+			<label class="flex flex-col gap-1 font-semibold" for={ "setting-input-" + props.Key }>
 				<span class="flex items-center gap-2">
 					{ props.Label }
 					if props.Overridden {
-						<span class="rounded-full border tone-mute px-2 py-1 text-xs" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
+						<span class="rounded-pill tone-mute px-3 py-1 text-note font-normal" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
 					}
 				</span>
 			</label>
@@ -69,7 +69,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				</span>
 			}
 		</div>
-		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
+		<p class="text-note text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		<div class="flex flex-col gap-1">
 			<div class="flex items-center gap-2">
 				if len(props.Options) > 0 {
@@ -118,13 +118,13 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 		</div>
 		<div id={ SettingErrorID(props.Key) } class="empty:hidden" data-testid={ "error-" + props.Key }></div>
 		if props.OnOff && props.Unreadable {
-			<p class="text-sm text-danger" role="alert" data-testid={ "unreadable-" + props.Key }>現在の値を読み込めなかったため、保存できません。ページを再読み込みしてください。直らない場合は「既定に戻す」で保存値を削除できます。</p>
+			<p class="text-item text-danger" role="alert" data-testid={ "unreadable-" + props.Key }>現在の値を読み込めなかったため、保存できません。ページを再読み込みしてください。直らない場合は「既定に戻す」で保存値を削除できます。</p>
 		}
 		if props.Warning != "" {
-			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
+			<p class="text-item text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}
 		if props.Notice != "" {
-			<p class="text-sm text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
+			<p class="text-item text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
 		}
 	</form>
 }

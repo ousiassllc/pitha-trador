@@ -27,22 +27,22 @@ func TestScanFunnel_StepsAreNamedInPlainJapaneseAndKeepTheirNumbers(t *testing.T
 	}
 }
 
-// issue #987: each funnel step nests in the scan panel card, so it is a --bone panel on
-// --r-md (brand-guide S1/§4) with the small-card padding (16).
+// issue #987: each funnel step nests in the scan panel card, so it is a surface-sel panel
+// on 16px corners with the small-card padding (16) and no frame.
 func TestScanFunnel_StepsAreNestedMediumRadiusPanels(t *testing.T) {
 	v := organisms.ScanPanelView{HasCycle: true}
 	html := renderComponent(t, organisms.ScanFunnel(v))
-	if !strings.Contains(html, `<li class="rounded-md border border-border bg-bone p-4">`) || strings.Contains(html, "rounded-lg") {
-		t.Errorf("funnel steps must be rounded-md p-4 panels: %s", html)
+	if !strings.Contains(html, `<li class="rounded-card bg-surface-sel p-4">`) {
+		t.Errorf("funnel steps must be rounded-card bg-surface-sel p-4 panels: %s", html)
 	}
 }
 
-// issue #1031: a funnel step's label is a dl-style label, so it is text-sm text-mute
-// (design-tokens: labels are text-sm; text-xs is for notes and captions).
-func TestScanFunnel_StepLabelsAreTextSm(t *testing.T) {
+// A funnel step's label is a note on a surface-sel ground: text-note text-mute-on-soft
+// (brand-guide app UI: captions are 13px).
+func TestScanFunnel_StepLabelsAreTextNote(t *testing.T) {
 	v := organisms.ScanPanelView{HasCycle: true}
 	html := renderComponent(t, organisms.ScanFunnel(v))
-	if !strings.Contains(html, `<div class="text-sm text-mute">`) || strings.Contains(html, `<div class="text-xs text-mute">`) {
-		t.Errorf("funnel step labels must be text-sm text-mute: %s", html)
+	if !strings.Contains(html, `<div class="text-note text-mute-on-soft">`) || strings.Contains(html, `<div class="text-sm text-mute">`) {
+		t.Errorf("funnel step labels must be text-note text-mute-on-soft: %s", html)
 	}
 }

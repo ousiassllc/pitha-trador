@@ -56,7 +56,7 @@ type PanelProps struct {
 // answers apart; they never trade and never enter the RAG, Calibration or the
 // meta-model.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="jev-trial-panel">
+	<section class="flex flex-col gap-4 rounded-card bg-surface p-card text-item text-ink" data-testid="jev-trial-panel">
 		<h3 class="sr-only">モデル比較トライアル</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="jev-trial-notice">{ props.Notice }</p>
@@ -64,7 +64,7 @@ templ Panel(props PanelProps) {
 		if !props.TrialRuns {
 			<p class="text-warning" role="status" data-testid="jev-trial-not-paper">この動作モードは Paper ではないため、トライアルは動きません。</p>
 		} else {
-			<p class="text-mute" data-testid="jev-trial-paper-only">Paper でだけ動きます。</p>
+			<p class="text-note text-mute" data-testid="jev-trial-paper-only">Paper でだけ動きます。</p>
 		}
 		<form class="flex flex-col gap-3" hx-post="/settings/jev-trial" hx-target="#jev-trial-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-trial-form">
 			<div class="flex items-center gap-2">
@@ -77,7 +77,7 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
-					<span class="text-ink">アーム</span>
+					<span class="text-item font-semibold text-ink">アーム</span>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-arms", Label: "アームの説明"}) {
 						アームは比べるモデル 1 つの設定です。1 行が 1 つのアームで、最大 8 つまで追加できます（0 件ならトライアルは何も呼びません）。アーム名は英小文字・数字・. _ - の 1〜48 文字で、アームごとに別の名前にします。提供元は OpenRouter・独自 API（custom）・ChatGPT サブスク（codex_chatgpt）から選び、モデルはその提供元のモデル id、プロンプトの版はこのビルドに登録された trader の版から選びます。この 4 つは必須です。1 日の上限（USD）は、そのアームだけの 1 日の上限で、空にすると 0.05 USD です。定価は、応答が費用を返さないときの見積りに使う入力 100 万トークンあたりの定価で、空なら不明として扱います。送り先の提供元は、指定すると OpenRouter がその提供元だけに送り（ほかへ切り替えません）、カンマ区切りで最大 8 件です。データの扱いの既定は「学習に使わない提供元だけ」で、送り先が減るぶん応答が失敗しやすくなることがあります。「制限しない」にすると送り先は増えますが、入力が提供元の学習に使われ得ます。ZDR は、データを保持しない提供元だけに送ります。送り先・データの扱い・ZDR は OpenRouter のアームだけで使えます。ChatGPT サブスクのアームは USD で数えないため、1 日の上限と定価も使えません（上限は下の「ChatGPT サブスク」の呼び出し回数とトークン数です）。保存前にすべて検証し、1 つでも不正なら何も保存しません。OpenRouter の API キーは、外部連携・AI の「OpenRouter」で設定します。
 					}
@@ -87,7 +87,7 @@ templ Panel(props PanelProps) {
 					<span class="text-warning" role="status" data-testid="jev-trial-arms-error">保存されているアームの設定が不正なため、アームなしとして扱っています。保存すると置き換わります。</span>
 				}
 				if props.KeyKnown {
-					<span class="text-sm text-mute" data-testid="jev-trial-key">
+					<span class="text-note text-mute" data-testid="jev-trial-key">
 						OpenRouter の API キー:
 						if props.KeySet {
 							設定済み
@@ -99,13 +99,13 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
-					<label for="jev-trial-cap" class="text-ink">全体の 1 日の費用上限（USD）</label>
+					<label for="jev-trial-cap" class="text-item font-semibold text-ink">全体の 1 日の費用上限（USD）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-cap", Label: "費用上限の説明"}) {
 						1 日は日本時間の日です。全アームの費用の合計がこの上限に達すると、その日のトライアル全体を止めます（ライブの判断は止まりません。翌日に再開します）。アームごとの 1 日の上限にも別に達するとそのアームだけ止まります。欄を空のまま保存すると既定値が使われ、保存した値を消して既定値に戻すときも欄を空にして保存します。費用は、応答が返した費用（reported）を最優先で数え、無ければ定価×入力トークンの見積り、どちらも無ければ「不明」とし、不明の呼び出しは 0 USD とは数えず、最も高い単価で数えます（上限をすり抜けないため）。請求書とは突き合わせていません。支払い不足（402）・権限なし（403）の応答はその日のうちに即停止し、レート制限・過負荷（429/529）は一定時間止めます。失敗した呼び出しの回数にも 1 日の上限があり、この回数は固定です。
 					}
 				</div>
 				@atoms.Input(atoms.InputProps{ID: "jev-trial-cap", Name: "cap", Class: "w-auto", Attrs: capAttrs(props)})
-				<span class="text-sm text-mute" data-testid="jev-trial-cap-note">
+				<span class="text-note text-mute" data-testid="jev-trial-cap-note">
 					if props.CapIsDefault {
 						今の上限: <span class="font-mono tabular-nums text-ink" data-testid="jev-trial-cap-effective">{ props.CapUSD } USD</span>（既定値）
 					} else {
@@ -122,7 +122,7 @@ templ Panel(props PanelProps) {
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="jev-trial-cost">
-			<span class="flex items-center gap-2 text-ink">
+			<span class="flex items-center gap-2 text-item font-semibold text-ink">
 				トライアルの状態
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-trial-status", Label: "トライアルの状態の説明"}) {
 					費用は上限の判定に使った「数えた費用」です。応答が費用を返さなかった呼び出しは、定価か最も高い単価で数えているため、実際の請求とは一致しません。止まっている理由は、その日（日本時間）のあいだ表示し、翌日に再開します。RAG に過去のライブ判断の答えを含めて送った行は、データベースに旗が付き、完全に独立した条件ではないことが分かるようにしてあります。
@@ -133,16 +133,16 @@ templ Panel(props PanelProps) {
 				<span class="text-warning" role="status" data-testid="jev-trial-halt">{ props.HaltNote }</span>
 			}
 			if len(props.Arms) == 0 {
-				<span class="text-sm text-mute" data-testid="jev-trial-arms-empty">アームはありません。</span>
+				<span class="text-note text-mute" data-testid="jev-trial-arms-empty">アームはありません。</span>
 			} else {
-				<table class="w-full text-left text-sm" aria-label="アームごとの今日の状態" data-testid="jev-trial-arm-table">
+				<table class="w-full text-left text-item" aria-label="アームごとの今日の状態" data-testid="jev-trial-arm-table">
 					<thead>
-						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">アーム</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">回数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">費用 / 上限（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">失敗 / 上限</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">状態</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">アーム</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">回数</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">費用 / 上限（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">失敗 / 上限</th><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">状態</th></tr>
 					</thead>
 					<tbody>
 						for _, a := range props.Arms {
-							<tr data-testid="jev-trial-arm-row">
-								<td class="px-2 py-1.5"><code>{ a.ID }</code><br/><span class="text-mute">{ a.Model }・{ a.PromptVersion }</span></td>
+							<tr class="border-b border-line-soft last:border-b-0" data-testid="jev-trial-arm-row">
+								<td class="px-2 py-1.5"><code>{ a.ID }</code><br/><span class="text-note text-mute">{ a.Model }・{ a.PromptVersion }</span></td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(a.TodayCalls) }</td>
 								<td class="px-2 py-1.5 text-right font-mono tabular-nums" data-testid="jev-trial-arm-cost">
 									if a.Subscription {

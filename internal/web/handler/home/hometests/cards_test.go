@@ -234,37 +234,37 @@ func between(s, start, end string) string {
 }
 
 // issue #990 (T3): notices say what could not be read or what was skipped, so
-// they are body text (text-sm), not 12px notes.
+// they are body text (text-item), not notes.
 func TestNotices_AreBodySize(t *testing.T) {
 	f := newFixture()
 	f.alertsErr = errBoom
 	f.source.healthErr = errBoom
-	if body := f.mustGet(t, "/home/attention"); !strings.Contains(body, `<p class="mt-2 text-sm text-warning" data-testid="attention-notice">`) {
-		t.Errorf("attention notice must be text-sm: %s", body)
+	if body := f.mustGet(t, "/home/attention"); !strings.Contains(body, `<p class="mt-2 text-item text-warning" data-testid="attention-notice">`) {
+		t.Errorf("attention notice must be text-item: %s", body)
 	}
 
 	f = newFixture()
 	f.state = domain.SystemStatePaused
 	f.source.healthErr = errBoom
-	if body := f.mustGet(t, "/home/trade-status"); !strings.Contains(body, `<p class="mt-2 text-sm text-warning" data-testid="trade-status-notice">`) {
-		t.Errorf("trade status notice must be text-sm: %s", body)
+	if body := f.mustGet(t, "/home/trade-status"); !strings.Contains(body, `<p class="mt-2 text-item text-warning" data-testid="trade-status-notice">`) {
+		t.Errorf("trade status notice must be text-item: %s", body)
 	}
 
 	f = newFixture()
 	f.source.health.MetaAdopted = false
 	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"
-	if body := f.mustGet(t, "/home/details"); !strings.Contains(body, `<p class="mt-1 text-sm text-warning" data-testid="model-retrain">`) {
-		t.Errorf("retrain notice must be text-sm: %s", body)
+	if body := f.mustGet(t, "/home/details"); !strings.Contains(body, `<p class="mt-1 text-item text-warning" data-testid="model-retrain">`) {
+		t.Errorf("retrain notice must be text-item: %s", body)
 	}
 }
 
-// The loss-limit room carries a value, so it is body-size (text-sm), not a 12px note
-// (brand-guide T3; issue #1005).
+// The loss-limit room is a description line, so it is the 13px note step
+// (text-note text-mute; brand-guide app UI; issue #1005 / #1139).
 func TestPnL_LossLimitLineIsBodySize(t *testing.T) {
 	f := newFixture()
 	f.settings.guard = dailyguardsettings.Resolved{Limits: dailyguardsettings.Limits{LossLimitJPY: 50000}}
 	body := f.mustGet(t, "/home/pnl")
-	if !strings.Contains(body, `class="mt-2 text-sm text-mute" data-testid="pnl-loss-limit"`) {
-		t.Errorf("loss limit line is not text-sm text-mute: %s", body)
+	if !strings.Contains(body, `class="mt-2 text-note text-mute" data-testid="pnl-loss-limit"`) {
+		t.Errorf("loss limit line is not text-note text-mute: %s", body)
 	}
 }

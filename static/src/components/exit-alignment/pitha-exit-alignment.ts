@@ -28,23 +28,36 @@ export class PithaExitAlignment extends LitElement {
       :host {
         display: block;
       }
+      /* An inline alert (brand-guide app UI): --surface-sel ground, 16px corners,
+         ink text, the state colour only on the leading dot. */
       .warnings {
+        position: relative;
         margin: 0;
-        padding: 0.5rem 1rem;
-        border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
-        border-radius: var(--r-md);
-        background: color-mix(in srgb, var(--warning) 10%, transparent);
-        color: var(--warning);
-        font-size: 0.875rem;
-        line-height: 1.7;
+        padding: 0.75rem 1rem 0.75rem 2.25rem;
+        border-radius: var(--r-card);
+        background: var(--surface-sel);
+        color: var(--ink);
+        font-size: 0.9375rem;
+        line-height: 1.6;
+        list-style: none;
+      }
+      .warnings::before {
+        content: "";
+        position: absolute;
+        top: 1.25rem;
+        left: 1rem;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: var(--r-full);
+        background: var(--warning);
       }
       .summary {
         display: grid;
         grid-template-columns: max-content 1fr;
         gap: 0.25rem 1rem;
         margin: 0;
-        font-size: 0.875rem;
-        line-height: 1.7;
+        font-size: 0.9375rem;
+        line-height: 1.6;
       }
       .summary dt {
         color: var(--mute);
@@ -60,15 +73,17 @@ export class PithaExitAlignment extends LitElement {
         font-variant-numeric: normal;
       }
       h2 {
-        margin: 0.75rem 0 1.5rem;
-        font-size: 2rem;
-        line-height: 1.4;
+        margin: 0.75rem 0 1rem;
+        color: var(--ink);
+        font-size: 0.9375rem;
+        line-height: 1.6;
         font-weight: 600;
       }
       h3 {
         margin: 0.75rem 0;
-        font-size: 1.5rem;
-        line-height: 1.5;
+        color: var(--ink);
+        font-size: 0.9375rem;
+        line-height: 1.6;
         font-weight: 600;
       }
     `,

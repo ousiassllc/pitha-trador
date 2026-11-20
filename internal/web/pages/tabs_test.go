@@ -94,14 +94,14 @@ func TestCalibrationPage_LitSectionsAreSeparatedByTheSectionGap(t *testing.T) {
 	}
 }
 
-// issue #991 (S2): tabs follow the menu-item recipe: 40px high (min-h-10),
-// 8px apart (gap-2), 12px on the sides (px-3).
+// issue #991 (S2): tabs are pills: 40px high (min-h-10), 8px apart (gap-2),
+// 16px on the sides (px-4), no underline and no bar border.
 func TestTabNav_FollowsTheMenuItemRecipe(t *testing.T) {
 	body := renderPage(t, pages.PerformancePage(pages.PerformanceProps{}))
-	if !strings.Contains(body, `class="mt-6 flex flex-wrap gap-2 border-b border-border print:hidden" data-testid="tab-nav"`) {
-		t.Errorf("tab bar must be gap-2: %.600s", body)
+	if !strings.Contains(body, `class="mt-6 flex flex-wrap gap-2 print:hidden" data-testid="tab-nav"`) {
+		t.Errorf("tab bar must be gap-2 without a border: %.600s", body)
 	}
-	if !strings.Contains(body, `-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base `) {
-		t.Errorf("tab must be min-h-10 px-3: %.600s", body)
+	if !strings.Contains(body, `inline-flex min-h-10 items-center rounded-pill px-4 text-item font-semibold text-ink `) || strings.Contains(body, "border-b-2") {
+		t.Errorf("tab must be a min-h-10 px-4 pill without an underline: %.600s", body)
 	}
 }

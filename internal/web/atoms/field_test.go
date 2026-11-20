@@ -24,11 +24,11 @@ func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 // replaces the default layout classes while the shared border stays.
 func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{
-		Name: "from", Type: "date", Class: "mt-1 text-sm",
+		Name: "from", Type: "date", Class: "mt-1 text-item",
 		Attrs: templ.Attributes{"required": true, "min": "1", "data-testid": "f"},
 	}), "")
 
-	for _, want := range []string{`type="date"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3 mt-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
+	for _, want := range []string{`type="date"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3 mt-1 text-item", ` required`, `min="1"`, `data-testid="f"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -107,7 +107,7 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	for _, want := range []string{
 		`type="checkbox"`, `role="switch"`, `name="enabled"`, `value="on"`, ` checked`, `data-testid="sw"`,
 		"peer sr-only", "h-5 w-9 shrink-0 rounded-full", "after:h-3.5 after:w-3.5", "peer-checked:bg-accent", "peer-checked:after:bg-bone",
-		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-base font-normal", "有効にする",
+		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-item font-normal", "有効にする",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Switch lacks %q: %s", want, body)
@@ -133,7 +133,7 @@ func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
 	if err := atoms.InlineAlert("入力を確認してください", "数値で入力してください").Render(context.Background(), &sb); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`role="alert"`, "data-inline-alert", "tone-danger", "<svg", `aria-hidden="true"`, "入力を確認してください", "数値で入力してください"} {
+	for _, want := range []string{`role="alert"`, "data-inline-alert", "rounded-card border border-danger/40 bg-surface-sel", "text-danger", "text-item", "<svg", `aria-hidden="true"`, "入力を確認してください", "数値で入力してください"} {
 		if !strings.Contains(sb.String(), want) {
 			t.Errorf("InlineAlert lacks %q: %s", want, sb.String())
 		}

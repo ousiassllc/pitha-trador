@@ -87,16 +87,15 @@ export class PithaKillSwitchPanel extends LitElement {
         white-space: nowrap;
       }
       button.pitha-kill-switch-panel-kill {
-        border-color: var(--danger);
         background: var(--danger);
         color: var(--bone);
       }
       /* Hover keeps the --danger face (brand-guide C4: no derived state
-         colour), which also has to out-rank buttonStyles' accent-soft hover,
-         and answers with a --ink 1px edge like the heatmap segments' hover
-         border. The focus ring is an outline, so the two stay apart. */
+         colour), which also has to out-rank buttonStyles' surface-sel hover,
+         and answers with a --ink 1px inset edge (the shared button has no
+         border). The focus ring is an outline, so the two stay apart. */
       button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
-        border-color: var(--ink);
+        box-shadow: inset 0 0 0 1px var(--ink);
         background: var(--danger);
       }
     `,

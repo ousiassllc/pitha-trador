@@ -1,12 +1,9 @@
-/* Table headings are SemiBold 600 (brand-guide §2/§4). Preflight does not
-   reset <th>, so the UA's `th { font-weight: bold }` would draw 700 on the
-   cell itself (a parent's font-semibold is only inherited, and loses). A row
-   heading is body text, Regular like the Lit tables' `tbody th`. Imported by
-   app.css into the base layer, so utilities such as font-normal still win. */
+/* Table headings are 13px Regular 400 --mute (brand-guide #app-ui: table
+   headings are 13px / 400 mute). Preflight does not reset <th>, so the UA's
+   `th { font-weight: bold }` would draw 700 on the cell itself (a parent's
+   font-normal is only inherited, and loses). A row heading (`scope="row"`) is
+   body text and Regular too, so one rule covers both. Imported by app.css
+   into the base layer, so utilities such as font-semibold still win. */
 th {
-  font-weight: 600;
-}
-
-th[scope="row"] {
   font-weight: 400;
 }

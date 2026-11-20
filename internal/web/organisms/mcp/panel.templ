@@ -75,7 +75,7 @@ type PanelProps struct {
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
 // handled by static/src/components/copy-button.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-panel" { pollAttrs(props)... }>
+	<section class="flex flex-col gap-4 rounded-card bg-surface p-card text-item text-ink" data-testid="mcp-panel" { pollAttrs(props)... }>
 		<h3 class="sr-only">MCP</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="mcp-notice">{ props.Notice }</p>
@@ -168,9 +168,9 @@ templ Panel(props PanelProps) {
 			<dd class="flex flex-wrap items-center gap-2">
 				<code data-testid="mcp-exe-path">{ props.ExePath }</code>
 				if props.ExeExists {
-					<span class="rounded-full border tone-success px-2 py-1 text-xs" data-testid="mcp-exe-found">見つかる</span>
+					<span class="rounded-pill tone-success px-3 py-1 text-note" data-testid="mcp-exe-found">見つかる</span>
 				} else {
-					<span class="rounded-full border tone-warning px-2 py-1 text-xs" data-testid="mcp-exe-missing">見つからない</span>
+					<span class="rounded-pill tone-warning px-3 py-1 text-note" data-testid="mcp-exe-missing">見つからない</span>
 				}
 			</dd>
 			<dt class="text-ink">設定ファイルの場所</dt>
@@ -181,8 +181,8 @@ templ Panel(props PanelProps) {
 
 // keyReveal is the one-time display of a freshly generated key.
 templ keyReveal(key string) {
-	<div class="flex flex-col gap-2 rounded-md border tone-warning p-3" role="alert" hx-history="false" autocomplete="off" data-clear-on-close data-testid="mcp-key-reveal">
-		<p class="text-warning">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
+	<div class="flex flex-col gap-2 banner-warning" role="alert" hx-history="false" autocomplete="off" data-clear-on-close data-testid="mcp-key-reveal">
+		<p class="text-item font-semibold">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
 		<div class="flex flex-wrap items-center gap-2">
 			@atoms.Input(atoms.InputProps{ID: "mcp-new-key", Class: "font-mono", Attrs: templ.Attributes{"readonly": true, "value": key, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-new-key"}})
 			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-new-key", "data-testid": "mcp-copy-key"}}) {
@@ -195,22 +195,22 @@ templ keyReveal(key string) {
 				ヘッダーをコピー
 			}
 		</div>
-		<p class="text-sm text-warning">画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
+		<p class="text-note text-mute-on-soft">画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
 	</div>
 }
 
 templ stateBadge(state string) {
 	switch state {
 		case "starting":
-			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs">起動中</span>
+			<span class="inline-flex items-center rounded-pill tone-info px-3 py-1 text-note">起動中</span>
 		case "error":
-			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs">エラー</span>
+			<span class="inline-flex items-center rounded-pill tone-danger px-3 py-1 text-note">エラー</span>
 		case "listening":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">待受中</span>
+			<span class="inline-flex items-center rounded-pill tone-success px-3 py-1 text-note">待受中</span>
 		case "no_key":
-			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs">キー未設定</span>
+			<span class="inline-flex items-center rounded-pill tone-warning px-3 py-1 text-note">キー未設定</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">停止中</span>
+			<span class="inline-flex items-center rounded-pill tone-mute px-3 py-1 text-note">停止中</span>
 	}
 }
 

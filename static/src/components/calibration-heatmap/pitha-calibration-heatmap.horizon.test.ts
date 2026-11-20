@@ -131,18 +131,18 @@ describe('pitha-calibration-heatmap horizon switch', () => {
   });
 });
 
-describe('horizon switch is the guide segment (brand-guide §4)', () => {
-  // --accent-soft track, --surface selected face; --accent fill is for primary actions only.
-  test('track is --accent-soft, the selected segment is a --surface face, nothing is --accent', () => {
+describe('horizon switch is the guide sub-nav (brand-guide #app-ui)', () => {
+  // No track; the selected segment is a --surface-sel pill; --accent fill is for primary actions only.
+  test('the selected segment is a --surface-sel pill, the track has no ground, nothing is --accent', () => {
     const css = heatmapStyles.cssText;
+    expect(css).not.toMatch(/\.pitha-calibration-heatmap-horizons\s*\{[^}]*background:/);
     expect(css).toMatch(
-      /\.pitha-calibration-heatmap-horizons\s*\{[^}]*background:\s*var\(--accent-soft\)/,
+      /button\[aria-pressed='true'\][^{]*\{[^}]*background:\s*var\(--surface-sel\)/,
     );
-    expect(css).toMatch(/button\[aria-pressed='true'\][^{]*\{[^}]*background:\s*var\(--surface\)/);
     expect(css).not.toMatch(/background:\s*var\(--accent\)\s*;/);
   });
 
-  // WCAG 1.4.1: selection is not told by the face colour alone; SemiBold is allowed on buttons (T2).
+  // WCAG 1.4.1: selection is not told by the face colour alone; SemiBold is allowed on buttons.
   test('the selected segment is also semibold', () => {
     expect(heatmapStyles.cssText).toMatch(
       /button\[aria-pressed='true'\][^{]*\{[^}]*font-weight:\s*600/,
@@ -150,22 +150,34 @@ describe('horizon switch is the guide segment (brand-guide §4)', () => {
   });
 });
 
-describe('heatmap cell typography (guide T3, design-tokens.md)', () => {
-  // Value rows are read, not annotations: sm 14. Only the band label is xs 12.
-  test('the cell value rows are 0.875rem and only the range label is 0.75rem', () => {
+describe('heatmap cell typography (brand-guide #app-ui, three steps)', () => {
+  // Value rows are read, not annotations: 15. Only the band label is the 13px note.
+  test('the cell value rows are 0.9375rem and only the range label is 0.8125rem', () => {
     const css = heatmapStyles.cssText;
-    expect(css).toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*font-size:\s*0\.875rem/);
-    expect(css).toMatch(/\.pitha-calibration-heatmap-cell \.range\s*\{[^}]*font-size:\s*0\.75rem/);
+    expect(css).toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*font-size:\s*0\.9375rem/);
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-cell \.range\s*\{[^}]*font-size:\s*0\.8125rem/,
+    );
+    expect(css).not.toMatch(/font-size:\s*(0\.75|0\.875|1)rem/);
   });
 
-  // Guide T4: sm (14px) is 1.7 — spelled out so it does not inherit body's 1.8.
-  test('the 0.875rem horizon label and summary carry line-height 1.7', () => {
+  // The 15px step is 1.6 — spelled out so it does not inherit body's 1.8.
+  test('the 0.9375rem horizon label and summary carry line-height 1.6', () => {
     const css = heatmapStyles.cssText;
     expect(css).toMatch(
-      /\.pitha-calibration-heatmap-horizon\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+      /\.pitha-calibration-heatmap-horizon\s*\{[^}]*font-size:\s*0\.9375rem;\s*line-height:\s*1\.6/,
     );
     expect(css).toMatch(
-      /\.pitha-calibration-heatmap-summary\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+      /\.pitha-calibration-heatmap-summary\s*\{[^}]*font-size:\s*0\.9375rem;\s*line-height:\s*1\.6/,
     );
+  });
+
+  // Cards are 16px and have no 1px frame, an empty band included (flat --surface-sel ground).
+  test('the cell is a --r-card card without a border', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-cell\s*\{[^}]*border-radius:\s*var\(--r-card\)/,
+    );
+    expect(css).not.toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*border:/);
   });
 });

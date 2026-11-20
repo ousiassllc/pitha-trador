@@ -21,35 +21,30 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap button {
     align-self: flex-start;
   }
-  /* Segmented control (brand-guide §4): an --accent-soft track, the selected
-     segment a --surface face and SemiBold (selection is not colour alone, WCAG 1.4.1).
-     --accent fill is for primary actions only. */
+  /* Segmented control (brand-guide app UI, sub-nav): no container ground; the
+     selected segment is a --surface-sel pill and SemiBold (selection is not
+     colour alone, WCAG 1.4.1), the others are transparent and take --surface-sel
+     on hover. --accent fill is for primary actions only. */
   .pitha-calibration-heatmap-horizons {
     display: inline-flex;
     align-self: flex-start;
     gap: 0.25rem;
-    padding: 0.25rem;
-    border-radius: var(--r-md);
-    background: var(--accent-soft);
   }
-  .pitha-calibration-heatmap-horizons button,
-  .pitha-calibration-heatmap-horizons button:hover:not(:disabled) {
-    border-color: transparent;
+  .pitha-calibration-heatmap-horizons button {
     background: transparent;
   }
   .pitha-calibration-heatmap-horizons button:hover:not(:disabled) {
-    border-color: var(--border);
+    background: var(--surface-sel);
   }
   .pitha-calibration-heatmap-horizons button[aria-pressed='true'],
   .pitha-calibration-heatmap-horizons button[aria-pressed='true']:hover:not(:disabled) {
-    border-color: transparent;
-    background: var(--surface);
+    background: var(--surface-sel);
     font-weight: 600;
   }
   .pitha-calibration-heatmap-horizon {
     margin: 0;
-    font-size: 0.875rem;
-    line-height: 1.7;
+    font-size: 0.9375rem;
+    line-height: 1.6;
   }
   .pitha-calibration-heatmap-grid {
     display: grid;
@@ -62,25 +57,20 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-cell {
     display: flex;
     flex-direction: column;
-    border-radius: var(--r-md);
-    border: 1px solid var(--border);
-    padding: 0.5rem;
-    font-size: 0.875rem;
-    line-height: 1.7;
+    border-radius: var(--r-card);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.6;
     /* --cell-bg / --cell-fg are set per cell (bucketColors): a density ramp of --ink on --surface with --ink text. */
-    background: var(--cell-bg, var(--bone));
+    background: var(--cell-bg, var(--surface-sel));
     color: var(--cell-fg, var(--ink));
   }
-  /* A band without labeled samples: flat and dashed (the guide's empty-state border). */
-  .pitha-calibration-heatmap-cell[data-empty] {
-    border-style: dashed;
-  }
-  /* The band label is an annotation (guide T3: xs 12); the value rows keep sm 14. */
+  /* The band label is a caption (13px, the guide's note step); the value rows keep 15px. */
   .pitha-calibration-heatmap-cell .range {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   .pitha-calibration-heatmap-cell .accuracy {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     font-weight: 400;
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
@@ -97,8 +87,8 @@ export const heatmapStyles = css`
     grid-template-columns: max-content 1fr;
     gap: 0.25rem 1rem;
     margin: 0;
-    font-size: 0.875rem;
-    line-height: 1.7;
+    font-size: 0.9375rem;
+    line-height: 1.6;
   }
   .pitha-calibration-heatmap-summary dt {
     color: var(--mute);

@@ -59,15 +59,15 @@ templ writeSection(props PanelProps) {
 				}
 			</span>
 			if len(props.Audit) == 0 {
-				<span class="text-sm text-mute" data-testid="mcp-audit-empty">設定変更の記録はありません。</span>
+				<span class="text-note text-mute" data-testid="mcp-audit-empty">設定変更の記録はありません。</span>
 			} else {
-				<table class="w-full text-left text-sm" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
+				<table class="w-full text-left text-item" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
 					<thead>
-						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">変更元</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">操作</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">キー</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後</th></tr>
+						<tr class="text-mute"><th scope="col" class="px-2 py-1.5 text-note font-normal">日時</th><th scope="col" class="px-2 py-1.5 text-note font-normal">変更元</th><th scope="col" class="px-2 py-1.5 text-note font-normal">操作</th><th scope="col" class="px-2 py-1.5 text-note font-normal">キー</th><th scope="col" class="px-2 py-1.5 text-note font-normal">前</th><th scope="col" class="px-2 py-1.5 text-note font-normal">後</th></tr>
 					</thead>
 					<tbody>
 						for _, row := range props.Audit {
-							<tr data-testid="mcp-audit-row">
+							<tr class="border-b border-line-soft last:border-b-0" data-testid="mcp-audit-row">
 								<td class="px-2 py-1.5">{ row.At }</td>
 								<td class="px-2 py-1.5">{ row.By }</td>
 								<td class="px-2 py-1.5">{ row.What }</td>

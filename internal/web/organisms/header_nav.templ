@@ -35,24 +35,24 @@ var navEntries = []struct {
 	{NavSettings, "設定", "/settings", true},
 }
 
-// navLinkClass is a nav link's styling: the guide's menu item (height 40,
-// left/right 12; brand-guide §3), and the current entry is emphasised, the
-// others only get the hover colour.
+// navLinkClass is a nav link's styling: a pill (height 40, left/right 16;
+// brand-guide #app-ui), the current entry on the --surface-sel ground, the
+// others only get the hover ground.
 func navLinkClass(current bool) string {
-	const base = "inline-flex min-h-10 items-center px-3 "
+	const base = "inline-flex min-h-10 items-center rounded-pill px-4 text-item font-semibold text-ink "
 	if current {
-		return base + "text-ink"
+		return base + "bg-surface-sel"
 	}
-	return base + "hover:text-ink"
+	return base + "hover:bg-surface-sel"
 }
 
 // MainNav renders Header's `<nav>`: the entry equal to current (when not
 // NavNone) carries `aria-current="page"` and the emphasised style.
 templ MainNav(current NavItem) {
-	<nav aria-label="メインナビゲーション" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-mute">
+	<nav aria-label="メインナビゲーション" class="flex flex-wrap items-center gap-x-2 gap-y-1">
 		for _, e := range navEntries {
 			if e.SeparatorBefore {
-				<span aria-hidden="true" class="h-4 w-px bg-accent-soft" data-testid="nav-separator"></span>
+				<span aria-hidden="true" class="h-4 w-px bg-line-soft" data-testid="nav-separator"></span>
 			}
 			<a
 				class={ navLinkClass(e.Item == current) }

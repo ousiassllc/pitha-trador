@@ -187,12 +187,12 @@ func TestScannerHandler_ScanView_FragmentListsSymbolsWithStatusAndReasons(t *tes
 	}
 }
 
-// The CSV download is a link people press, so it is 14px like the count beside
-// it, not a 12px note (brand-guide §2, T3; issue #958).
-func TestScannerHandler_ScanView_ExportLinkIsBodyText(t *testing.T) {
+// The CSV download sits beside the count caption, so it is a 13px note step
+// (brand-guide app UI: three type steps; issue #958).
+func TestScannerHandler_ScanView_ExportLinkIsNoteText(t *testing.T) {
 	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
-	if !strings.Contains(body, `<a class="text-sm text-accent underline decoration-mute"`) || !strings.Contains(body, `data-testid="scan-export"`) {
-		t.Errorf("export link is not text-sm: %s", body)
+	if !strings.Contains(body, `<a class="text-note text-accent underline decoration-mute"`) || !strings.Contains(body, `data-testid="scan-export"`) {
+		t.Errorf("export link is not text-note: %s", body)
 	}
 }
 
@@ -297,15 +297,15 @@ func TestScannerHandler_ScanView_ServesLiveSourceCycle(t *testing.T) {
 	}
 }
 
-// The pass/exclude/missing counts carry values, so they are body-size (text-sm),
-// not a 12px note (brand-guide T3; issue #1005).
-func TestScannerHandler_ScanView_CountLineIsBodySize(t *testing.T) {
+// The pass/exclude/missing counts are a description line, so they are the
+// 13px note step in mute (brand-guide app UI; issue #1005).
+func TestScannerHandler_ScanView_CountLineIsNoteText(t *testing.T) {
 	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
 	at := strings.Index(body, `data-testid="scan-count-passed"`)
 	if at < 0 {
 		t.Fatalf("no count line: %s", body)
 	}
-	if line := body[strings.LastIndex(body[:at], "<p "):at]; !strings.Contains(line, `class="mt-2 text-sm text-mute"`) {
-		t.Errorf("count line is not text-sm text-mute: %s", line)
+	if line := body[strings.LastIndex(body[:at], "<p "):at]; !strings.Contains(line, `class="mt-2 text-note text-mute"`) {
+		t.Errorf("count line is not text-note text-mute: %s", line)
 	}
 }

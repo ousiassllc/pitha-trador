@@ -154,13 +154,13 @@ func TestPage_EvaluationErrorIsFixedMessage(t *testing.T) {
 // its right-aligned cells (brand-guide §2 T5, §4 table; issue #958).
 func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
 	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
-	if !strings.Contains(body, `<dd class="text-xl text-ink font-mono tabular-nums">`) {
+	if !strings.Contains(body, `<dd class="text-item text-ink font-mono tabular-nums">`) || strings.Contains(body, `<dd class="text-xl `) {
 		t.Error("cost values should be font-mono tabular-nums")
 	}
-	if strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-xs font-semibold">`) {
+	if strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-note font-normal">`) {
 		t.Error("a numeric column header lacks text-right")
 	}
-	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>`) {
+	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-right text-note font-normal">件数</th>`) {
 		t.Error("the 件数 header should be right-aligned")
 	}
 }
@@ -178,7 +178,7 @@ func TestPage_EvaluationOOSWindowIsMonoAndRightAligned(t *testing.T) {
 // left-aligned in the body font (brand-guide §2 T5; issue #1028).
 func TestPage_EvaluationStatusColumnIsLeftAligned(t *testing.T) {
 	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
-	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">状態</th>`) {
+	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-left text-note font-normal">状態</th>`) {
 		t.Error("the 状態 header should be left-aligned")
 	}
 	if !strings.Contains(body, `<td class="px-2 py-1.5 text-left">active</td>`) {

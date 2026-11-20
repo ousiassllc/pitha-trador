@@ -10,8 +10,8 @@ import (
 )
 
 // Text links are --accent with an --mute underline on every screen, and the
-// current tab's underline is --accent (brand-guide §1 / §4 タブ; issue #1004, C2).
-func TestPages_LinksAreAccentAndCurrentTabUnderlineIsAccent(t *testing.T) {
+// current tab is a --surface-sel pill (brand-guide §1 / §4 タブ; issue #1004, C2).
+func TestPages_LinksAreAccentAndCurrentTabIsASelectedPill(t *testing.T) {
 	watchlist := renderPage(t, pages.WatchlistPage(domain.WatchListView{
 		Enabled: true,
 		Lists: []domain.WatchList{{
@@ -38,7 +38,7 @@ func TestPages_LinksAreAccentAndCurrentTabUnderlineIsAccent(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(watchlist, `class="-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base border-accent text-ink"`) {
-		t.Errorf("the current tab must be underlined with border-accent: %s", watchlist)
+	if !strings.Contains(watchlist, `class="inline-flex min-h-10 items-center rounded-pill px-4 text-item font-semibold text-ink bg-surface-sel"`) {
+		t.Errorf("the current tab must be a pill on bg-surface-sel: %s", watchlist)
 	}
 }

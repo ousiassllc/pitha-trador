@@ -44,7 +44,7 @@ type ArmEditorProps struct {
 templ ArmEditor(props ArmEditorProps) {
 	<div id="jev-trial-arm-editor" class="flex flex-col gap-3" data-testid="jev-trial-arms">
 		if len(props.Fields) == 0 {
-			<p class="text-sm text-mute" data-testid="jev-trial-arm-fields-empty">アームはありません。</p>
+			<p class="text-note text-mute" data-testid="jev-trial-arm-fields-empty">アームはありません。</p>
 		}
 		for i, f := range props.Fields {
 			@armCard(i, f, props.PromptVersions)
@@ -58,8 +58,8 @@ templ ArmEditor(props ArmEditorProps) {
 }
 
 templ armCard(i int, f ArmField, versions []string) {
-	<fieldset class="flex flex-col gap-3 rounded-md border border-border p-3" data-testid="jev-trial-arm-field-row">
-		<legend class="px-1 text-sm text-mute">アーム { strconv.Itoa(i + 1) }</legend>
+	<fieldset class="flex flex-col gap-3 rounded-card bg-surface-sel p-4" data-testid="jev-trial-arm-field-row">
+		<legend class="px-1 text-item font-semibold text-ink">アーム { strconv.Itoa(i + 1) }</legend>
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 			@armLabel(i, "id", "アーム名") {
 				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "id"), Name: armName(i, "id"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.ID, "required": true, "maxlength": "48", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-id"}})
@@ -118,7 +118,7 @@ templ armCard(i int, f ArmField, versions []string) {
 
 templ armLabel(i int, field, text string) {
 	<div class="flex flex-col gap-1">
-		<label for={ armDOMID(i, field) } class="text-sm text-ink">{ text }</label>
+		<label for={ armDOMID(i, field) } class="text-item font-semibold text-ink">{ text }</label>
 		{ children... }
 	</div>
 }

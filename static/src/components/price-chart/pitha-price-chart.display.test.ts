@@ -172,11 +172,11 @@ describe('pitha-price-chart empty state (issue #687)', () => {
     expect(notice?.textContent).toContain('表示できる足がありません');
   });
 
-  // Guide T4: sm (14px) is 1.7, spelled out so it does not inherit body's 1.8.
-  test('the 0.875rem empty message carries line-height 1.7', () => {
+  // 15px body step; line-height spelled out so it does not inherit body's 1.8.
+  test('the 0.9375rem empty message carries line-height 1.6', () => {
     const css = PithaPriceChart.styles.map((s) => s.cssText).join('');
     expect(css).toMatch(
-      /\.pitha-price-chart-empty\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+      /\.pitha-price-chart-empty\s*\{[^}]*font-size:\s*0\.9375rem;\s*line-height:\s*1\.6/,
     );
   });
 
@@ -196,8 +196,8 @@ describe('pitha-price-chart empty state (issue #687)', () => {
     expect(emptyNotice(el)).toBeNull();
   });
 
-  // Issue #999: same dashed-frame recipe as scanner-empty (design guide S4/§4).
-  test('uses the dashed --border frame, --r-lg and 48/24 padding', async () => {
+  // Brand-guide app UI empty state: a --surface-sel card, no dashed frame.
+  test('uses the --surface-sel ground, --r-card and 48/24 padding without a frame', async () => {
     const el = await mount([]);
     const css = (
       el.constructor as unknown as { elementStyles: { cssText: string }[] }
@@ -205,8 +205,9 @@ describe('pitha-price-chart empty state (issue #687)', () => {
       .map((s) => s.cssText)
       .join('');
     expect(css).toMatch(
-      /\.pitha-price-chart-empty\s*\{[^}]*border:\s*1px dashed var\(--border\);[^}]*border-radius:\s*var\(--r-lg\);[^}]*padding:\s*3rem 1\.5rem;[^}]*text-align:\s*center;/,
+      /\.pitha-price-chart-empty\s*\{[^}]*border-radius:\s*var\(--r-card\);[^}]*background:\s*var\(--surface-sel\);[^}]*padding:\s*3rem 1\.5rem;[^}]*text-align:\s*center;/,
     );
+    expect(css).not.toMatch(/\.pitha-price-chart-empty\s*\{[^}]*border:/);
   });
 });
 

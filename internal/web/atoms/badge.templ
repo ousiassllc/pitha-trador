@@ -16,17 +16,17 @@ const (
 templ Badge(direction Direction) {
 	switch direction {
 		case DirectionLong:
-			<span class="inline-flex items-center gap-1 rounded-full border tone-success px-2 py-1 text-xs">
+			<span class="inline-flex items-center gap-1 rounded-pill tone-success px-3 py-1 text-note">
 				@IconNavArrowUp()
 				LONG
 			</span>
 		case DirectionShort:
-			<span class="inline-flex items-center gap-1 rounded-full border tone-danger px-2 py-1 text-xs">
+			<span class="inline-flex items-center gap-1 rounded-pill tone-danger px-3 py-1 text-note">
 				@IconNavArrowDown()
 				SHORT
 			</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">NONE</span>
+			<span class="inline-flex items-center rounded-pill tone-mute px-3 py-1 text-note">NONE</span>
 	}
 }
 
@@ -39,14 +39,14 @@ templ Badge(direction Direction) {
 templ EntryQualityBadge(quality string) {
 	switch quality {
 		case "exceptional":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">{ quality }</span>
+			<span class="inline-flex items-center rounded-pill tone-success px-3 py-1 text-note">{ quality }</span>
 		case "strong":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">{ quality }</span>
+			<span class="inline-flex items-center rounded-pill tone-success px-3 py-1 text-note">{ quality }</span>
 		case "good":
-			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs">{ quality }</span>
+			<span class="inline-flex items-center rounded-pill tone-info px-3 py-1 text-note">{ quality }</span>
 		case "fair":
-			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs">{ quality }</span>
+			<span class="inline-flex items-center rounded-pill tone-warning px-3 py-1 text-note">{ quality }</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">{ quality }</span>
+			<span class="inline-flex items-center rounded-pill tone-mute px-3 py-1 text-note">{ quality }</span>
 	}
 }

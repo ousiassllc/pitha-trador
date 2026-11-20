@@ -21,10 +21,10 @@ func TestSignalBadgeGroup_PendingPillDoesNotSetTextMute(t *testing.T) {
 func TestSignalBadgeGroup_ConfidenceIsMonoAndEntryQualityIsNot(t *testing.T) {
 	dir, conf, quality := "long", 0.72, "良好"
 	html := render(t, molecules.SignalBadgeGroup(&dir, &conf, &quality))
-	if !strings.Contains(html, `<span class="text-xs font-mono tabular-nums text-mute">`) {
+	if !strings.Contains(html, `<span class="text-note font-mono tabular-nums text-mute">`) {
 		t.Errorf("confidence must be font-mono tabular-nums: %s", html)
 	}
-	if !strings.Contains(html, `<span class="text-xs text-ink">良好</span>`) {
+	if !strings.Contains(html, `<span class="text-note text-ink">良好</span>`) {
 		t.Errorf("entry quality must stay plain text: %s", html)
 	}
 }

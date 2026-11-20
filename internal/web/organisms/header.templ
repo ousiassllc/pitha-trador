@@ -74,11 +74,11 @@ import (
 // `print:hidden`: a printout is the page's content only, ink on bone
 // (brand-guide §8).
 templ Header(state domain.SystemState, current NavItem) {
-	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-surface px-4 py-4 print:hidden lg:px-6">
+	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-line-soft bg-surface px-4 py-4 print:hidden lg:px-6">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
 				id="header-logo"
-				class="flex shrink-0 items-center gap-2 text-sm text-ink"
+				class="flex shrink-0 items-center gap-2 text-item font-semibold text-ink"
 				href="/"
 				data-testid="header-logo"
 			>
@@ -104,7 +104,7 @@ templ Header(state domain.SystemState, current NavItem) {
 		<span class="flex items-center gap-1">
 			<a
 				id="header-version"
-				class="text-xs text-mute hover:text-ink"
+				class="text-note text-mute hover:text-ink"
 				href="/settings/maintenance#update-panel"
 				data-testid="header-version"
 			>{ version.Version }</a>
