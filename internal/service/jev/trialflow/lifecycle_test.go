@@ -71,9 +71,19 @@ func TestQueueIsBoundedAtFourInFlight(t *testing.T) {
 			t.Fatal("fewer than 4 arms started")
 		}
 	}
+	// The dispatcher goroutine takes a slot per arm in order and records a skip
+	// for each arm that finds all four taken. Release only once both skips are
+	// recorded: releasing earlier frees slots while a5/a6 are still being
+	// dispatched, and they would then take those slots and run.
+	waitFor(t, "the two comparisons without a slot to be recorded", func() bool {
+		return e.count(`SELECT COUNT(*) FROM jev_trial_skips`) == 2
+	})
 	close(release)
 	e.trial.Wait()
 	if n := e.count(`SELECT COUNT(*) FROM jev_trial_decisions`); n != 4 {
 		t.Fatalf("rows = %d, want 4 (the other 2 comparisons are dropped, not queued)", n)
+	}
+	if n := len(started); n != 0 {
+		t.Fatalf("%d more arm calls started after the first 4, want 0", n)
 	}
 }
