@@ -13,10 +13,20 @@ var wordRe = regexp.MustCompile(`[A-Za-z0-9+/=_.:~%\-]{32,}`)
 // an identifier (ousiassllc/pitha-trador, jev_evaluation_horizon, host.name).
 const separators = "/._-:~%"
 
-func maskWords(s string) string { return wordRe.ReplaceAllStringFunc(s, maskWord) }
+// wordSpans are the credentials among the 32+ character words of s.
+func wordSpans(s string) []span {
+	var out []span
+	for _, loc := range wordRe.FindAllStringIndex(s, -1) {
+		for _, sp := range maskWord(s[loc[0]:loc[1]]) {
+			out = append(out, span{loc[0] + sp[0], loc[0] + sp[1]})
+		}
+	}
+	return out
+}
 
-// maskWord masks a 32+ character word when it is a credential rather than text:
-//   - no separator: the run is opaque (looksOpaque);
+// maskWord returns the spans of a 32+ character word that are a credential
+// rather than text:
+//   - no separator: the whole run is opaque (looksOpaque);
 //   - with separators: a piece of 32+ opaque characters is masked on its own, so a
 //     URL or a path with a long token in it keeps its readable parts; and a word
 //     that is not a URL and has a random-looking piece (mixed case with a digit)
@@ -24,40 +34,36 @@ func maskWords(s string) string { return wordRe.ReplaceAllStringFunc(s, maskWord
 //
 // A UUID, a GitHub URL, a file path, a snake_case name and a host name have
 // short, lower-case pieces and stay as they are.
-func maskWord(w string) string {
+func maskWord(w string) []span {
+	whole := []span{{0, len(w)}}
 	if !strings.ContainsAny(w, separators) {
 		if looksOpaque(w) {
-			return Replacement
+			return whole
 		}
-		return w
+		return nil
 	}
-	var out strings.Builder
-	changed, randomish := false, false
+	var pieces []span
+	randomish := false
 	start := 0
 	for i := 0; i <= len(w); i++ {
 		if i < len(w) && !strings.ContainsRune(separators, rune(w[i])) {
 			continue
 		}
 		if seg := w[start:i]; len(seg) >= 32 && looksOpaque(seg) {
-			out.WriteString(Replacement)
-			changed = true
+			pieces = append(pieces, span{start, i})
 		} else {
-			out.WriteString(seg)
 			randomish = randomish || isRandomish(seg)
-		}
-		if i < len(w) {
-			out.WriteByte(w[i])
 		}
 		start = i + 1
 	}
-	if changed {
-		return out.String()
+	if len(pieces) > 0 {
+		return pieces
 	}
 	urlLike := strings.Contains(w, "://") || strings.HasPrefix(w, "/")
 	if !urlLike && looksOpaque(w) && (randomish || (strings.Contains(w, "+") && isMixedCase(w))) {
-		return Replacement
+		return whole
 	}
-	return w
+	return nil
 }
 
 // looksOpaque reports whether a 32+ character run is a credential rather than

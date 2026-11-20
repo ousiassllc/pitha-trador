@@ -35,9 +35,9 @@ var (
 	keySegments = map[string]bool{"pass": true, "pw": true, "pwd": true, "auth": true, "session": true, "sessionid": true, "authid": true}
 )
 
-// maskAssignments masks the value of every credential-named key=value.
-func maskAssignments(s string) string {
-	var b strings.Builder
+// assignmentSpans are the values of every credential-named key=value.
+func assignmentSpans(s string) []span {
+	var out []span
 	pos := 0
 	for pos < len(s) {
 		loc := assignRe.FindStringSubmatchIndex(s[pos:])
@@ -62,16 +62,13 @@ func maskAssignments(s string) string {
 			}
 		}
 		if end == start {
-			b.WriteString(s[pos:from])
 			pos = from
 			continue
 		}
-		b.WriteString(s[pos:start])
-		b.WriteString(Replacement)
+		out = append(out, span{start, end})
 		pos = end
 	}
-	b.WriteString(s[pos:])
-	return b.String()
+	return out
 }
 
 // opaque: 8+ characters with a digit, the shape of a secret written after "は".
