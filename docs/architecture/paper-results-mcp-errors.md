@@ -30,6 +30,8 @@
 | `unsupported_candidate_kind` | 422 | `promotion_checklist` が、候補の種類・組み合わせを比べられない（`invalid_argument` とは別のコード。未知の引数・形の誤り・候補と現行が同じ、などは `invalid_argument` のまま）。次の 4 つ: `current` に `experiment` / `setting` を指定した、`current` に `live_cohort` を指定した（別の判断を見ていて同じ行がない）、`candidate` が `experiment` / `setting` なのに `current` を指定した（前後比較の「前」で決まっている）、`candidate` が `setting` で `id` が MCP の設定ホワイトリスト（`key_not_allowed` と同じ）にないキー。`error.data.detail` に規則の固定文を付ける（引数の値・候補の id は引用しない）。何も適用せず、何も書かない（設計は `docs/architecture/research-tools/paper-results-mcp-promotion.md` §1・§6、API は `docs/api/endpoints/research-tools/paper-results-mcp-promotion.md` §3.44）。`candidate` の実験 id が無いときは `experiment_not_found`（404） | この候補の種類・組み合わせは昇格チェックリストでは比べられません。error.data.detail の理由とツールの説明を確認してください。 |
 | `backtest_not_found` | 404 | `backtest_get` の `run_id` のバックテストが無い（issue #1086） | その run_id のバックテストはありません。backtest_list で確認してください。 |
 | `backtest_unavailable` | 503 | `backtest_start` で、再生用のデータを読む設定が無い・読めない、または MCP が停止処理中。何も書かない（issue #1086） | バックテストを実行できません（再生用のデータを読む設定が無い、または読めません）。 |
+| `research_note_not_found` | 404 | `research_note_update` / `research_note_get` の `note_id` の研究ノートが無い。何も書かない | その note_id の研究ノートはありません。research_notes_list で確認してください。 |
+| `research_note_version_conflict` | 409 | `research_note_update` の `expected_version` が、ノートの現在の版と違う（別の書き込みで版が進んでいる）。何も書かない。`error.data.detail` に現在の版（`current_version は N です`） | ノートはすでに別の版に更新されています。research_note_get で最新の版を読み、その current_version を expected_version にして出し直してください。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -42,7 +44,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 58 個（読み取り 26（期間指定 23 + `health_today`・`ai_roles` + `promotion_checklist`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1、リプレイ 5、書き出し 1、バックテストと仮想 Paper 6）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 63 個（読み取り 26（期間指定 23 + `health_today`・`ai_roles` + `promotion_checklist`）、設定 6、注文案 6、実験 4、Jev のプロンプト 3、研究用の状況 1、リプレイ 5、書き出し 1、バックテストと仮想 Paper 6、研究ノートと FX の系列 5）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満、実験ツールの引数（`changes` が 0 件、`kind` / 値 / 仮説 / `started_at` / `ended_at` / `audit_id` の規則違反、`experiment_id` が欠けている・1 未満、`min_trades` が範囲外。`error.data.detail` に規則の理由を付ける） | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
@@ -72,3 +74,5 @@
 | 1.11 | 2026-11-15 | `invalid_argument` の条件のツール数を 37 → 42 に直した（読み取り 22・書き出し 1 を足した） | issue #1089・#1090・#1091・#1094 |
 | 1.12 | 2026-11-15 | バックテストのコード `backtest_not_found`（404）・`backtest_unavailable`（503）を追加。`limit_exceeded`（組・追加コスト・期間・仮想 Paper のプロファイル数）と `concurrency_limited`（実行中のバックテスト）の条件を追記し、ツール数を 58 にした（バックテスト 3 + 仮想 Paper 3）。`settings_set` の `hypothesis`（空・長すぎ・変更なし）は既存の `invalid_argument` | issue #1086 / #1087 / #1088 |
 | 1.13 | 2026-11-19 | `promotion_checklist` 用のコード `unsupported_candidate_kind`（422）を追加。それまで `invalid_argument` に丸めていた、候補・現行の種類や組み合わせを比べられない拒否を分けた。`experiment` / `setting` は candidate にできるようになったので、拒否は current への指定・current との組み合わせ・ホワイトリスト外の設定キーに限る | issue #1122・#1125（親 #1091） |
+| 1.14 | 2026-11-15 | 研究ノートツールのコード `research_note_not_found`（404）・`research_note_version_conflict`（409）を追加。`write_disabled` を研究ノートの書き込み（`research_note_create` / `research_note_update`）にも使い、`invalid_argument`（`error.data.detail` は値を引用しない）を研究ノートの引数規則にも使う。ツール数の記述は別途更新 | issue #1095 |
+| 1.15 | 2026-11-15 | `invalid_argument` の条件のツール数を 58 → 63 に直した（研究ノートの 4 つと `fx_series_summary` を足したため。内訳に「研究 5」を追加） | issue #1095 / #1084 |

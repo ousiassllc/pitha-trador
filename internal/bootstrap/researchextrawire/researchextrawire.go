@@ -1,9 +1,10 @@
 // Package researchextrawire collects the optional research parts the bootstrap wires
-// in: the J-Quants read adapter (issue #1093) and the EDINET document list (issue
-// #1096) as scheduler maintenance tasks, and the replay evaluation (issue #1085)
-// as a background runner. All are off until switched on on the Settings screen and
-// send no request without their API key. The 立花 news task is not wired (it waits
-// for #725). Nothing here is an input of trading.
+// in: the J-Quants read adapter (issue #1093), the EDINET document list (issue
+// #1096) and the research FX candle record (issue #1084) as scheduler maintenance
+// tasks, and the replay evaluation (issue #1085) as a background runner. All are
+// off until switched on on the Settings screen and send no request without their
+// API key. The 立花 news task is not wired (it waits for #725). Nothing here is an
+// input of trading.
 package researchextrawire
 
 import (
@@ -14,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/disclosuresrcwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jquantswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/replaywire"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/researchfxjob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
@@ -36,10 +38,11 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository, secrets config.
 		replay: replaywire.New(dbPath, secrets)}
 }
 
-// Option registers the maintenance tasks (J-Quants, EDINET) with the scheduler.
+// Option registers the maintenance tasks (J-Quants, EDINET, research FX) with the scheduler.
 func (w *Wire) Option() scheduler.Option {
 	return func(s *scheduler.Scheduler) {
 		scheduler.WithMaintenanceTask(jquantswire.New(w.db, w.settings, w.jquants).Task())(s)
+		scheduler.WithMaintenanceTask(researchfxjob.New(w.db, w.settings).Task())(s)
 		for _, task := range disclosuresrcwire.Tasks(w.db, w.settings, w.edinet) {
 			scheduler.WithMaintenanceTask(task)(s)
 		}

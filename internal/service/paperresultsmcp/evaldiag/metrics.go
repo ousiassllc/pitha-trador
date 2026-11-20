@@ -24,7 +24,7 @@ const (
 // return (bps) of every arm on it, whether it entered, and the stored label.
 type evalRow struct {
 	id      int64
-	at      time.Time
+	at      time.Time // the decision's timestamp (the FX join of fxcontext.go)
 	day     string
 	dir     string
 	net     [numArms]float64

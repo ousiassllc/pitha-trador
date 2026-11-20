@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtesttool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jevshadowtool"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote/notetool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/tooldef"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/virtualpapertool"
 )
@@ -15,7 +16,7 @@ import (
 // The tools declared in their own packages with tooldef join the table here:
 // the one place that turns a tooldef.Def into a table entry.
 func init() {
-	for _, d := range slices.Concat(backtesttool.Defs(), jevshadowtool.Defs(), virtualpapertool.Defs()) {
+	for _, d := range slices.Concat(backtesttool.Defs(), jevshadowtool.Defs(), virtualpapertool.Defs(), notetool.Defs()) {
 		tools = append(tools, fromDef(d))
 	}
 }

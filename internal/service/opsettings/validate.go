@@ -91,7 +91,7 @@ func encode(key, raw string) (string, error) {
 		}
 		value = n
 	case kindWatch:
-		v, err := watchsettings.NormalizeSymbols(raw)
+		v, err := normalizeSymbols(key, raw)
 		if err != nil {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
@@ -247,6 +247,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
+	case isResearchFX(key):
+		return validateResearchFX(key, encoded)
 	case researchonlysettings.IsKey(key):
 		if err := researchonlysettings.Validate(key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}

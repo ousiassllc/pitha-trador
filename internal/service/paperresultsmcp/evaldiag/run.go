@@ -164,7 +164,13 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 		Caveats:     caveats(cutoff),
 	}
 	for _, acc := range order {
-		out.Cohorts = append(out.Cohorts, acc.cohort(horizon))
+		c := acc.cohort(horizon)
+		if req.FXSymbol != "" {
+			if c.FXContext, err = fxContext(ctx, q, req.FXSymbol, acc.rows); err != nil {
+				return nil, 0, err
+			}
+		}
+		out.Cohorts = append(out.Cohorts, c)
 	}
 	return out, decisions, nil
 }

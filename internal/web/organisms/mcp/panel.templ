@@ -48,6 +48,9 @@ type PanelProps struct {
 	// (default on), Audit the newest audit rows.
 	WriteGate    bool
 	WriteEnabled bool
+	// ResearchNotes shows the read-only research-note list under the write
+	// section; false when the gate cannot serve it.
+	ResearchNotes bool
 	// OrderProposalsEnabled is the order-proposal intake switch (issue #827;
 	// default off).
 	OrderProposalsEnabled bool
@@ -156,6 +159,9 @@ templ Panel(props PanelProps) {
 		</dl>
 		if props.WriteGate {
 			@writeSection(props)
+			if props.ResearchNotes {
+				<div id="mcp-research-notes" hx-get="/settings/mcp/research-notes" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-research-notes-slot"></div>
+			}
 		}
 		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
 			<dt class="text-ink">paper-results-mcp の配置先</dt>
