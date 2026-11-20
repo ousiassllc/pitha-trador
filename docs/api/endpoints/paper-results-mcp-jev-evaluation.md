@@ -19,6 +19,7 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 | `prompt_version` | 任意。この版（`question_version`。例 `trader-v4`）の判断だけ。省略は全版（版ごとに別集計） |
 | `model_id` | 任意。この `model_id` の判断だけ（100 文字まで）。省略は全モデル（モデルごとに別集計） |
 | `fx_symbol` | 任意。通貨ペア（`^[A-Z]{3}_[A-Z]{3}$`。例 `USD_JPY`）。指定すると各 cohort に `fx_context`（下記）を足す。省略は足さない（出力は変わらない） |
+| `index_symbol` | 任意。立花の指数コード（`^[0-9A-Za-z]{1,8}$`。例 `101`＝日経平均、`151`＝TOPIX）。指定すると各 cohort に `index_context`（下記）を足す。省略は足さない（出力は変わらない）。`fx_symbol` と同時に指定できる |
 
 不明な引数・型の違い・範囲外（`horizon_minutes` が 1〜60 でない、`prompt_version` の形が不正）は `invalid_argument`（422）、期間の誤りは `invalid_period`（422）。期間内の判断が 10,000 件（`MaxDecisions`）を超える（`horizon_minutes` が長いほど窓の行が増えるため、窓の行数の上限 `MaxWindowRows` = 200,000 から `200,000 ÷ (horizon_minutes + 4)` 件に下がる。ホライズン 60 なら 3,125 件）、または (`model_id`, `question_version`) の組が 50（`MaxCohorts`）を超えると、部分結果を返さず `limit_exceeded`（422。期間か `model_id` / `prompt_version` で狭める）。
 
@@ -85,6 +86,20 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 
 区分は、判断の時刻 `t` の mid 価格の、60 分前の mid 価格に対する**変化の符号**: `up`（上昇）/ `flat`（変化なし）/ `down`（下落）。mid は足の**始値**の BID・ASK の平均で、`t` 以前で最新の（BID・ASK の両方がある）足を、足の開始から 5 分以内のものに限って使う（`fxdiag.AtOrBefore`）。`t` と `t − 60 分` のどちらかに足が無ければ `unmatched`（市場休みや欠けの時間帯の判断が入る）。終値は 1 分あとにしか分からないので使わず、判断の時刻より後の価格は見ない。
 
+#### `index_context`（`index_symbol` を指定したとき）
+
+引数 `index_symbol`（任意。`101` のような立花の指数コード）を指定すると、各 cohort に `index_context` を足す。研究用の指数の 1 分値の記録（`research_index_minutes`。`docs/api/endpoints/research-tools/paper-results-mcp-research-index.md`）を**読むだけ**で、記述のみ（しきい値なし・取引には使わない）。**指定しなければ `index_context` というキーは出ず、応答はこの引数が無かった頃とバイト単位で同じ**（記録の有無にもよらない）。指定しても `index_context` 以外の値は変わらない。
+
+| キー | 内容 |
+|---|---|
+| `symbol` | 指定した指数コード |
+| `lookback_minutes` / `staleness_minutes` | 30 / 5。固定値（為替より窓が短いのは、指数は立会の分にしか値が無いため） |
+| `return` | 変化の定義の説明文 |
+| `buckets[]` | `fx_context` と同じ。`up` / `flat` / `down` / `unmatched` の 4 要素（この順。0 件も出す）。`{bucket, n, mean_net_bps}`。llm アームの行の平均 net bps（0 件は `null`）。4 区分の `n` の合計は cohort の `evaluated` |
+
+区分は、判断の時刻 `t` の時点で**取得済みの最新の値**の、30 分前の時刻の時点で取得済みの最新の値に対する変化の符号。値は分の開始から 5 秒後に取るので、`分の開始 + 5 秒 <= t` の分だけが見え、`t` より後の値は使わない。分の開始が `t` から 5 分より古ければ値なし。立会外・昼休み・記録の欠けは `unmatched` になり、直前の値を持ち越さない。指数コードの記録が無ければ全行が `unmatched`。
+
+
 #### 出力の例（合成データ）
 
 テストの固定データ（`evaltests`。1 日目〜3 日目、`model-1` / `trader-v3` の 6 件。TP/SL 30・コスト 10 bps・10 分）の `all`:
@@ -120,3 +135,4 @@ Jev（AI）が良いのかどうかを、**エントリー判定（entry_quality
 | 1.0 | 2026-11-14 | 新規 | issue #1073 |
 | 1.1 | 2026-11-15 | 日の区切りが JST であること、出力の net bps が「いまの設定（`calibration.barrier_*`・`cost.*`）で付け直した値」で保存済みラベルの値ではないことを、引数表と冒頭の説明に明記 | issue #1073（PR #1077 の直し） |
 | 1.2 | 2026-11-15 | 任意の引数 `fx_symbol`（研究用の為替 1 分足の記録を判断の時刻に合わせて結合し、cohort ごとに `fx_context` を足す。指定しなければ出力は変わらない）を、引数表と「`fx_context`」の節に追記 | issue #1084 |
+| 1.3 | 2026-11-20 | 任意の引数 `index_symbol`（研究用の指数の 1 分値の記録を判断の時刻に合わせて結合し、cohort ごとに `index_context` を足す。指定しなければ出力は変わらない）を、引数表と「`index_context`」の節に追記 | issue #1084 |

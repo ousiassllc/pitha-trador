@@ -21,11 +21,12 @@ func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 		"jev.shadow.enabled", "jev.shadow.candidate_version", // #929: only these two of the jev.shadow.* keys; the cost cap, halt, failures, throttle and the live version are not here
 		"research.labels.enabled",                                              // #1073: only the recording switch of the research labels (default off); research.labels.retention_days is not here
 		"research.fx.enabled",                                                  // #1084: only the recording switch of the research FX candles (default off); research.fx.symbols is not here
+		"research.index.enabled",                                               // #1084: only the recording switch of the research index values (default off); research.index.symbols is not here
 		"research.tachibana_bars.enabled", "research.tachibana_quotes.enabled", // #1082, #1083: only the two switches of the 立花 research collections (default off); their other keys are Settings-screen only
 		"research.eval.enabled", "research.model.enabled", "research.export.enabled", // #1089, #1092, #1094: only the three switches (default off); the retentions and promotion criteria are not here
 	}
-	if len(want) != 28 {
-		t.Fatalf("the test lists %d keys, issues #1073, #1082, #1083, #1084, #1089, #1092 and #1094 make the whitelist 28", len(want))
+	if len(want) != 29 {
+		t.Fatalf("the test lists %d keys, issues #1073, #1082, #1083, #1084, #1089, #1092 and #1094 make the whitelist 29", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)

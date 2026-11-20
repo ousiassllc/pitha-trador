@@ -31,7 +31,8 @@ const Description = "jev_evaluation の llm アーム（期間内の trader の 
 // SchemaProperties are the tool's own arguments besides the period.
 func SchemaProperties() map[string]any {
 	props := evaldiag.SchemaProperties()
-	delete(props, "fx_symbol") // the FX context is jev_evaluation's own (issue #1084); this tool's request has no such field
+	delete(props, "fx_symbol")    // the FX context is jev_evaluation's own (issue #1084); this tool's request has no such field
+	delete(props, "index_symbol") // so is the index context (issue #1084)
 	props["dimensions"] = map[string]any{
 		"type": "array", "uniqueItems": true, "minItems": 1, "maxItems": len(dimensions),
 		"items":       map[string]any{"type": "string", "enum": Names()},

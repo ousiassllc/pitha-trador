@@ -2,7 +2,7 @@
 
 `docs/architecture/paper-results-mcp.md` §5 の分割章（行数上限のため別ファイル）。issue #1084 の **USD/JPY（為替）の部分だけ**。ツールの引数と出力は `docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md` §3.46、表は `docs/architecture/er/research-tools/tables-research-fx.md`、GMO のアダプタは `docs/architecture/overview/integrations.md` §14。
 
-日経平均・TOPIX など指数の記録は**まだ実装していない**（立花の日中の時価の記録 #1083 が使えるようになってから別に行う）。指数の表・設定・ツールはこの章の範囲にない。
+日経平均・TOPIX など指数の記録はこの章の範囲にない（別の記録・別のスイッチ・別のツール。`research-tools/paper-results-mcp-research-index.md`）。
 
 ## 1. 目的と位置づけ
 
@@ -10,7 +10,7 @@
 
 **取引に影響しない**ことは次で担保する:
 
-- **既定はオフ**: 記録は Settings の `research.fx.enabled`（`runtime_settings` の JSON 整数 1 / 0、既定 0。Settings「研究用の為替 1 分足の記録」。Paper 実績 MCP の `settings_set` からも変えられる）がオンのときだけ動く。オフ（未設定・0・壊れた値）の間、日次タスクは `maintenance.ErrSkipped` を返し、**外部への要求を 0 回**にし、表にも `runtime_settings`（ランナーの最終成功日 `system.maintenance.research_fx.last_success_date`）にも何も書かない。`researchfxjob` の `TestJob_IsOffByDefaultMakesNoRequestAndWritesNothingWhileOff` が、未設定・0・壊れた値・範囲外のそれぞれで、GMO のモックサーバが受けた要求数が 0、3 表（2 表と `runtime_settings`）の行数が変わらず、最終成功日が無いことを固定する。**スイッチが読めない**（`runtime_settings` の読み取りがエラー）ときも「オン」とは見なさず、警告ログを 1 行出して `maintenance.ErrSkipped` を返す（外部への要求も書き込みも 0。ランナーの失敗として数えず「研究用の為替 1 分足の記録に失敗」の通知も出さない。次のキャッチアップで再び読む）。`TestJob_AnUnreadableSwitchIsSkippedNotSwitchedOnNorFailed` が固定する。
+- **既定はオフ**: 記録は Settings の `research.fx.enabled`（`runtime_settings` の JSON 整数 1 / 0、既定 0。Settings「研究用の為替・指数の 1 分値の記録」。Paper 実績 MCP の `settings_set` からも変えられる）がオンのときだけ動く。オフ（未設定・0・壊れた値）の間、日次タスクは `maintenance.ErrSkipped` を返し、**外部への要求を 0 回**にし、表にも `runtime_settings`（ランナーの最終成功日 `system.maintenance.research_fx.last_success_date`）にも何も書かない。`researchfxjob` の `TestJob_IsOffByDefaultMakesNoRequestAndWritesNothingWhileOff` が、未設定・0・壊れた値・範囲外のそれぞれで、GMO のモックサーバが受けた要求数が 0、3 表（2 表と `runtime_settings`）の行数が変わらず、最終成功日が無いことを固定する。**スイッチが読めない**（`runtime_settings` の読み取りがエラー）ときも「オン」とは見なさず、警告ログを 1 行出して `maintenance.ErrSkipped` を返す（外部への要求も書き込みも 0。ランナーの失敗として数えず「研究用の為替 1 分足の記録に失敗」の通知も出さない。次のキャッチアップで再び読む）。`TestJob_AnUnreadableSwitchIsSkippedNotSwitchedOnNorFailed` が固定する。
 - 書くのは新しい 2 表（`research_fx_candles` / `research_fx_days`）だけ。既存の表には列も制約もトリガも足さない。Feature Engine（市場コンテキストを含む）・Policy・Risk・発注・Paper ガード・Live・Jev のプロンプト・RAG・メタモデルの学習・自己改善・既存のシャドー（trader-v5）は変えず、この記録を読まない。
 - **kabu の登録枠を使わない・登録要求を増やさない**: 記録は GMO の公開 API だけを呼ぶ。記録の 4 パッケージ（`domain` / `repository` / `service` / `bootstrap` の `researchfx*`）と設定のパッケージは、`go list -deps` で見て、ブローカー・kabu・立花のクライアント（`internal/service/broker`・`internal/service/marketdata`）にも、Feature Engine・Policy・Risk・発注・Jev のコードにも依存しない。`internal/repository/researchfx/isolation_test.go` の `TestRecordingPackagesDependOnNoBrokerOrTradingCode` がこれを固定する。監視銘柄の数も減らさない。
 - 参照を固定する: 同じテストの `TestResearchFXRecordIsReadOnlyByItsRecorderAndTheResearchTools` が、表名・パッケージ・設定キー・GMO アダプタのシンボルを、記録部品・日次タスク・設定・読み取り専用の MCP ツール・`jev_evaluation` の結合・Settings の保存と画面のグループ・`db/migrations` のファイルだけに限る。`TestTradingSidePackagesDoNotMentionTheFXRecord` が、Feature Engine（`marketcontext` を含む）・Policy・Risk・execution・ブローカー・Jev・RAG などのパッケージが何も参照しないことを名指しで固定する。記録部品が書く表が自分の 2 表だけ、MCP の問い合わせは SELECT だけであることも同じテストが固定する。

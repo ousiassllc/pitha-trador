@@ -170,6 +170,11 @@ func Run(ctx context.Context, q query.Q, r query.Range, _ time.Time, req Request
 				return nil, 0, err
 			}
 		}
+		if req.IndexSymbol != "" {
+			if c.IndexContext, err = indexContext(ctx, q, req.IndexSymbol, acc.rows); err != nil {
+				return nil, 0, err
+			}
+		}
 		out.Cohorts = append(out.Cohorts, c)
 	}
 	return out, decisions, nil

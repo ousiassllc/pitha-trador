@@ -2,7 +2,7 @@
 
 `docs/api/endpoints/paper-results-mcp.md` §3.46 の分割章（行数上限のため別ファイル）。issue #1084（USD/JPY の部分）。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。読み取り専用（設定も記録も書かない）。設計は `docs/architecture/research-tools/paper-results-mcp-research-fx.md`、表は `docs/architecture/er/research-tools/tables-research-fx.md`。
 
-日経平均・TOPIX など指数の系列は**まだ記録していない**（立花の日中の時価の記録 #1083 が使えるようになってから別に行う）。このツールが返すのは為替だけ。
+日経平均・TOPIX など指数の系列は別のツール `index_series_summary`（`research-tools/paper-results-mcp-research-index.md` §3.51）が返す。このツールが返すのは為替だけ。
 
 ## 3. ツール
 

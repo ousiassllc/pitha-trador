@@ -36,6 +36,9 @@ const FxSymbolDescription = "通貨ペア（例: USD_JPY）。指定すると、
 // accepts (like USD_JPY); jev_evaluation and research_horizon_summary share it.
 func ValidFxSymbol(s string) bool { return researchfxsettings.ValidSymbol(s) }
 
+// FxReturnDescription says what the bucket is (the return field of fx_context).
+const FxReturnDescription = "判断の時刻以前の最新の足の始値の BID/ASK 平均（mid）の、60 分前の時刻以前の最新の足に対する変化の符号（up＝上昇、flat＝変化なし、down＝下落）"
+
 var fxBuckets = []string{FxUp, FxFlat, FxDown, FxUnmatched}
 
 // FxBucket is the LLM arm's net return (bps, after the label's cost) over the
@@ -55,25 +58,62 @@ type FxContext struct {
 	Buckets          []FxBucket `json:"buckets"`
 }
 
-// FxReturnDescription says what the bucket is (the return field of fx_context).
-const FxReturnDescription = "判断の時刻以前の最新の足の始値の BID/ASK 平均（mid）の、60 分前の時刻以前の最新の足に対する変化の符号（up＝上昇、flat＝変化なし、down＝下落）"
+// fxContext splits rows' llm arm by the sign of the symbol's mid-price change
+// (candle open mid at the decision time against the one FxLookbackMinutes
+// earlier, both the latest candle at or before the time within the staleness).
+func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*FxContext, error) {
+	buckets, err := splitByReturn(rows, FxLookbackMinutes*time.Minute, fxMid(ctx, q, symbol))
+	if err != nil {
+		return nil, err
+	}
+	return &FxContext{
+		Symbol: symbol, LookbackMinutes: FxLookbackMinutes, StalenessMinutes: FxStalenessMinutes,
+		Return: FxReturnDescription, Buckets: buckets,
+	}, nil
+}
 
 // FxTrailingBuckets is the bucket of each time: the sign of the symbol's mid-price
 // change (candle open mid at the time against the one FxLookbackMinutes earlier,
 // both the latest candle at or before the time within the staleness). It only
 // reads research_fx_candles, and the result never reaches trading.
 func FxTrailingBuckets(ctx context.Context, q query.Q, symbol string, times []time.Time) ([]string, error) {
-	lookback := FxLookbackMinutes * time.Minute
+	return trailingBuckets(times, FxLookbackMinutes*time.Minute, fxMid(ctx, q, symbol))
+}
+
+// fxMid is the price function of the FX series: the candle open mid at or before
+// each time within the staleness.
+func fxMid(ctx context.Context, q query.Q, symbol string) func(times []time.Time) ([]*float64, error) {
 	staleness := FxStalenessMinutes * time.Minute
+	return func(times []time.Time) ([]*float64, error) {
+		quotes, err := fxdiag.AtOrBefore(ctx, q, symbol, times, staleness)
+		if err != nil {
+			return nil, err
+		}
+		mids := make([]*float64, len(quotes))
+		for i, qt := range quotes {
+			if qt != nil {
+				mid := qt.MidOpen()
+				mids[i] = &mid
+			}
+		}
+		return mids, nil
+	}
+}
+
+// trailingBuckets is the bucket of each time by the sign of the change of a price
+// series over lookback before it. price returns, for the given times, the series'
+// price known at each (nil: unmatched). A time is unmatched when either the price
+// at it or the one lookback earlier is.
+func trailingBuckets(times []time.Time, lookback time.Duration, price func(times []time.Time) ([]*float64, error)) ([]string, error) {
 	start := make([]time.Time, len(times))
 	for i, t := range times {
 		start[i] = t.Add(-lookback)
 	}
-	now, err := fxdiag.AtOrBefore(ctx, q, symbol, times, staleness)
+	now, err := price(times)
 	if err != nil {
 		return nil, err
 	}
-	before, err := fxdiag.AtOrBefore(ctx, q, symbol, start, staleness)
+	before, err := price(start)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +121,7 @@ func FxTrailingBuckets(ctx context.Context, q query.Q, symbol string, times []ti
 	for i := range times {
 		out[i] = FxUnmatched
 		if now[i] != nil && before[i] != nil {
-			switch d := now[i].MidOpen() - before[i].MidOpen(); {
+			switch d := *now[i] - *before[i]; {
 			case d > 0:
 				out[i] = FxUp
 			case d < 0:
@@ -109,14 +149,14 @@ func FxBucketsOf(counts map[string]int, sums map[string]float64) []FxBucket {
 	return out
 }
 
-// fxContext splits rows' llm arm by the sign of the symbol's trailing mid-price
-// change (FxTrailingBuckets at each decision time).
-func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*FxContext, error) {
+// splitByReturn splits the llm arm of rows by the sign of the change of a price
+// series over lookback before each decision (trailingBuckets at each decision time).
+func splitByReturn(rows []evalRow, lookback time.Duration, price func(times []time.Time) ([]*float64, error)) ([]FxBucket, error) {
 	at := make([]time.Time, len(rows))
 	for i, r := range rows {
 		at[i] = r.at
 	}
-	buckets, err := FxTrailingBuckets(ctx, q, symbol, at)
+	buckets, err := trailingBuckets(at, lookback, price)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +166,5 @@ func fxContext(ctx context.Context, q query.Q, symbol string, rows []evalRow) (*
 		counts[buckets[i]]++
 		sums[buckets[i]] += r.net[iLLM]
 	}
-	return &FxContext{
-		Symbol: symbol, LookbackMinutes: FxLookbackMinutes, StalenessMinutes: FxStalenessMinutes,
-		Return: FxReturnDescription, Buckets: FxBucketsOf(counts, sums),
-	}, nil
+	return FxBucketsOf(counts, sums), nil
 }
