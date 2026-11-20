@@ -170,6 +170,7 @@ var dialogs = []Dialog{
 	{PageResults, "modal-regime", nil},
 	{PageResults, "modal-orderflow", nil},
 	{PageResults, "modal-research-labels", nil},
+	{PageResults, "modal-research-fx", nil},
 	{PageResults, "modal-research-jobs", nil},
 	{PageResults, "modal-research-promotion", nil},
 
