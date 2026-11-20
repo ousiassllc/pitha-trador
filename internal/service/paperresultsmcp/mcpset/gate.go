@@ -10,14 +10,17 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote"
 )
 
 // Gate is the application's side of the same state the Writer changes: it
 // reads and flips the write switch (the Settings screen's toggle), lists the
 // audit log for the Settings panel, and (through Audited) records the Settings
 // screen's own changes to whitelisted keys, so settings_diff and
-// the audit log see every change of those keys whoever made it.
+// the audit log see every change of those keys whoever made it. The embedded
+// Lister serves the Settings screen's read-only research-note list.
 type Gate struct {
+	*researchnote.Lister
 	db       *sql.DB
 	settings *system.RuntimeSettingsRepository
 	now      func() time.Time
@@ -27,7 +30,7 @@ type Gate struct {
 
 // NewGate returns a Gate over the application's database.
 func NewGate(db *sql.DB) *Gate {
-	return &Gate{db: db, settings: system.NewRuntimeSettingsRepository(db), now: time.Now, summaries: experiment.NewSummaryCache()}
+	return &Gate{Lister: researchnote.NewLister(db), db: db, settings: system.NewRuntimeSettingsRepository(db), now: time.Now, summaries: experiment.NewSummaryCache()}
 }
 
 // Enabled reports the write switch (on while nothing is stored).

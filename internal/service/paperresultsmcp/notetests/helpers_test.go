@@ -82,23 +82,34 @@ func (s *testServer) tick(t *testing.T, at time.Time) {
 
 func (s *testServer) call(t *testing.T, name string, args any) response {
 	t.Helper()
+	r, err := s.post(name, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// post is call without the testing.T: it returns the transport error instead
+// of stopping the test, so a goroutine other than the test's own can use it
+// (t.Fatal must only be called from the test goroutine).
+func (s *testServer) post(name string, args any) (response, error) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": name, "arguments": args}})
 	req, err := http.NewRequest(http.MethodPost, s.http.URL, strings.NewReader(string(body)))
 	if err != nil {
-		t.Fatal(err)
+		return response{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+testAPIKey)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatal(err)
+		return response{}, err
 	}
 	defer func() { _ = res.Body.Close() }()
 	b, err := io.ReadAll(res.Body)
 	if err != nil {
-		t.Fatal(err)
+		return response{}, err
 	}
-	return response{status: res.StatusCode, body: b}
+	return response{status: res.StatusCode, body: b}, nil
 }
 
 // data decodes a successful response's structuredContent.data into out.
@@ -153,11 +164,16 @@ func create(t *testing.T, srv *testServer, args map[string]any) researchnote.Not
 
 func update(t *testing.T, srv *testServer, id int64, version int, extra map[string]any) response {
 	t.Helper()
+	return srv.call(t, "research_note_update", updateArgs(id, version, extra))
+}
+
+// updateArgs is a research_note_update request; extra adds the fields to change.
+func updateArgs(id int64, version int, extra map[string]any) map[string]any {
 	args := map[string]any{"note_id": id, "expected_version": version}
 	for k, v := range extra {
 		args[k] = v
 	}
-	return srv.call(t, "research_note_update", args)
+	return args
 }
 
 func list(t *testing.T, srv *testServer, args map[string]any) []researchnote.Row {

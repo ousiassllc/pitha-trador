@@ -155,7 +155,7 @@ func TestToolListAndNoSecrets(t *testing.T) {
 	if err := jsonUnmarshal(res.body, &list); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"virtual_paper_profile_create": false, "virtual_paper_profile_stop": false, "virtual_paper_compare": true}
+	want := map[string]bool{"virtual_paper_profile_create": false, "virtual_paper_profile_stop": false, "virtual_paper_rerun_failed": false, "virtual_paper_compare": true}
 	for _, tl := range list.Result.Tools {
 		if ro, ok := want[tl.Name]; ok {
 			if tl.Annotations["readOnlyHint"] != ro {

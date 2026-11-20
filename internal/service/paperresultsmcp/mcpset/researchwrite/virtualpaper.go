@@ -11,9 +11,10 @@ import (
 )
 
 // The virtual Paper side of the Writer (issue #1087). Its whole write surface is
-// two transactions on virtual_paper_profiles: CreateVirtualPaperProfile (one
-// INSERT) and StopVirtualPaperProfile (one UPDATE). Both run behind the write
-// switch. The days and trades of a profile are written only by the
+// three transactions behind the write switch: CreateVirtualPaperProfile (one
+// INSERT) and StopVirtualPaperProfile (one UPDATE) on virtual_paper_profiles,
+// and RerunVirtualPaperFailedDay (one DELETE of a failed virtual_paper_days
+// mark, issue #1131). The days and trades of a profile are written only by the
 // application's daily recorder.
 
 // CreateVirtualPaperProfile stores a profile (virtualpaper.Create's validation,
@@ -42,4 +43,14 @@ func StopVirtualPaperProfile(ctx context.Context, w *mcpset.Writer, id int64) (r
 		return err
 	})
 	return out, changed, err
+}
+
+// RerunVirtualPaperFailedDay makes profile id's failed day re-run-eligible
+// (virtualpaper.RerunFailedDay's rules), behind the write switch
+// (ErrWriteDisabled while it is off, with nothing written). The next daily
+// record replays the day.
+func RerunVirtualPaperFailedDay(ctx context.Context, w *mcpset.Writer, id int64, day string) error {
+	return w.InTx(ctx, "virtual paper rerun transaction", true, func(tx *sql.Tx, now time.Time) error {
+		return virtualpaper.RerunFailedDay(ctx, tx, now, id, day)
+	})
 }

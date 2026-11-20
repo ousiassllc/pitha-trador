@@ -154,7 +154,9 @@ type Data struct {
 	// RecordedThrough is the latest JST day the recorder completed (null: none yet).
 	RecordedThrough *string        `json:"recorded_through"`
 	Horizons        []HorizonStats `json:"horizons"`
-	Coverage        Coverage       `json:"coverage"`
-	Definitions     Definitions    `json:"definitions"`
-	Notice          string         `json:"notice"`
+	// FXContext is present only when the call names fx_symbol (fx.go).
+	FXContext   *FXContext  `json:"fx_context,omitempty"`
+	Coverage    Coverage    `json:"coverage"`
+	Definitions Definitions `json:"definitions"`
+	Notice      string      `json:"notice"`
 }

@@ -4,7 +4,7 @@
 
 ## 位置づけ
 
-本物の Paper と同じ判断・同じ相場に対し、設定の差分だけを変えた「仮想 Paper」のプロファイルの記録。**研究専用**で、取引には使わない（Policy・Risk・発注・Paper ガード・Live・Jev・自己改善は読まない。`internal/repository/virtualpaper/isolation_test.go` が固定）。書き込むのは日次の記録部品（`internal/service/virtualpaper`、`internal/bootstrap/virtualpaperjob` が保守タスクとして動かす）と、MCP のプロファイルの作成・停止（`virtual_paper_profiles` の INSERT / UPDATE だけ）。`paper_orders`・`positions`・資金・`runtime_settings`・`market_snapshots`・`jev_decisions` には何も書かない。既存の表に列・制約・トリガは足さない。外部キーは自表のプロファイルにだけ張る（`market_snapshots` の保持期間による削除を止めない）。
+本物の Paper と同じ判断・同じ相場に対し、設定の差分だけを変えた「仮想 Paper」のプロファイルの記録。**研究専用**で、取引には使わない（Policy・Risk・発注・Paper ガード・Live・Jev・自己改善は読まない。`internal/repository/virtualpaper/isolation_test.go` が固定）。書き込むのは日次の記録部品（`internal/service/virtualpaper`、`internal/bootstrap/virtualpaperjob` が保守タスクとして動かす）と、MCP のプロファイルの作成・停止（`virtual_paper_profiles` の INSERT / UPDATE だけ）と、失敗した日の再実行（`virtual_paper_rerun_failed`。`status = 'failed'` の `virtual_paper_days` の 1 行の DELETE だけ。issue #1131）。`paper_orders`・`positions`・資金・`runtime_settings`・`market_snapshots`・`jev_decisions` には何も書かない。既存の表に列・制約・トリガは足さない。外部キーは自表のプロファイルにだけ張る（`market_snapshots` の保持期間による削除を止めない）。
 
 記録は日次の保守タスクが、終わった JST の日ごとに既存のバックテストの再生（`ShadowBacktestPortfolioTrades`。約定の仮定は `fillmodel`）で書く。約定・相場の処理・判断の経路には一切つながらない。外部キーが自表だけなので、`market_snapshots` / `jev_decisions` の削除（保持期間 90 日）を止めたり連鎖させたりしない。
 
@@ -29,13 +29,13 @@
 
 ## virtual_paper_days
 
-(プロファイル, JST の日) ごとの「再生を終えた」印。取引の行と同じトランザクションで書く。印の無い日は次の実行がやり直す。主キーは `(profile_id, day)`（WITHOUT ROWID）。
+(プロファイル, JST の日) ごとの「再生を終えた」印。取引の行と同じトランザクションで書く。印の無い日は次の実行がやり直す（`failed` の印は MCP の `virtual_paper_rerun_failed` だけが、その 1 行を削除して外せる。`done` / `empty` の印は削除しない）。主キーは `(profile_id, day)`（WITHOUT ROWID）。
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
 | profile_id | integer | NOT NULL, FK → virtual_paper_profiles.id | |
 | day | text | NOT NULL, CHECK (長さ 10) | JST の日付 |
-| status | text | NOT NULL, CHECK (`done` / `empty` / `failed`) | `done` 再生した、`empty` その日の足が無い（休場・未収集）、`failed` 再生が失敗（自動ではやり直さない） |
+| status | text | NOT NULL, CHECK (`done` / `empty` / `failed`) | `done` 再生した、`empty` その日の足が無い（休場・未収集）、`failed` 再生が失敗（自動ではやり直さない。MCP の `virtual_paper_rerun_failed` が印を削除すると次の日次の記録が再生し直す） |
 | bars | integer | NOT NULL, DEFAULT 0, CHECK (>= 0) | 再生した足の数（ウォームアップを除く） |
 | decisions_seen | integer | NOT NULL, DEFAULT 0, CHECK (>= 0) | エントリーの評価に使った新しい Jev の判断の数（`RunConfig.OnEntryEvaluation` の回数）。削除後も残る分母 |
 | trades | integer | NOT NULL, DEFAULT 0, CHECK (>= 0) | 記録した取引の数（unfinished を含む） |

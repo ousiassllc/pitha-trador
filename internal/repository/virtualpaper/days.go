@@ -16,7 +16,8 @@ const (
 	DayDone = "done"
 	// DayEmpty is a day without any market_snapshots bar: nothing to replay.
 	DayEmpty = "empty"
-	// DayFailed is a day whose replay failed (Error says why); it is not retried.
+	// DayFailed is a day whose replay failed (Error says why); it is not retried
+	// until ResetFailedDay takes its mark away.
 	DayFailed = "failed"
 )
 
@@ -143,6 +144,40 @@ FROM virtual_paper_days WHERE profile_id = ? AND day >= ? AND day < ? ORDER BY d
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// ErrDayNotFound is returned by GetDay for a (profile, day) without a mark.
+var ErrDayNotFound = errors.New("virtualpaper: day not found")
+
+// GetDay returns the mark of profile's day, or ErrDayNotFound.
+func GetDay(ctx context.Context, q Querier, profileID int64, day string) (Day, error) {
+	d := Day{ProfileID: profileID, Day: day}
+	err := q.QueryRowContext(ctx, `SELECT status, bars, decisions_seen, trades, unfinished, error
+FROM virtual_paper_days WHERE profile_id = ? AND day = ?`, profileID, day).
+		Scan(&d.Status, &d.Bars, &d.DecisionsSeen, &d.Trades, &d.Unfinished, &d.Error)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Day{}, ErrDayNotFound
+	}
+	if err != nil {
+		return Day{}, fmt.Errorf("virtualpaper: get day: %w", err)
+	}
+	return d, nil
+}
+
+// ResetFailedDay takes the mark of a failed day away, so that the recorder's next
+// run replays the day again (a day without a mark is pending). It deletes only a
+// row whose status is failed and reports whether it did (false: no such mark, or
+// it is done / empty). A failed day holds no trade, so nothing else is touched.
+func ResetFailedDay(ctx context.Context, db DB, profileID int64, day string) (bool, error) {
+	res, err := db.ExecContext(ctx, `DELETE FROM virtual_paper_days WHERE profile_id = ? AND day = ? AND status = 'failed'`, profileID, day)
+	if err != nil {
+		return false, fmt.Errorf("virtualpaper: reset failed day: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("virtualpaper: reset failed day: %w", err)
+	}
+	return n > 0, nil
 }
 
 // ProfileIDsWithDoneDays returns the ids of the profiles that have at least one

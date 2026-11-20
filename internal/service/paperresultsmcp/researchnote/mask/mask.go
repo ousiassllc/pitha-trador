@@ -7,7 +7,12 @@
 // ordinary research text: GitHub URLs, file paths, snake_case identifiers,
 // UUIDs and host names are left alone (see mask_words.go). The rules are pure
 // and idempotent (masking masked text changes nothing), and the package
-// imports only the standard library.
+// imports only the standard library and golang.org/x/text/unicode/norm.
+//
+// The rules read the text NFKC-folded to ASCII (doc.go), so fullwidth key
+// names and prefixes (ＡＰＩ_ＫＥＹ＝…, ｓｋ－…, Ｂｅａｒｅｒ …) are masked like their
+// halfwidth spelling; the masked span is then put back on the text as written,
+// so nothing else in the note is rewritten.
 //
 // Unicode format characters (category Cf: zero-width space and joiner, word
 // joiner, BOM, soft hyphen, bidi marks) are removed first, so a credential
@@ -47,21 +52,25 @@ var (
 	dottedRe = regexp.MustCompile(`\b[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{8,}){2,}\b`)
 )
 
-// Text returns s with every key-shaped span replaced by Replacement.
+// Text returns s with every key-shaped span replaced by Replacement. The rules
+// read a copy of s folded to NFKC-equivalent ASCII (see doc), but only the
+// masked spans change in the result: everything else is s as it was written.
 func Text(s string) string {
 	if s == "" {
 		return s
 	}
 	s = strings.Map(dropFormat, s)
-	s = pemRe.ReplaceAllLiteralString(s, Replacement)
-	s = prefixedRe.ReplaceAllString(s, "${1}"+Replacement)
-	s = jwtRe.ReplaceAllString(s, "${1}"+Replacement)
-	s = urlUserinfoRe.ReplaceAllString(s, "${1}"+Replacement+"@")
-	s = maskAssignments(s)
-	s = bearerRe.ReplaceAllStringFunc(s, maskBearer)
-	s = spacedRe.ReplaceAllStringFunc(s, maskSpaced)
-	s = dottedRe.ReplaceAllStringFunc(s, maskDotted)
-	return maskWords(s)
+	d := newDoc(s)
+	d.mask(wholeSpans(pemRe, d.text))
+	d.mask(afterGroup1(prefixedRe, d.text, 0))
+	d.mask(afterGroup1(jwtRe, d.text, 0))
+	d.mask(afterGroup1(urlUserinfoRe, d.text, 1))
+	d.mask(assignmentSpans(d.text))
+	d.mask(bearerSpans(d.text))
+	d.mask(spacedSpans(d.text))
+	d.mask(dottedSpans(d.text))
+	d.mask(wordSpans(d.text))
+	return d.original(s)
 }
 
 // Texts masks each element of in, returning a new slice.
@@ -83,34 +92,65 @@ func dropFormat(r rune) rune {
 	return r
 }
 
-// maskBearer masks the token of "Bearer <token>". The capitalised scheme (the
-// HTTP spelling) always masks; a lower-case "bearer" is also an English word,
-// so it masks only when the token has a digit.
-func maskBearer(m string) string {
-	sub := bearerRe.FindStringSubmatch(m)
-	if sub[1] == "bearer" && !hasDigit(sub[3]) {
-		return m
+// wholeSpans are the matches of re.
+func wholeSpans(re *regexp.Regexp, text string) []span {
+	var out []span
+	for _, loc := range re.FindAllStringIndex(text, -1) {
+		out = append(out, span{loc[0], loc[1]})
 	}
-	return sub[1] + sub[2] + Replacement
+	return out
 }
 
-// maskSpaced masks the value of "token abc12345xyz" when it is 8+ characters
+// afterGroup1 are the matches of re without their group 1 (the boundary
+// character in front of a prefix) and without the last trim bytes (the "@" of
+// a URL userinfo).
+func afterGroup1(re *regexp.Regexp, text string, trim int) []span {
+	var out []span
+	for _, loc := range re.FindAllStringSubmatchIndex(text, -1) {
+		out = append(out, span{loc[3], loc[1] - trim})
+	}
+	return out
+}
+
+// bearerSpans are the tokens of "Bearer <token>"; the scheme stays. The
+// capitalised scheme (the HTTP spelling) always masks; a lower-case "bearer" is
+// also an English word, so it masks only when the token has a digit.
+func bearerSpans(text string) []span {
+	var out []span
+	for _, loc := range bearerRe.FindAllStringSubmatchIndex(text, -1) {
+		if text[loc[2]:loc[3]] == "bearer" && !hasDigit(text[loc[6]:loc[7]]) {
+			continue
+		}
+		out = append(out, span{loc[6], loc[7]})
+	}
+	return out
+}
+
+// spacedSpans are the values of "token abc12345xyz" that are 8+ characters
 // with a digit (an ordinary phrase such as "token budget" has neither).
-func maskSpaced(m string) string {
-	sub := spacedRe.FindStringSubmatch(m)
-	if !hasDigit(sub[4]) {
-		return m
-	}
-	return sub[1] + sub[2] + sub[3] + Replacement
-}
-
-func maskDotted(m string) string {
-	for _, seg := range strings.Split(m, ".") {
-		if !hasDigitAndLetter(seg) {
-			return m
+func spacedSpans(text string) []span {
+	var out []span
+	for _, loc := range spacedRe.FindAllStringSubmatchIndex(text, -1) {
+		if hasDigit(text[loc[8]:loc[9]]) {
+			out = append(out, span{loc[8], loc[9]})
 		}
 	}
-	return Replacement
+	return out
+}
+
+// dottedSpans are the dotted runs whose every segment has a letter and a digit.
+func dottedSpans(text string) []span {
+	var out []span
+	for _, loc := range dottedRe.FindAllStringIndex(text, -1) {
+		whole := true
+		for _, seg := range strings.Split(text[loc[0]:loc[1]], ".") {
+			whole = whole && hasDigitAndLetter(seg)
+		}
+		if whole {
+			out = append(out, span{loc[0], loc[1]})
+		}
+	}
+	return out
 }
 
 func hasDigit(s string) bool { return strings.ContainsAny(s, "0123456789") }

@@ -30,7 +30,7 @@ type toolEnv struct {
 	// capitalJPY is config/risk.yaml's Paper capital, the fallback of paperCapital.
 	capitalJPY float64
 	now        time.Time
-	// The fields below serve the settings tools (settings_tools.go).
+	// The fields below serve the settings tools (settingstool).
 	client      string                         // the caller's host, for the audit log
 	paperLimits *config.RiskLimits             // risk.yaml's Paper section (defaults of the Paper keys)
 	policy      *config.PolicyConfig           // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
@@ -84,8 +84,8 @@ func resolveLimit(requested *int, maxLimit int) (int, *toolError) {
 }
 
 // tools is the dispatch table: the nine read tools of the API spec §3, then
-// the settings tools (settings_tools.go) and the order-proposal tools
-// (order_proposal_tools.go).
+// the settings tools (settingstool) and the order-proposal tools
+// (proposaltool), which join through ext_tools.go.
 var tools = []tool{
 	diagTool("paper_performance_summary", "期間内にクローズした Paper 取引の件数・勝率・期待値・ドローダウン（読み取り専用）", nil,
 		func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {

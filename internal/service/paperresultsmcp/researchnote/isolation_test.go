@@ -27,12 +27,12 @@ func TestResearchNotesAreReadAndWrittenOnlyByTheirTools(t *testing.T) {
 		"research_notes", "research_note_versions", "paperresultsmcp/researchnote",
 	}
 	allowed := []string{
-		"internal/service/paperresultsmcp/researchnote/",            // the record's own code
-		"internal/service/paperresultsmcp/mcpset/research_notes.go", // the Settings screen's list
-		"internal/service/paperresultsmcp/ext_tools.go",             // registers the notetool definitions in the dispatch table
-		"internal/service/paperresultsmcp/errors.go",                // the tools' error-code texts (they name the list tool)
-		"internal/web/handler/mcpsettings/research_notes",           // the Settings screen's read-only list
-		"internal/web/organisms/mcp/research_notes",                 // its view
+		"internal/service/paperresultsmcp/researchnote/",  // the record's own code
+		"internal/service/paperresultsmcp/mcpset/gate.go", // embeds the Settings screen's list
+		"internal/service/paperresultsmcp/ext_tools.go",   // registers the notetool definitions in the dispatch table
+		"internal/service/paperresultsmcp/errors.go",      // the tools' error-code texts (they name the list tool)
+		"internal/web/handler/mcpsettings/research_notes", // the Settings screen's read-only list
+		"internal/web/organisms/mcp/research_notes",       // its view
 		"db/migrations/", // the schema
 	}
 	walkGo(t, root, func(rel string, src []byte) {
@@ -85,15 +85,14 @@ func TestResearchNotePackagesImportOnlyTheSQLHelpersAndTheMask(t *testing.T) {
 // DELETE / DDL statement in their source names research_notes or
 // research_note_versions, and no statement touches a version row except INSERT.
 func TestResearchNotePackagesWriteOnlyTheirOwnTables(t *testing.T) {
-	for _, dir := range []string{".", "mask", filepath.Join("..", "mcpset")} {
+	for _, dir := range []string{".", "mask"} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
-				(strings.Contains(dir, "mcpset") && name != "research_notes.go") {
+			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 				continue
 			}
 			src, err := os.ReadFile(filepath.Join(dir, name))

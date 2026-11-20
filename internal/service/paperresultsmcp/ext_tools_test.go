@@ -17,7 +17,11 @@ func TestToolDefCodesAreTheRootsCodes(t *testing.T) {
 		tooldef.CodeInvalidArgument: CodeInvalidArgument, tooldef.CodeLimitExceeded: CodeLimitExceeded,
 		tooldef.CodeConcurrencyLimited: CodeConcurrencyLimited, tooldef.CodeWriteDisabled: CodeWriteDisabled,
 		tooldef.CodeInvalidValue: CodeInvalidValue, tooldef.CodeBacktestNotFound: CodeBacktestNotFound,
-		tooldef.CodeBacktestUnavailable: CodeBacktestUnavailable,
+		tooldef.CodeBacktestUnavailable: CodeBacktestUnavailable, tooldef.CodeKeyNotAllowed: CodeKeyNotAllowed,
+		tooldef.CodeProposalsDisabled: CodeProposalsDisabled, tooldef.CodeIdempotencyConflict: CodeIdempotencyConflict,
+		tooldef.CodeProposalNotFound: CodeProposalNotFound, tooldef.CodeNotCancellable: CodeNotCancellable,
+		tooldef.CodeMultipleVariables: CodeMultipleVariables, tooldef.CodeExperimentNotFound: CodeExperimentNotFound,
+		tooldef.CodeExperimentNotRunning: CodeExperimentNotRunning,
 	} {
 		if _, ok := codeTable[Code(def)]; !ok || Code(def) != root {
 			t.Errorf("tooldef code %q is not the root's code %q (or not in codeTable)", def, root)

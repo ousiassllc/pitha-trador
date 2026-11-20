@@ -17,7 +17,7 @@
 
 ## 2. ラベルによる前後比較（`internal/service/paperresultsmcp/experiment/labelcompare`）
 
-`experiment/` 配下は行数の警告を超えているので、新しいパッケージに置く。`experiment_tools.go` は `labeltool.Compare` を呼ぶだけで、`experiment.Compare` の結果に `labelcompare.Attach` で `label_based` を足した `labelcompare.Response`（`experiment.Comparison` を埋め込んだ構造体。JSON では既存のメンバーがそのまま並ぶ）を返す。
+`experiment/` 配下は行数の警告を超えているので、新しいパッケージに置く。`experimenttool`（`experiment_compare`）は `labeltool.Compare` を呼ぶだけで、`experiment.Compare` の結果に `labelcompare.Attach` で `label_based` を足した `labelcompare.Response`（`experiment.Comparison` を埋め込んだ構造体。JSON では既存のメンバーがそのまま並ぶ）を返す。
 
 ### 2.1 前後それぞれの窓で見るもの
 
@@ -66,7 +66,7 @@
 
 ## 3. `settings_set` に仮説を付けて 1 回で実験を記録する
 
-- 実装: `mcpset.Writer.SetWithExperiment`（`mcpset/setexperiment.go`）。ツール側は `settings_tools.go` の `settings_set` が `labeltool.Set`を呼ぶ。
+- 実装: `mcpset.Writer.SetWithExperiment`（`mcpset/setexperiment.go`）。ツール側は `settingstool` の `settings_set` が `labeltool.Set`を呼ぶ。
 - 1 トランザクション（`runInTx`。`Set` と同じ接続・同じ `_txlock=immediate`）の中で、順に: (1) ホワイトリスト（`ErrKeyNotAllowed` → `key_not_allowed`。デコード時にも先に検査済み）、(2) 書き込み許可（`ErrWriteDisabled` → `write_disabled`）、(3) 仮説・実験の形の検査（`experiment.Args.Validate`。空・空白だけ・500 文字超・制御文字は `invalid_argument` に理由つき。**設定を書く前**）、(4) 値の検証と保存・監査行（`Writer.Set` と同じ `saveAndAudit`）、(5) 保存後の前後の値が分かったところで実験を検査し（変更前と変更後が同じなら `invalid_argument`＝何も変えていない実験は作れない）、`experiment.Insert`。どれかが失敗すると全部ロールバックされ、**設定・監査行・実験のどれも残らない**（`TestSetWithHypothesisIsAllOrNothing` が、実験の挿入を強制的に失敗させて設定が保存されず監査行も無いことを固定する）。
 - 実験の中身: `kind` = `setting`、`name` = キー、`before` / `after` = 保存の前後の**有効な値**（保存した値が無かったときの既定値を含む。監査行の `before` が「保存値なし」で null になるのとは違い、実験には既定値が入る）、`audit_id` = この変更の監査行（`Writer.Set` の `audit_id`）、`started_at` = 書き込みの時刻（応答の `at`）、`actor` = `mcp`、`client` = 呼び出し元。
 - 応答: 仮説を渡したときだけ `experiment`（`experiment_create` の応答と同じ形）を足す。仮説を渡さないときの応答のメンバーは従来と同じ（`key` / `unit` / `value` / `before` / `audit_id` / `at`、LLM cutoff のキーは `llm_cutoff_status`）。

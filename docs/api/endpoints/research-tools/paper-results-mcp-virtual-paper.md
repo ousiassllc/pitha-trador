@@ -2,7 +2,7 @@
 
 `docs/api/endpoints/paper-results-mcp.md` の分割章（行数上限のため別ファイル）。issue #1087。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` に従う。設計は `docs/architecture/paper-results-mcp-virtual-paper.md`。
 
-「仮想 Paper」は、本物の Paper と同じ判断・同じ相場に対して、方針・出口の設定の**差分**だけを変えたプロファイルを並べて記録し、比べる記録専用の機能。取引・Risk・発注・設定・資金には何も反映しない。プロファイルが 0 件（既定）のあいだは何も動かない。記録は本体の日次の保守タスク（16:00 JST 以降）が、終わった日ごとに再生して書くので、**結果は取引日の終わった後（最大で翌日）に出る**。基準になる設定は、その日を処理した時点で本体が使っている設定。
+「仮想 Paper」は、本物の Paper と同じ判断・同じ相場に対して、方針・出口の設定の**差分**だけを変えたプロファイルを並べて記録し、比べる記録専用の機能。取引・Risk・発注・設定・資金には何も反映しない。プロファイルが 0 件（既定）のあいだは何も動かない。記録は本体の日次の保守タスク（16:00 JST 以降）が、終わった日ごとに再生して書くので、**結果は取引日の終わった後（最大で翌日）に出る**。再生が失敗した日（`failed`）は自動ではやり直さず、`virtual_paper_rerun_failed` で明示的に戻したときだけ次の日次の記録が再生し直す。基準になる設定は、その日を処理した時点で本体が使っている設定。
 
 ## 3. ツール
 
@@ -42,6 +42,23 @@
 引数 `profile_id`（必須）。プロファイルを止める。以後の日は記録しない（止めた時点で未処理の日は、終わっていても記録しない）。記録済みの取引・日は残り、比較にも使える。止めたあとは同時に有効な 5 件に数えない。
 
 応答の `data`: `profile`（`status` が `stopped`、`stopped_at` つき）、`stopped`（今回止めたら true）、`already_stopped`（もう止まっていたら true。失敗にはしない）。存在しない `profile_id` は `invalid_argument`。`write_disabled`。
+
+### `virtual_paper_rerun_failed`（書き込み）
+
+プロファイルの `failed` の日（再生が失敗して印が付いた日）を、再実行の対象に戻す（issue #1131）。その日の印（`virtual_paper_days` の 1 行）だけを削除し、このツール自身は再生しない。次の日次の記録（本体の保守タスク。16:00 JST 以降）が同じ日をもう一度再生し、成功すれば `done`、足が無ければ `empty`、また失敗すれば `failed` になる。`failed` の日は、このツールを呼ばない限り自動ではやり直されない（呼ばなければ何も再実行されない。戻した日がまた失敗しても自動では繰り返さない）。
+
+引数:
+
+| キー | 内容 |
+|---|---|
+| `profile_id` | 必須。動いている（`active`）プロファイルの `profile_id` |
+| `day` | 必須。戻す日（JST の `YYYY-MM-DD`）。今日から 10 日（記録部品の溜まった日の上限）以内の `failed` の日だけ |
+
+応答の `data`: `profile_id` / `day` / `reset`（true）。
+
+エラー（いずれも何も書かない。`error.data.detail` には項目名と理由だけを載せ、渡された値や保存された値・秘密は載せない）: `done` / `empty` の日・印の無い日・日付でない値・今日から 10 日より前の日・停止したプロファイルの日は `invalid_argument`（detail に `day` または `profile_id`）、存在しない `profile_id` と引数の不足・未知の引数も `invalid_argument`、書き込み許可がオフのときは `write_disabled`。
+
+書き込む表は `virtual_paper_days` だけ（`failed` の 1 行の削除）。`virtual_paper_trades`・`virtual_paper_profiles`・`paper_orders`・`positions`・資金・`runtime_settings` には書かず、取引・Risk・発注・ライブの経路は変わらない。
 
 ### `virtual_paper_compare`（読み取り専用）
 

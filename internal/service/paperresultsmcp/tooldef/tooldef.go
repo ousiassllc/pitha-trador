@@ -1,6 +1,7 @@
 // Package tooldef is the contract between the Paper results MCP's dispatch
 // table (package paperresultsmcp) and the tool packages that live beside it
-// (backtesttool, virtualpapertool, jevshadowtool): a tool is declared here as a
+// (backtesttool, virtualpapertool, jevshadowtool, settingstool, proposaltool,
+// experimenttool, researchnote/notetool): a tool is declared here as a
 // Def, built on the exported twins of the root's private argument, schema and
 // failure helpers, and the root adapts each Def into its own table entry
 // (ext_tools.go). A tool package can therefore not reach anything but what Env
@@ -14,7 +15,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtestjob"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -39,6 +42,12 @@ type Env struct {
 	Writer func() (*mcpset.Writer, error)
 	// Backtests is backtest_start's job manager.
 	Backtests *backtestjob.Manager
+	// PaperLimits is risk.yaml's Paper section (the defaults of the Paper keys); the settings tools read it.
+	PaperLimits *config.RiskLimits
+	// CapitalJPY is risk.yaml's Paper capital, the fallback of PaperCapital.
+	CapitalJPY float64
+	// Experiments is experiments_list's cache of the rows of finished experiments.
+	Experiments *experiment.SummaryCache
 }
 
 // Run executes the tool and returns its data and the row count to log. An

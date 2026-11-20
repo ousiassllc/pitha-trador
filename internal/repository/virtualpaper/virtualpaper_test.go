@@ -64,3 +64,38 @@ func TestRecordDay_IsAtomicAndIdempotent(t *testing.T) {
 		t.Error("a day mark of an unknown profile was stored")
 	}
 }
+
+// ResetFailedDay deletes only a failed mark: done and empty marks (and their
+// trades) and a missing mark are left alone and reported as not reset.
+func TestResetFailedDay_OnlyFailedMarks(t *testing.T) {
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	now := time.Date(2026, 1, 9, 8, 0, 0, 0, time.UTC)
+	id, err := repo.InsertProfile(ctx, db, repo.NewProfile{Name: "p", ParamsJSON: "{}", CreatedAt: now, FirstDay: "2026-01-02", Actor: repo.ActorMCP})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for day, status := range map[string]string{"2026-01-05": repo.DayDone, "2026-01-06": repo.DayEmpty, "2026-01-07": repo.DayFailed} {
+		if err := repo.RecordDay(ctx, db, repo.Day{ProfileID: id, Day: day, Status: status}, nil, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, day := range []string{"2026-01-05", "2026-01-06", "2026-01-08"} {
+		if reset, err := repo.ResetFailedDay(ctx, db, id, day); err != nil || reset {
+			t.Errorf("ResetFailedDay(%s) = %v, %v; want false (not a failed mark)", day, reset, err)
+		}
+	}
+	if d, err := repo.GetDay(ctx, db, id, "2026-01-05"); err != nil || d.Status != repo.DayDone {
+		t.Errorf("done mark = %+v, %v; want it kept", d, err)
+	}
+	if reset, err := repo.ResetFailedDay(ctx, db, id, "2026-01-07"); err != nil || !reset {
+		t.Fatalf("ResetFailedDay(failed) = %v, %v; want true", reset, err)
+	}
+	if _, err := repo.GetDay(ctx, db, id, "2026-01-07"); !errors.Is(err, repo.ErrDayNotFound) {
+		t.Errorf("GetDay after the reset: %v, want ErrDayNotFound", err)
+	}
+}

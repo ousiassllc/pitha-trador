@@ -34,7 +34,7 @@
 
 - **変えないもの**: `max_tokens: 4096`・`token_count: 12`（キー名が `token` で終わらない）、`pass_rate: 0.8`、GitHub の URL（`https://github.com/ousiassllc/pitha-trador/issues/1095`）、パス（`db/migrations/000067_create_research_notes`）、snake_case の識別子（`jev_evaluation_horizon_30m_cohort_llm_vs_baseline`）、UUID、ホスト名、`2026-11-15T10:00:00+09:00` のような日時、普通の英文。URL・パスの中の 32 文字未満のトークンは見分けられず変えない（32 文字以上なら、その片だけを伏せる）。
 - **見えない文字**: 伏せる前に Unicode の書式文字（カテゴリ Cf。ゼロ幅スペース・ゼロ幅結合子・語結合子・BOM・ソフトハイフン・双方向制御）を取り除く（`sk-\u200bproj-…` や `Bearer abc\u200b123` で規則をすり抜けられないため）。取り除いた結果が保存される（ZWJ で連結した絵文字は分かれて見える）。
-- **空白類**: 区切り（`:` `=` `：` `＝`・`Bearer` など）の後ろの空白は、ASCII の空白・タブに加えて Unicode の空白（`\p{Zs}`。NBSP・IME の全角スペース U+3000 など）も読む。全角英数のキー名（`ＡＰＩ_ＫＥＹ`）は対象外。
+- **空白類**: 区切り（`:` `=` `：` `＝`・`Bearer` など）の後ろの空白は、ASCII の空白・タブに加えて Unicode の空白（`\p{Zs}`。NBSP・IME の全角スペース U+3000 など）も読む。- **全角英数**: 規則は、文章を NFKC 相当に畳んだ写し（全角の英数字・記号 `ＡＰＩ_ＫＥＹ＝`・`ｓｋ－`・`Ｂｅａｒｅｒ`・全角スペースなど、NFKC で ASCII になる文字を ASCII にしたもの）に当てる。そのため全角のキー名・接頭辞・`Bearer` も半角と同じ規則で `[masked]` になる。伏せるのは見つけた範囲だけで、元の文章の同じ範囲（畳むと長さが変わる文字があっても、元の文字の境界で）を置き換える。伏せなかった部分は書いたまま（全角のまま）保存され、普通の日本語や「変えないもの」の例（`max_tokens`・GitHub の URL・日時）は新たに伏せない。検査の失敗の理由は値を引用しない（全角でも同じ）。実装は `researchnote/mask/doc.go`（`golang.org/x/text/unicode/norm`）。
 - 方針は粗めで、誤検出（`session: running` や、`Bearer token` の `token` や、`passwd` の値を伏せる）は許し、漏れを許さない。同じ入力は何度掛けても同じ結果（冪等。更新で変えない項目を再び掛けても変わらない）。
 - 文字数の上限は伏せる前（処理量の上限）と伏せたあと（`[masked]` のほうが長い場合）の両方で確かめる。検査の失敗の理由は値を引用しない。
 - タグは伏せたあとに小文字にして重複を除く（接頭辞の判定が大文字小文字を区別するため）。
@@ -52,18 +52,27 @@
 | キーの形の文字列が伏せて保存される | `notetests` の `TestKeyShapedStringsAreMaskedBeforeStoring`（行・応答・版・監査表・検索）、`TestRefusalsDoNotEchoTheCallersText`、`researchnote/mask` の単体テスト、`researchnote` の `TestClean*` |
 | 取引・Risk・発注・Jev・設定に差分がない | `notetests` の `TestNotesChangeNoSettingAndNoTradingState`（研究ノートの 2 表以外のすべての表を書き込み・読み取りの前後で比べる）、`TestNoteWritePathIsNarrow`（実行した書き込み文が 3 種類だけで、版の `UPDATE` / `DELETE` はトリガが拒否）、`researchnote/isolation_test.go`（表名・パッケージを参照できるファイルを限り、`researchnote` が import するのは SQL の補助と伏せ字だけ。Policy・Risk・発注・ブローカー・Jev・Feature Engine・設定のコードを呼べない） |
 | マイグレーション | `db/migrationtests/migration_000067_test.go`（66↔67、既存の表に触れない、CHECK・UNIQUE・トリガ・外部キー） |
-| Settings の一覧 | `internal/router/mcproute/research_notes_test.go`、`internal/web/handler/mcpsettings/research_notes_test.go` |
+| Settings の一覧 | `internal/router/mcproute/research_notes_test.go`、`internal/web/handler/mcpsettings/research_notes_test.go`、検索・タグ・結論の絞り込みが `research_notes_list` と同じノートを出すこと・条件に合わないノートが出ないこと・20 件の上限・伏せた本文だけが出ること・書き込みの経路が無いこと（`internal/web/handler/mcpsettings/research_notes_filter_test.go`） |
 
 ## 6. Settings 画面（読み取り専用）
 
-MCP のカード（書き込みの節の下）に「研究ノート」の節を出す（`GET /settings/mcp/research-notes`。`internal/web/handler/mcpsettings/research_notes.go`、`internal/web/organisms/mcp/research_notes.templ`）。新しい順に 20 件、結論のバッジ（支持・不支持・保留）、問い、更新時刻（JST）、版の番号を並べ、開くと仮説・結果の要約（先頭 200 文字）・根拠リンクの件数・タグを見られる。フォームも書き込みの経路も無い。ゲートが読み取りを持たない構成（一部のテスト）ではこの節も経路も出ない。
+MCP のカード（書き込みの節の下）に「研究ノート」の節を出す（`GET /settings/mcp/research-notes`。`internal/web/handler/mcpsettings/research_notes.go`、`internal/web/organisms/mcp/research_notes.templ`）。新しい順に 20 件、結論のバッジ（支持・不支持・保留）、問い、更新時刻（JST）、版の番号を並べ、開くと仮説・結果の要約（先頭 200 文字）・根拠リンクの件数・タグを見られる。書き込みのフォームも経路も無い。ゲートが読み取りを持たない構成（一部のテスト）ではこの節も経路も出ない。
+
+### 6.1 検索と絞り込み（issue #1132）
+
+一覧の上に GET のフォーム（検索語・タグ・結論）を置く（`GET /settings/mcp/research-notes?q=…&tag=…&conclusion=…`。HTMX で節だけを差し替え、保存や更新はしない）。条件は `research_notes_list` の `query` / `tag` / `conclusion` と同じ意味で、画面も MCP も同じ `researchnote.List` を通すので、同じ条件なら同じノートが同じ順で出る（§4）。一覧のタグは、そのタグで絞り込むリンクになる。
+
+- 上限は変えない。絞り込んでも 20 件までで、ページングや「続き」は無い。20 件に達したときは「20 件まで表示」と出し、検索語・タグ・結論で絞るよう促す。
+- 検索語は 200 文字、タグは 40 文字まで（前後の空白は除く）、結論は `supported` / `unsupported` / `pending` のどれか。外れた値は 422 とインラインの理由で断り、何も出さない（MCP が `invalid_argument` で断るのと同じ範囲）。
+- 期間（`from` / `to`）は画面には足さない（MCP からだけ）。
+- 表示するのは保存済みの（§3 で伏せたあとの）本文だけ。生の鍵の形の文字列は画面に出ず、それで検索しても当たらない。
 
 ## 7. 実装の置き場所
 
 | 内容 | 場所 |
 |---|---|
 | 語彙・検査・伏せ字の呼び出し・SQL | `internal/service/paperresultsmcp/researchnote`（`note.go` / `store.go` / `read.go`）、伏せ字 `researchnote/mask` |
-| 書き込み（`mcpset.Writer.InTx` 上の 2 トランザクション `CreateNote` / `UpdateNote`）と Settings 用の一覧（`Gate`） | `internal/service/paperresultsmcp/researchnote/notetool/write.go`・`internal/service/paperresultsmcp/mcpset/research_notes.go` |
+| 書き込み（`mcpset.Writer.InTx` 上の 2 トランザクション `CreateNote` / `UpdateNote`）と Settings 用の一覧（`Gate` が埋め込む `researchnote.Lister`。読み取り専用トランザクション） | `internal/service/paperresultsmcp/researchnote/notetool/write.go`・`internal/service/paperresultsmcp/researchnote/lister.go`（`mcpset/` に研究ノートの処理は置かない。`mcpset/gate.go` は `Lister` を埋め込むだけ） |
 | ツール定義 | `internal/service/paperresultsmcp/researchnote/notetool`（4 ツールのスキーマ・説明・引数検査・エラー写像。サーバー本体は import しない）。ディスパッチ表への登録は `internal/service/paperresultsmcp/ext_tools.go`（`notetool.Defs()` を `tooldef.Def` として他の研究ツールと同じく表の項目に変換する） |
 | エラーコード | `research_note_not_found`（404）・`research_note_version_conflict`（409）。`errors.go` と `paper-results-mcp-errors.md`。ツールの失敗は `query.CodedError`（`ErrorCode` / `ErrorDetail`）を実装した `notetool.Error` で返し、サーバーの `classify` が写す |
 | 表 | `db/migrations/000067_create_research_notes.{up,down}.sql` |

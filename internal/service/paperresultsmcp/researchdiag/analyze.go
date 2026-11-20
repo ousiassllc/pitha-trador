@@ -40,7 +40,7 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, req Request, now tim
 	}
 	var a *acc
 	if req.scope() == ScopeSnapshots {
-		a, err = snapshotsAcc(ctx, q, r, recorded)
+		a, err = snapshotsAcc(ctx, q, r, recorded, req.FXSymbol != "")
 	} else {
 		a, err = decisionsAcc(ctx, q, r, req, recorded)
 	}
@@ -64,6 +64,11 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, req Request, now tim
 			}
 		}
 		data.Horizons = append(data.Horizons, hs)
+	}
+	if req.FXSymbol != "" {
+		if data.FXContext, err = a.fxContext(ctx, q, req.FXSymbol); err != nil {
+			return Data{}, 0, err
+		}
 	}
 	if data.RecordedThrough, err = recordedThrough(ctx, q); err != nil {
 		return Data{}, 0, err

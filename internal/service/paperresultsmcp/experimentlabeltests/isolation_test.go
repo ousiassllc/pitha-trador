@@ -23,7 +23,7 @@ func TestLabelComparisonIsReachedOnlyByTheExperimentTools(t *testing.T) {
 		"internal/service/paperresultsmcp/experiment/labelcompare/",
 		"internal/service/paperresultsmcp/experiment/unrecorded/",
 		"internal/service/paperresultsmcp/labeltool/",              // wires them into the experiment tools
-		"internal/service/paperresultsmcp/experiment_tools.go",     // the experiment tools' descriptions and run functions
+		"internal/service/paperresultsmcp/experimenttool/",         // the experiment tools' descriptions and run functions
 		"internal/service/paperresultsmcp/mcpset/setexperiment.go", // the one write path
 	}
 	for _, dir := range []string{"internal", "cmd"} {
