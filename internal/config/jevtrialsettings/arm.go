@@ -28,6 +28,16 @@ const (
 	DataCollectionAllow = "allow"
 )
 
+// Values of Arm.Endpoint: the path appended to the provider's base URL. They
+// equal trialwire.DefaultEndpoint and trialwire.DecisionsEndpoint (a test in
+// internal/service/jev/trial pins that; this package cannot import the wire layer).
+const (
+	// EndpointSystemOne is the System One path, the same one the live Jev uses.
+	EndpointSystemOne = "/v1/systemone"
+	// EndpointDecisions is OpenRouter's Decisions API path (an Alpha API).
+	EndpointDecisions = "/alpha/decisions"
+)
+
 // MaxArms bounds the number of arms.
 const MaxArms = 8
 
@@ -88,6 +98,10 @@ type Arm struct {
 	// replay evaluation reads it (cutoff.go); the live trial ignores it. A date
 	// must never be guessed: leave it empty until the vendor publishes it.
 	LLMCutoff string `json:"llm_cutoff,omitempty"`
+	// Endpoint is the API path this arm calls: EndpointSystemOne or
+	// EndpointDecisions; empty is EndpointSystemOne. Only an arm that calls an
+	// HTTP API has one (not ProviderCodexChatGPT). The live Jev never reads it.
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // CapUSD is the arm's effective daily cost cap.
@@ -145,6 +159,7 @@ const (
 	ArmsErrProviderOnly   = "provider_only"
 	ArmsErrDataCollection = "data_collection"
 	ArmsErrLLMCutoff      = "llm_cutoff"
+	ArmsErrEndpoint       = "endpoint"
 )
 
 // ArmsError is an invalid arms setting. Kind (an ArmsErr* constant) and ArmID
@@ -173,6 +188,12 @@ func (a Arm) Validate() error {
 	}
 	if a.Provider != ProviderOpenRouter && (len(a.ProviderOnly) > 0 || a.DataCollection != "" || a.ZDR) {
 		return armsErr(ArmsErrProvider, a.ID, "arm %q: provider_only, data_collection and zdr are OpenRouter routing preferences and cannot be used with provider %q", a.ID, a.Provider)
+	}
+	if a.Provider == ProviderCodexChatGPT && a.Endpoint != "" {
+		return armsErr(ArmsErrEndpoint, a.ID, "arm %q: a %q arm calls the Codex CLI, not an HTTP API; endpoint cannot be used", a.ID, ProviderCodexChatGPT)
+	}
+	if ep := a.Endpoint; ep != "" && ep != EndpointSystemOne && ep != EndpointDecisions {
+		return armsErr(ArmsErrEndpoint, a.ID, "arm %q: endpoint must be %q or %q", a.ID, EndpointSystemOne, EndpointDecisions)
 	}
 	if a.Provider == ProviderCodexChatGPT && (a.DailyCostCapUSD != 0 || a.ListPriceUSDPerMtok != 0) {
 		return armsErr(ArmsErrProvider, a.ID, "arm %q: a %q arm has no USD cost; daily_cost_cap_usd and list_price_usd_per_mtok cannot be used (the caps are the provider's call and token caps)", a.ID, ProviderCodexChatGPT)

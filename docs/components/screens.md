@@ -135,3 +135,4 @@
 | 1.22 | 2026-11-15 | Settings「証券会社・データ」に「立花 研究用の日足収集」（`modal-research-tachibana-bars`。issue #1082）と「立花 研究用の時価記録」（`modal-research-tachibana-quotes`。issue #1083）の 2 カードを追加（どちらも既定オフ・研究専用で、取引・監視銘柄には使わない） | issue #1082・#1083 |
 | 1.23 | 2026-11-15 | Settings「外部連携・AI」に J-Quants（日足・分足。API キー）と J-Quants（日足・分足の取り込み。有効化・契約・1 日の要求数の上限・解約時の削除）のカードを追加 | issue #1093 |
 | 1.24 | 2026-11-19 | Settings「予測モデル」の「研究用の日次評価の記録・学習・書き出し」カード（`modal-research-jobs`）に、夜間タスクの状態パネル（オフ／最終成功日／直近の失敗と短い理由）を追加。表示だけで取引・昇格には使わない | issue #1126 |
+| 1.25 | 2026-11-20 | Settings「外部連携・AI」のモデル比較トライアルのアームのカードに「API の送り先」（`/v1/systemone`〔既定〕または `/alpha/decisions`。`jev-trial-arm-endpoint`。アームごと。提供元が codex_chatgpt のアームでは保存できない）を追加 | issue #1064 |

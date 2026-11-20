@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment/labelcompare"
@@ -34,7 +37,7 @@ func near(got *float64, want float64) bool { return got != nil && math.Abs(*got-
 // the day-clustered interval and the days still needed.
 func TestLabelBasedComparisonWorksWithZeroTrades(t *testing.T) {
 	srv, w := newServer(t)
-	plantLabels(t, w, 5, -2, 4)
+	plantLabels(t, w, labelcompare.MinDaysFloor, -2, 4)
 	for i, d := range afterDates { // trade signals: skips and their reasons
 		at := d + "T01:30:00Z"
 		signal(t, w, int64(100+i), at, true, "")
@@ -51,19 +54,19 @@ func TestLabelBasedComparisonWorksWithZeroTrades(t *testing.T) {
 	if lb.Error != "" || lb.Caution == "" {
 		t.Fatalf("label_based: error=%q caution=%q", lb.Error, lb.Caution)
 	}
-	wantDecisions := labelcompare.Decisions{Long: 10, Short: 5, None: 5, Total: 20}
+	wantDecisions := labelcompare.Decisions{Long: 16, Short: 8, None: 8, Total: 32}
 	if lb.Before.Decisions != wantDecisions || lb.After.Decisions != wantDecisions {
 		t.Errorf("decisions before=%+v after=%+v, want %+v", lb.Before.Decisions, lb.After.Decisions, wantDecisions)
 	}
-	if lb.Before.Days != 5 || lb.After.Days != 5 {
-		t.Errorf("days = %d/%d, want 5/5", lb.Before.Days, lb.After.Days)
+	if lb.Before.Days != 8 || lb.After.Days != 8 {
+		t.Errorf("days = %d/%d, want 8/8", lb.Before.Days, lb.After.Days)
 	}
 	dl := lb.DecisionLabels
 	if dl == nil || dl.HorizonMinutes != 10 {
 		t.Fatalf("decision_labels = %+v", dl)
 	}
 	all := dl.All
-	if !near(all.Before.MeanNetBps, -2) || !near(all.After.MeanNetBps, 4) || all.Before.N != 10 || all.After.N != 10 {
+	if !near(all.Before.MeanNetBps, -2) || !near(all.After.MeanNetBps, 4) || all.Before.N != 16 || all.After.N != 16 {
 		t.Errorf("all: before %+v after %+v", all.Before, all.After)
 	}
 	if all.Before.CILow == nil || all.Before.CIHigh == nil || *all.Before.CILow >= -2 || *all.Before.CIHigh <= -2 {
@@ -78,16 +81,16 @@ func TestLabelBasedComparisonWorksWithZeroTrades(t *testing.T) {
 
 	// Research labels: 30m LONG means (base + 2): 0 before, 6 after.
 	h30 := lb.ResearchLabels[0]
-	if h30.Horizon != "30m" || !near(h30.Long.Before.MeanNetBps, 0) || !near(h30.Long.After.MeanNetBps, 6) || h30.Long.Diff == nil || h30.Long.After.Days != 5 {
+	if h30.Horizon != "30m" || !near(h30.Long.Before.MeanNetBps, 0) || !near(h30.Long.After.MeanNetBps, 6) || h30.Long.Diff == nil || h30.Long.After.Days != 8 {
 		t.Errorf("research 30m long = %+v", h30.Long)
 	}
 	if h60 := lb.ResearchLabels[1]; h60.Long.After.N != 0 || h60.Long.Diff != nil {
 		t.Errorf("research 60m has no rows: %+v", h60.Long)
 	}
 
-	// Skips: 5 policy + 5 risk skips against 5 passed signals; fixed codes only.
+	// Skips: 8 policy + 8 risk skips against 8 passed signals; fixed codes only.
 	sk := lb.After.Skips
-	if sk == nil || sk.SkipCount != 10 || sk.RiskPassedCount != 5 || sk.SkipRate == nil || !near(sk.SkipRate, 10.0/15) {
+	if sk == nil || sk.SkipCount != 16 || sk.RiskPassedCount != 8 || sk.SkipRate == nil || !near(sk.SkipRate, 16.0/24) {
 		t.Fatalf("after skips = %+v", sk)
 	}
 	codes := []string{}
@@ -102,9 +105,9 @@ func TestLabelBasedComparisonWorksWithZeroTrades(t *testing.T) {
 	}
 
 	// Days needed: the difference is large against the daily spread, so the
-	// provisional floor (5 days) is what binds, and 5 are observed.
+	// floor (8 days) is what binds, and 8 are observed.
 	dn := lb.DaysNeeded
-	if dn == nil || dn.ObservedPerSide != 5 || dn.MinDays != labelcompare.MinDaysFloor || dn.DaysToMin != 0 ||
+	if dn == nil || dn.ObservedPerSide != 8 || dn.MinDaysSource != "measured_v1" || dn.MinDays != labelcompare.MinDaysFloor || dn.DaysToMin != 0 ||
 		dn.NeededPerSide == nil || *dn.NeededPerSide != labelcompare.MinDaysFloor || dn.RemainingDays == nil || *dn.RemainingDays != 0 {
 		t.Errorf("days_needed = %+v", dn)
 	}
@@ -124,11 +127,43 @@ func TestLabelBasedWithSparseDaysIsInsufficientDays(t *testing.T) {
 		t.Fatalf("label_verdict = %s judged=%v", lb.LabelVerdict, lb.LabelJudged)
 	}
 	dn := lb.DaysNeeded
-	if dn == nil || dn.ObservedPerSide != 2 || dn.DaysToMin != 3 || dn.RemainingDays == nil || *dn.RemainingDays != 3 {
-		t.Errorf("days_needed = %+v, want 3 days to the floor", dn)
+	if dn == nil || dn.ObservedPerSide != 2 || dn.DaysToMin != labelcompare.MinDaysFloor-2 || dn.RemainingDays == nil || *dn.RemainingDays != labelcompare.MinDaysFloor-2 {
+		t.Errorf("days_needed = %+v, want %d days to the floor", dn, labelcompare.MinDaysFloor-2)
 	}
 	if lb.DecisionLabels.All.Diff == nil || lb.DecisionLabels.All.Before.Days != 2 {
 		t.Errorf("figures must still be returned: %+v", lb.DecisionLabels.All)
+	}
+}
+
+// The floor is exactly MinDaysFloor (8) days: one day short is still
+// insufficient_days (with min_days, min_days_source and days_to_min in the
+// response), eight is judged. The intervals say how they were made.
+func TestLabelBasedFloorIsEightDaysAndNamesItsSource(t *testing.T) {
+	if labelcompare.MinDaysFloor != 8 {
+		t.Fatalf("MinDaysFloor = %d, want 8 (docs §2.4 derive it as the smallest n >= 2*1.96^2)", labelcompare.MinDaysFloor)
+	}
+	for days, want := range map[int]string{7: labelcompare.VerdictInsufficientDays, 8: labelcompare.VerdictImproved} {
+		srv, w := newServer(t)
+		plantLabels(t, w, days, -2, 4)
+		e := createExperiment(t, srv, plantedSwitch(t, w))
+		lb := compareOf(t, srv, e.ID).LabelBased
+		dn := lb.DaysNeeded
+		if lb.LabelVerdict != want || dn == nil || dn.MinDays != 8 || dn.MinDaysSource != "measured_v1" || dn.DaysToMin != 8-days || dn.ObservedPerSide != days {
+			t.Errorf("%d days: label_verdict = %s (want %s), days_needed = %+v", days, lb.LabelVerdict, want, dn)
+		}
+		if lb.IntervalMethod != "newey_west_bartlett" || lb.IntervalLagDays != 1 {
+			t.Errorf("%d days: interval_method = %q lag = %d", days, lb.IntervalMethod, lb.IntervalLagDays)
+		}
+	}
+}
+
+// The lag of the correction is the longest holding time rounded up to days. A
+// stored label holds for at most the barrier timeout, a research label until
+// the session close, both within the day they start on: one day.
+func TestNeweyWestLagIsTheLongestHoldInDays(t *testing.T) {
+	longest := time.Duration(barriersettings.MaxTimeoutMinutes) * time.Minute
+	if want := int((longest + 24*time.Hour - 1) / (24 * time.Hour)); labelcompare.NeweyWestLagDays != want {
+		t.Errorf("NeweyWestLagDays = %d, want %d (ceil of the %v barrier timeout in days)", labelcompare.NeweyWestLagDays, want, longest)
 	}
 }
 
@@ -136,11 +171,11 @@ func TestLabelBasedWithSparseDaysIsInsufficientDays(t *testing.T) {
 // the floor, and remaining_days says how many.
 func TestLabelBasedRemainingDaysFollowTheVariance(t *testing.T) {
 	srv, w := newServer(t)
-	plantLabels(t, w, 5, 0, 0.3) // a 0.3 bps difference against jitter of +-0.4
+	plantLabels(t, w, labelcompare.MinDaysFloor, 0, 0.15) // a 0.15 bps difference against jitter of +-0.4
 	e := createExperiment(t, srv, plantedSwitch(t, w))
 	lb := compareOf(t, srv, e.ID).LabelBased
 	dn := lb.DaysNeeded
-	if dn == nil || dn.NeededPerSide == nil || dn.RemainingDays == nil || *dn.NeededPerSide <= 5 || *dn.RemainingDays != *dn.NeededPerSide-5 {
+	if dn == nil || dn.NeededPerSide == nil || dn.RemainingDays == nil || *dn.NeededPerSide <= labelcompare.MinDaysFloor || *dn.RemainingDays != *dn.NeededPerSide-labelcompare.MinDaysFloor {
 		t.Fatalf("days_needed = %+v, want more than the floor", dn)
 	}
 	if lb.LabelVerdict != labelcompare.VerdictInconclusive {
@@ -152,7 +187,7 @@ func TestLabelBasedRemainingDaysFollowTheVariance(t *testing.T) {
 // trade-based verdict uses), and the figures are still returned.
 func TestConfoundedExperimentHasNoLabelVerdict(t *testing.T) {
 	srv, w := newServer(t)
-	plantLabels(t, w, 5, -2, 4)
+	plantLabels(t, w, labelcompare.MinDaysFloor, -2, 4)
 	e := createExperiment(t, srv, plantedSwitch(t, w))
 	auditRow(t, w, "2026-10-13T10:00:00Z", "set", "risk.max_daily_trades", "3", "4")
 	c := compareOf(t, srv, e.ID)
@@ -168,8 +203,8 @@ func TestConfoundedExperimentHasNoLabelVerdict(t *testing.T) {
 // An experiment whose switch is not on record is not judged by labels.
 func TestUnconfirmedSwitchHasNoLabelVerdict(t *testing.T) {
 	srv, w := newServer(t)
-	plantLabels(t, w, 5, -2, 4)
-	e := createExperiment(t, srv, auditRow(t, w, "2026-10-11T15:00:00Z", "set", key, "7", "8")) // not the declared values
+	plantLabels(t, w, labelcompare.MinDaysFloor, -2, 4)
+	e := createExperiment(t, srv, auditRow(t, w, startedAt, "set", key, "7", "8")) // not the declared values
 	lb := compareOf(t, srv, e.ID).LabelBased
 	if lb.LabelVerdict != labelcompare.VerdictSwitchUnconfirmed || lb.LabelJudged {
 		t.Errorf("label_verdict = %s judged=%v", lb.LabelVerdict, lb.LabelJudged)
@@ -192,8 +227,8 @@ func TestLabelBasedWithNoDataAtAll(t *testing.T) {
 // member names are the documented ones.
 func TestTradeBasedFieldsAreUnchangedByTheLabelMember(t *testing.T) {
 	srv, w := newServer(t)
-	plantLabels(t, w, 5, -2, 4)
-	for _, at := range []string{"2026-10-09T01:00:00Z", "2026-10-10T01:00:00Z", "2026-10-13T01:00:00Z", "2026-10-14T01:00:00Z"} {
+	plantLabels(t, w, labelcompare.MinDaysFloor, -2, 4)
+	for _, at := range []string{"2026-10-05T01:00:00Z", "2026-10-06T01:00:00Z", "2026-10-13T01:00:00Z", "2026-10-14T01:00:00Z"} {
 		pnl := 1000.0
 		if at > startedAt {
 			pnl = 2500

@@ -97,7 +97,7 @@
 | `jev.trial.codex.halt` / `jev.trial.codex.login` | なし | Codex プロバイダー全体の停止記録（理由コード・再開時刻）・最後のログイン確認の状態（アプリが書く） |
 | `jev.trial.halt.<arm>` / `jev.trial.failures.<arm>` / `jev.trial.throttle.<arm>` | なし | アームごとの停止記録・失敗回数・429/529 の記録。`jev.shadow.*` とは重ならない |
 
-**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元〈openrouter・custom・codex_chatgpt から選ぶ。openrouter 以外では、送り先・データの扱い・ZDR は保存せず、データの扱いの既定値「学習に使わない提供元だけ」はハンドラが落とす。codex_chatgpt では 1 日の上限・定価も使えない〉・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
+**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元〈openrouter・custom・codex_chatgpt から選ぶ。openrouter 以外では、送り先・データの扱い・ZDR は保存せず、データの扱いの既定値「学習に使わない提供元だけ」はハンドラが落とす。codex_chatgpt では 1 日の上限・定価も使えない〉・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR・API の送り先〈既定は /v1/systemone。/alpha/decisions を選べる。issue #1064〉）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
 
 アーム（`jev.trial.arms` の要素）の形:
 
@@ -109,6 +109,7 @@
 | `prompt_version` | 登録済みの Trader プロンプト版（例 `trader-v3`） |
 | `daily_cost_cap_usd` | このアームの 1 日の上限（省略・0 は 0.05 USD） |
 | `list_price_usd_per_mtok` | 1M 入力トークンあたりの定価。0・省略は不明（応答が費用を報告しなければ `unknown`）。上限には、`provider_only` を指定していないアームなら `max(定価, 最悪単価 0.24)` で数える（低い定価を書いても上限は甘くならない） |
+| `endpoint` | 任意。このアームが呼ぶ API のパス（`/v1/systemone` または `/alpha/decisions`）。省略・空は `/v1/systemone`（ライブの Jev と同じ。既定は変えない）。`trial.NewCallers` が `trialwire.Config.Endpoint` へ渡す（アームごと。設定を変えるとキャッシュ済みのクライアントは作り直す）。`codex_chatgpt` では付けられない（HTTP API を呼ばない）。`/alpha/decisions` が実際に非 Jev モデルを受けるかは実測スパイク #1063 の結果次第で、この項目は選べるようにしただけ（実際の呼び出し・キーの投入はしない）。ライブの `jev.Client`・`JEV_*`・厳格検証は触らない（issue #1064） |
 | `provider_only` / `data_collection` / `zdr` | OpenRouter のルーティング指定（`provider.only`〈指定時はフォールバック無し〉・`provider.data_collection`・`provider.zdr`） |
 
 **第 1 段階のアーム案（設定例。ドキュメントにだけ書く。既定の配列は空で、アプリは何も登録しない）**:

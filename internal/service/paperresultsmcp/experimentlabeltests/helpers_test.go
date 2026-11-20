@@ -184,18 +184,21 @@ func researchDay(t *testing.T, w *sql.DB, day string, mean float64) {
 		day, mean*10+10, mean*10)
 }
 
-// The experiment of most tests: after = the JST days 10-12..10-16 (five days),
-// before = the five days just before (10-07..10-11).
+// The experiment of most tests: after = the JST days 10-10..10-17 (eight days,
+// labelcompare.MinDaysFloor), before = the eight days just before (10-02..10-09;
+// testkit.SeedRisk's signals are on 10-01, outside it).
 const (
-	startedAt = "2026-10-11T15:00:00Z" // 2026-10-12 00:00 JST
-	endedAt   = "2026-10-16T15:00:00Z" // 2026-10-17 00:00 JST
+	startedAt = "2026-10-09T15:00:00Z" // 2026-10-10 00:00 JST
+	endedAt   = "2026-10-17T15:00:00Z" // 2026-10-18 00:00 JST
 	key       = "risk.paper.max_trade_loss_pct"
 )
 
 var (
-	beforeDates = []string{"2026-10-07", "2026-10-08", "2026-10-09", "2026-10-10", "2026-10-11"}
-	afterDates  = []string{"2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"}
-	jitter      = []float64{-0.4, -0.2, 0, 0.2, 0.4}
+	beforeDates = []string{"2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"}
+	afterDates  = []string{"2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"}
+	// jitter sums to 0 (the means stay at the base) and is in no trend order, so
+	// neighbouring days are not alike (the Newey-West correction stays small).
+	jitter = []float64{-0.4, 0.2, -0.2, 0.4, 0, -0.3, 0.3, 0}
 )
 
 // plantLabels plants, for the first n days of before / after, two LONG
