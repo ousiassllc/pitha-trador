@@ -21,6 +21,8 @@ type ArmField struct {
 	// DataCollection is "deny" or "allow".
 	DataCollection string
 	ZDR            bool
+	// Endpoint is "" (the default, /v1/systemone) or "/alpha/decisions".
+	Endpoint string
 }
 
 // ArmEditorProps is ArmEditor's input.
@@ -93,6 +95,12 @@ templ armCard(i int, f ArmField, versions []string) {
 				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "data_collection"), Name: armName(i, "data_collection"), Class: "w-full", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-data-collection"}}) {
 					<option value="deny" selected?={ f.DataCollection != "allow" }>学習に使わない提供元だけ</option>
 					<option value="allow" selected?={ f.DataCollection == "allow" }>制限しない</option>
+				}
+			}
+			@armLabel(i, "endpoint", "API の送り先") {
+				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "endpoint"), Name: armName(i, "endpoint"), Class: "w-full font-mono", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-endpoint"}}) {
+					<option value="" selected?={ f.Endpoint != "/alpha/decisions" }>/v1/systemone（既定）</option>
+					<option value="/alpha/decisions" selected?={ f.Endpoint == "/alpha/decisions" }>/alpha/decisions</option>
 				}
 			}
 		</div>

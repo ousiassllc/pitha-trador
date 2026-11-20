@@ -22,21 +22,75 @@ func ser(days map[int64][2]float64) series { // day -> {n, sum}
 
 func approx(got *float64, want, tol float64) bool { return got != nil && math.Abs(*got-want) <= tol }
 
-// Two days per side, hand-calculated: the day means are [1, 3] and [5, 7].
-//   - each mean: 2 and 6, interval = mean +- t(1) * SE, SE = 1 -> +-12.7062;
-//   - difference 4, Welch: var 2 each, SE = sqrt(2/2 + 2/2) = sqrt(2), df = 2,
-//     t(2) = 4.30265 -> half-width 6.0849.
-func TestCompareIsTheDayClusteredIntervalAndWelchOnDayMeans(t *testing.T) {
+// Two days per side, hand-calculated: the day means are [1, 3] and [5, 7]; with
+// lag 1 the long-run variance of [1, 3] is
+//
+//		g0 = (1+1)/2 = 1, g1 = (1*-1)/2 = -0.5, v = (1 + 2*(1/2)*-0.5) * 2/(2-1) = 1
+//
+//	  - each mean: 2 and 6, interval = mean +- t(1) * sqrt(v/n) = +-12.7062*0.7071 = +-8.9846;
+//	  - difference 4: parts v/n = 0.5 each, SE = 1, df = 1 / (0.25/1 + 0.25/1) = 2,
+//	    t(2) = 4.30265 -> half-width 4.30265.
+func TestCompareIsTheNeweyWestIntervalAndWelchOnDayMeans(t *testing.T) {
 	c := compare(ser(map[int64][2]float64{1: {2, 2}, 2: {1, 3}}), ser(map[int64][2]float64{3: {4, 20}, 4: {1, 7}}))
 	if !approx(c.Before.MeanNetBps, 2, 1e-12) || !approx(c.After.MeanNetBps, 6, 1e-12) || c.Before.N != 3 || c.After.N != 5 || c.Before.Days != 2 {
 		t.Fatalf("stats = %+v / %+v", c.Before, c.After)
 	}
-	if !approx(c.Before.CILow, 2-12.7062, 1e-3) || !approx(c.Before.CIHigh, 2+12.7062, 1e-3) {
+	if !approx(c.Before.CILow, 2-8.9846, 1e-3) || !approx(c.Before.CIHigh, 2+8.9846, 1e-3) {
 		t.Errorf("before interval = %v..%v", *c.Before.CILow, *c.Before.CIHigh)
 	}
 	if c.Diff == nil || math.Abs(c.Diff.DiffBps-4) > 1e-12 || !approx(c.Diff.DF, 2, 1e-9) ||
-		!approx(c.Diff.CILow, 4-6.0849, 1e-3) || !approx(c.Diff.CIHigh, 4+6.0849, 1e-3) {
+		!approx(c.Diff.CILow, 4-4.30265, 1e-3) || !approx(c.Diff.CIHigh, 4+4.30265, 1e-3) {
 		t.Errorf("diff = %+v", c.Diff)
+	}
+}
+
+// Hand-calculated: xs = 1..4 has m = 2.5, g0 = 1.25, g1 = 0.3125, so with lag 1
+// v = (1.25 + 2*(1/2)*0.3125) * 4/3 = 25/12; with lag 0 it is the sample
+// variance (5/3).
+func TestLongRunVarianceIsNeweyWestWithBartlettWeights(t *testing.T) {
+	xs := []float64{1, 2, 3, 4}
+	if v, ok := longRunVariance(xs, 1); !ok || math.Abs(v-25.0/12) > 1e-12 {
+		t.Errorf("lag 1: v = %v ok = %v, want 25/12", v, ok)
+	}
+	if v, ok := longRunVariance(xs, 0); !ok || math.Abs(v-5.0/3) > 1e-12 {
+		t.Errorf("lag 0: v = %v ok = %v, want the sample variance 5/3", v, ok)
+	}
+	if v, _ := longRunVariance(xs, 99); v < 0 { // a lag beyond the sample is clamped
+		t.Errorf("clamped lag: v = %v", v)
+	}
+	if _, ok := longRunVariance([]float64{1}, 1); ok {
+		t.Error("one value has no variance")
+	}
+	// Alternating values (negative autocorrelation) narrow, never below 0.
+	if v, _ := longRunVariance([]float64{-1, 1, -1, 1, -1, 1}, 1); v < 0 || v >= 1.2 {
+		t.Errorf("alternating: v = %v, want in [0, sample variance 1.2)", v)
+	}
+}
+
+// The same eight daily means, in a trending order (neighbouring days alike) and
+// shuffled: the correction widens the interval of the trending one, which the
+// plain day-cluster interval could not tell apart.
+func TestCorrelatedDaysWidenTheInterval(t *testing.T) {
+	order := func(vals []float64, first int64) series {
+		s := series{}
+		for i, v := range vals {
+			s.add(first+int64(i), 1, v)
+		}
+		return s
+	}
+	trending := []float64{1, 2, 3, 4, 5, 6, 7, 8}
+	shuffled := []float64{4, 8, 1, 6, 3, 7, 2, 5}
+	zero := order([]float64{0, 0, 0, 0, 0, 0, 0, 1e-9}, 100)
+	a, b := compare(zero, order(trending, 1)), compare(zero, order(shuffled, 1))
+	width := func(lo, hi *float64) float64 { return *hi - *lo }
+	if wa, wb := width(a.After.CILow, a.After.CIHigh), width(b.After.CILow, b.After.CIHigh); wa <= wb {
+		t.Errorf("window interval: trending %v must be wider than shuffled %v", wa, wb)
+	}
+	if wa, wb := width(a.Diff.CILow, a.Diff.CIHigh), width(b.Diff.CILow, b.Diff.CIHigh); wa <= wb {
+		t.Errorf("difference interval: trending %v must be wider than shuffled %v", wa, wb)
+	}
+	if !approx(a.After.MeanNetBps, 4.5, 1e-12) || !approx(b.After.MeanNetBps, 4.5, 1e-12) {
+		t.Errorf("the mean must not move: %v %v", *a.After.MeanNetBps, *b.After.MeanNetBps)
 	}
 }
 
@@ -84,12 +138,12 @@ func TestNeededReportsRemainingDaysOrAReason(t *testing.T) {
 	before := ser(map[int64][2]float64{1: {1, 0}, 2: {1, 1}, 3: {1, 0}})
 	after := ser(map[int64][2]float64{4: {1, 5}, 5: {1, 6}, 6: {1, 5}})
 	d := needed([2]series{before, after}, compare(before, after))
-	if d.Reason != "" || d.NeededPerSide == nil || *d.NeededPerSide != MinDaysFloor || d.ObservedPerSide != 3 || d.DaysToMin != 2 || d.RemainingDays == nil || *d.RemainingDays != 2 {
+	if d.Reason != "" || d.NeededPerSide == nil || *d.NeededPerSide != MinDaysFloor || d.ObservedPerSide != 3 || d.DaysToMin != MinDaysFloor-3 || d.RemainingDays == nil || *d.RemainingDays != MinDaysFloor-3 {
 		t.Errorf("needed = %+v", d)
 	}
 
 	same := ser(map[int64][2]float64{1: {1, 0}, 2: {1, 1}})
-	if d := needed([2]series{same, same}, compare(same, same)); d.Reason != ReasonDiffNearZero || d.RemainingDays != nil || d.DaysToMin != 3 {
+	if d := needed([2]series{same, same}, compare(same, same)); d.Reason != ReasonDiffNearZero || d.RemainingDays != nil || d.DaysToMin != MinDaysFloor-2 {
 		t.Errorf("equal windows: %+v", d)
 	}
 	oneDay := ser(map[int64][2]float64{1: {1, 0}})

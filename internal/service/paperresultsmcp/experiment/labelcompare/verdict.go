@@ -13,8 +13,8 @@ func needed(all [2]series, c SideCompare) *DaysNeeded {
 	}
 	b, _ := dayMeans(all[0])
 	a, _ := dayMeans(all[1])
-	varBefore, okB := variance(b)
-	varAfter, okA := variance(a)
+	varBefore, okB := longRunVariance(b, NeweyWestLagDays)
+	varAfter, okA := longRunVariance(a, NeweyWestLagDays)
 	switch {
 	case !okB || !okA || c.Diff == nil:
 		d.Reason = ReasonVarianceUndefined

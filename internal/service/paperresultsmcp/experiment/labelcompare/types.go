@@ -6,7 +6,7 @@
 // costsettings.LabelBarriers' cost), the skips (trade_signals rejections, by
 // fixed reason code) and the research labels (#1074: research_label_day_stats)
 // of the experiment's before and after windows, with a day-clustered 95%
-// interval and the number of days still needed for a verdict.
+// interval (Newey-West corrected for the overlap of neighbouring days: newey.go) and the number of days still needed for a verdict.
 //
 // It is research output only and never an input of trading: it reads existing
 // tables through the MCP's read-only connection, writes nothing, and its
@@ -78,27 +78,27 @@ const (
 	// MinDaysFloor is the JST days each window needs with a labeled LONG /
 	// SHORT decision before the label-based side is judged.
 	//
-	// PROVISIONAL VALUE: 5 days is a placeholder, like experiment.MinTradesFloor
-	// (MinTradesProvisionalText). The production standard deviation of the
-	// daily mean label is not measured yet, so it is to be reviewed once it is.
-	// It is a floor under the statistical days-needed figure, not a power
-	// calculation.
-	MinDaysFloor = 5
+	// 8 is the smallest n with n >= 2 * 1.96^2 (about 7.7): the days per
+	// window at which the 95% half-width of a difference of two daily means
+	// is at most one daily standard deviation, whatever that deviation is
+	// (half-width = 1.96 * sigma * sqrt(2/n) <= sigma). The derivation and
+	// what was (and was not) measured are in
+	// docs/architecture/paper-results-mcp-experiments-labels.md §2.4. It is a
+	// floor under the statistical days-needed figure, not a power calculation.
+	MinDaysFloor = 8
 )
 
-// MinDaysProvisionalText is the fixed wording that says MinDaysFloor is provisional.
-const MinDaysProvisionalText = "暫定値（本番の日ごとのラベル平均の標準偏差は未確認。測って見直す予定）"
-
-// MinDaysSource says where the min_days of a response came from.
-const MinDaysSource = "floor_provisional_unapproved"
+// MinDaysSource says where the min_days of a response came from: the
+// derivation of MinDaysFloor above, not a provisional placeholder.
+const MinDaysSource = "measured_v1"
 
 // Caution is returned with every answer.
 const Caution = "ラベルによる判定は実現損益（取引の純損益）ではない。ラベルは約定ではなく「その時点で入っていたら」の仮想の結果で、" +
-	"保有期間の重なるラベルは時間的に重なり互いに独立ではない（区間は日を 1 まとまりとして出しているが楽観的になりうる）。" +
+	"保有期間の重なるラベルは時間的に重なり互いに独立ではない（区間は日を 1 まとまりとし、前後の日の相関は Newey-West で補正している。補正しても日数が少ないと区間は楽観的になりうる）。" +
 	"前後は別の期間で因果の証明にならない。取引ベースの判定（verdict / judged）の代わりにはならず、補助の証拠としてだけ使うこと。" +
 	"読み取り専用で、設定・モデル・プロンプトを変えたり戻したりしない"
 
-// Stat is a mean with its day-clustered 95% interval. N counts the
+// Stat is a mean with its day-clustered, Newey-West corrected 95% interval. N counts the
 // observations (decisions or snapshots) behind it, Days the JST days; the mean
 // is the mean of the per-day means, so every day weighs the same. The mean and
 // the interval are null when there is no day (the interval: fewer than two).
@@ -111,8 +111,9 @@ type Stat struct {
 }
 
 // Diff is after minus before of two windows' daily means: Welch's two-sample
-// interval on the per-day means (the unit of analysis is the day), null when
-// not computable.
+// interval on the per-day means (the unit of analysis is the day) with each
+// window's variance of the mean Newey-West corrected (diffOf), null when not
+// computable.
 type Diff struct {
 	DiffBps float64  `json:"diff_bps"`
 	CILow   *float64 `json:"ci_low"`
@@ -185,7 +186,7 @@ type ResearchHorizon struct {
 type DaysNeeded struct {
 	// ObservedPerSide is the smaller of the two windows' days with a labeled decision.
 	ObservedPerSide int `json:"observed_per_side"`
-	// MinDays is MinDaysFloor (provisional); MinDaysSource says so.
+	// MinDays is MinDaysFloor; MinDaysSource says where it comes from.
 	MinDays       int    `json:"min_days"`
 	MinDaysSource string `json:"min_days_source"`
 	// DaysToMin is max(0, MinDays - ObservedPerSide).
@@ -205,6 +206,10 @@ type Result struct {
 	// Error is an Error* code when the label-based side could not be computed.
 	Error   string `json:"error,omitempty"`
 	Caution string `json:"caution"`
+	// IntervalMethod (IntervalMethod) and IntervalLagDays (NeweyWestLagDays) say
+	// how every interval below was made.
+	IntervalMethod  string `json:"interval_method"`
+	IntervalLagDays int    `json:"interval_lag_days"`
 
 	LabelVerdict string `json:"label_verdict"`
 	LabelJudged  bool   `json:"label_judged"`

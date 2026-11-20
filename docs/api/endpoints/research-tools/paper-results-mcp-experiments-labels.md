@@ -12,20 +12,21 @@
 
 | メンバー | 内容 |
 |---|---|
-| `caution` | 固定の注意文（日本語）。ラベルは実現損益ではない・ラベルは時間的に重なる・前後は別期間で因果の証明にならない・補助の証拠としてだけ使う |
+| `caution` | 固定の注意文（日本語）。ラベルは実現損益ではない・ラベルは時間的に重なる（前後の日の相関は Newey-West で補正しているが、日数が少ないと区間は楽観的になりうる）・前後は別期間で因果の証明にならない・補助の証拠としてだけ使う |
+| `interval_method` / `interval_lag_days` | 区間の作り方。`newey_west_bartlett` と、補正のラグ（日。保有時間の最大を日に切り上げた値 = 1）。以下の区間はすべてこれ（issue #1129。設計 §2.2） |
 | `label_verdict` | `aborted` / `confounded`（取引ベースと同じ交絡・中止の結果を使う）/ `insufficient_days`（前後どちらかが `days_needed.min_days` 日未満）/ `switch_unconfirmed` / `not_computable` / `improved` / `worsened` / `inconclusive`。判定の順は設計 §2.5 |
 | `label_judged` | `improved` / `worsened` / `inconclusive` のとき true |
 | `before` / `after` | 窓ごと。`from` / `to`（取引ベースの `before` / `after` と同じ窓）、`days`（ラベルの付いた LONG / SHORT 判断のある JST の日数）、`decisions`（`long` / `short` / `none` / `unknown` / `total`。Jev trader の判断の件数）、`skips`（`skip_count` / `risk_passed_count` / `skip_rate`（null: signal 無し）/ `top_reasons`（`reason` + `count`、最大 5 件。**固定コードだけ**）） |
 | `decision_labels` | 判断が付けた方向の、既存のコスト控除後ラベル（`calibration_outcomes` の `label_version = 2` の `net_return_bps`）の前後比較。`horizon_minutes`（比べたラベルのホライズン。ラベルが無ければ 0）、`ignored_rows`（別のホライズンで比べなかった行数）、`long` / `short` / `all`（系列ごとの比較） |
 | `research_labels` | 研究用ラベル（#1074）の前後比較。要素は `horizon`（`30m` / `60m` / `close`）と `long` / `short`（系列ごとの比較）。記録が済んだ、窓に丸ごと入る JST の日だけを使う |
-| `days_needed` | 判定まであと何日か。`observed_per_side`、`min_days`（暫定値 5）/ `min_days_source`（`floor_provisional_unapproved`）、`days_to_min`、`needed_per_side`、`remaining_days`、`reason` |
+| `days_needed` | 判定まであと何日か。`observed_per_side`、`min_days`（8）/ `min_days_source`（`measured_v1`。根拠は設計 §2.4。暫定値ではない）、`days_to_min`、`needed_per_side`、`remaining_days`、`reason` |
 | `error` | 省略。付くのは、ラベルの比較を計算できなかったとき: `limit_exceeded`（窓の判断が 200,000 件超、または窓が 400 日超）/ `failed`。このとき `decision_labels` / `research_labels` / `days_needed` は null で `label_verdict` は `not_computable`。**呼び出しは成功のまま**で、取引ベースのメンバーは返る |
 
-系列ごとの比較（`long` / `short` / `all`）: `before` / `after` は `n`（観測の件数）・`days`・`mean_net_bps`（日平均の平均）・`ci_low` / `ci_high`（日クラスタの 95% 区間。日が 2 日未満は null）、`diff` は後−前の `diff_bps` と、日平均どうしの Welch の区間 `ci_low` / `ci_high`・`t`・`df`（計算できないものは null。`diff` 自体が null のことがある＝どちらかの窓に日が無い）。
+系列ごとの比較（`long` / `short` / `all`）: `before` / `after` は `n`（観測の件数）・`days`・`mean_net_bps`（日平均の平均）・`ci_low` / `ci_high`（日クラスタの 95% 区間を、前後の日の相関で Newey-West 補正したもの。日が 2 日未満は null）、`diff` は後−前の `diff_bps` と、日平均どうしの Welch の区間（各窓の分散は Newey-West の長期分散） `ci_low` / `ci_high`・`t`・`df`（計算できないものは null。`diff` 自体が null のことがある＝どちらかの窓に日が無い）。
 
 `days_needed`:
 
-- `needed_per_side`: 今の日ごとのばらつきと差のままで、前後それぞれ何日あれば区間の半幅が差の絶対値を下回るか（最小日数を下回らない）。
+- `needed_per_side`: 今の日ごとのばらつき（Newey-West の長期分散）と差のままで、前後それぞれ何日あれば区間の半幅が差の絶対値を下回るか（最小日数を下回らない）。
 - `remaining_days` = max(0, `needed_per_side` − `observed_per_side`)。目安であり、日が増えれば差もばらつきも動く。
 - `needed_per_side` / `remaining_days` が null のとき `reason`: `variance_undefined`（どちらかの窓が 2 日未満）/ `diff_near_zero`（差が 0）/ `beyond_horizon`（250 日でも足りない）。`days_to_min` は常に出る。
 
@@ -71,3 +72,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規 | issue #1088 |
+| 1.1 | 2026-11-20 | `label_based` に `interval_method` / `interval_lag_days` を追加。`min_days` を 8、`min_days_source` を `measured_v1` に変更。区間と `days_needed` を Newey-West（ラグ 1 日）で補正 | issue #1129 |

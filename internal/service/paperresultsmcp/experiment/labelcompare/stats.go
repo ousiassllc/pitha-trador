@@ -3,11 +3,6 @@ package labelcompare
 import (
 	"math"
 	"slices"
-
-	"gonum.org/v1/gonum/stat/distuv"
-
-	"github.com/ousiassllc/pitha-trador/internal/service/actuals"
-	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 )
 
 // dayMeans are the per-day means of s in day order (the observations of the
@@ -27,9 +22,9 @@ func dayMeans(s series) (means []float64, keys []int64) {
 	return means, keys
 }
 
-// statOf is the Stat of s: the mean of the per-day means with the day-clustered
-// 95% interval of actuals.ClusterMean (each day is one cluster holding its
-// mean, so this is the t interval over the days).
+// statOf is the Stat of s: the mean of the per-day means with the 95% interval
+// of meanInterval (each day is one observation: the day is the cluster, and the
+// correlation between neighbouring days is the Newey-West correction).
 func statOf(s series) Stat {
 	means, keys := dayMeans(s)
 	st := Stat{Days: len(keys)}
@@ -39,60 +34,32 @@ func statOf(s series) Stat {
 	if len(keys) == 0 {
 		return st
 	}
-	m := actuals.ClusterMean(means, keys)
-	if !finite(m.Value) {
+	m := meanOf(means)
+	if !finite(m) {
 		return st
 	}
-	st.MeanNetBps = &m.Value
-	if m.HasCI && finite(m.Lo) && finite(m.Hi) {
-		st.CILow, st.CIHigh = &m.Lo, &m.Hi
-	}
+	st.MeanNetBps = &m
+	st.CILow, st.CIHigh = meanInterval(means, NeweyWestLagDays)
 	return st
 }
 
-// compare is the SideCompare of one series in the two windows. The difference
-// is Welch's interval on the two windows' per-day means (the windows are
-// separate periods, so independent samples of days), after minus before.
+// compare is the SideCompare of one series in the two windows: after minus
+// before of the per-day means with diffOf's interval.
 func compare(before, after series) SideCompare {
-	c := SideCompare{Before: statOf(before), After: statOf(after)}
 	b, _ := dayMeans(before)
 	a, _ := dayMeans(after)
-	t := experiment.Welch(b, a)
-	if t.Diff == nil {
-		return c
-	}
-	c.Diff = &Diff{DiffBps: *t.Diff, CILow: t.CILow, CIHigh: t.CIHigh, T: t.T, DF: t.DF}
-	return c
-}
-
-// variance is the sample variance of xs (n - 1); ok is false with fewer than
-// two values.
-func variance(xs []float64) (v float64, ok bool) {
-	if len(xs) < 2 {
-		return 0, false
-	}
-	var sum float64
-	for _, x := range xs {
-		sum += x
-	}
-	mean := sum / float64(len(xs))
-	var ss float64
-	for _, x := range xs {
-		ss += (x - mean) * (x - mean)
-	}
-	return ss / float64(len(xs)-1), true
+	return SideCompare{Before: statOf(before), After: statOf(after), Diff: diffOf(b, a, NeweyWestLagDays)}
 }
 
 // daysNeeded is the smallest number of days g per window at which the 95%
-// half-width of the difference, t(2g-2) * sqrt((var_before + var_after) / g),
-// is below |diff| at the current variances (equal-sized windows; the t quantile
-// at 2g-2 degrees of freedom is the equal-size Welch value). ok is false when
-// no g up to MaxDaysNeeded does.
+// half-width of the difference, t(2g-2) * sqrt((v_before + v_after) / g), is
+// below |diff| at the current long-run variances (equal-sized windows; the t
+// quantile at 2g-2 degrees of freedom is the equal-size Welch value). ok is
+// false when no g up to MaxDaysNeeded does.
 func daysNeeded(varBefore, varAfter, diff float64) (g int, ok bool) {
 	spread := varBefore + varAfter
 	for g = 2; g <= MaxDaysNeeded; g++ {
-		half := distuv.StudentsT{Mu: 0, Sigma: 1, Nu: float64(2*g - 2)}.Quantile(1-(1-experiment.CILevel)/2) * math.Sqrt(spread/float64(g))
-		if half < math.Abs(diff) {
+		if tQuantile(float64(2*g-2))*math.Sqrt(spread/float64(g)) < math.Abs(diff) {
 			return g, true
 		}
 	}

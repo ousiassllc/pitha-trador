@@ -154,6 +154,7 @@ func TestSave_CollectsTheRowsIntoArms(t *testing.T) {
 	full.Set("arm-10-provider_only", "chutes, deepinfra/fp8")
 	full.Set("arm-10-data_collection", "allow")
 	full.Set("arm-10-zdr", "1")
+	full.Set("arm-10-endpoint", "/alpha/decisions")
 	form := merge(armForm(2, "second"), armForm(0, "first"), full)
 	form.Set("enabled", "on")
 	if rec := do(engine(f), http.MethodPost, "/settings/jev-trial", form); rec.Code != http.StatusOK {
@@ -165,12 +166,12 @@ func TestSave_CollectsTheRowsIntoArms(t *testing.T) {
 	}
 	want := jevtrialsettings.Arm{
 		ID: "last", Provider: "openrouter", Model: "m-last", PromptVersion: "trader-v3",
-		DailyCostCapUSD: 0.02, ListPriceUSDPerMtok: 0.24, ProviderOnly: []string{"chutes", "deepinfra/fp8"}, DataCollection: "allow", ZDR: true,
+		DailyCostCapUSD: 0.02, ListPriceUSDPerMtok: 0.24, ProviderOnly: []string{"chutes", "deepinfra/fp8"}, DataCollection: "allow", ZDR: true, Endpoint: "/alpha/decisions",
 	}
 	if !reflect.DeepEqual(got[2], want) {
 		t.Errorf("arm = %+v, want %+v", got[2], want)
 	}
-	if got[0].ZDR || got[0].DailyCostCapUSD != 0 || got[0].ProviderOnly != nil {
+	if got[0].ZDR || got[0].DailyCostCapUSD != 0 || got[0].ProviderOnly != nil || got[0].Endpoint != "" {
 		t.Errorf("a blank row = %+v, want unset optional fields", got[0])
 	}
 }
@@ -202,7 +203,7 @@ func TestSave_UnreadableRowsSaveNothing(t *testing.T) {
 	for name, form := range map[string]url.Values{
 		"cap is text":        merge(armForm(0, "a"), url.Values{"arm-0-daily_cost_cap_usd": {"abc"}}),
 		"price is text":      merge(armForm(0, "a"), url.Values{"arm-0-list_price_usd_per_mtok": {"x"}}),
-		"unknown field":      merge(armForm(0, "a"), url.Values{"arm-0-endpoint": {"x"}}),
+		"unknown field":      merge(armForm(0, "a"), url.Values{"arm-0-colour": {"x"}}),
 		"row without number": {"arm-x-id": {"a"}},
 		"negative number":    {"arm--1-id": {"a"}},
 		"no field":           {"arm-0": {"a"}},
@@ -218,6 +219,21 @@ func TestSave_UnreadableRowsSaveNothing(t *testing.T) {
 		if len(f.saved) != 0 {
 			t.Errorf("%s: the service was called", name)
 		}
+	}
+}
+
+// The endpoint select shows the stored choice; an arm without one shows the default.
+func TestPanel_ShowsTheStoredEndpoint(t *testing.T) {
+	f := &fakeService{state: jevtrial.State{TrialRuns: true, CapUSD: 0.1, Arms: []jevtrial.ArmStatus{
+		{Arm: jevtrialsettings.Arm{ID: "a-one", Provider: "openrouter", Model: "m1", PromptVersion: "trader-v3", Endpoint: "/alpha/decisions"}, CapUSD: 0.05},
+		{Arm: jevtrialsettings.Arm{ID: "a-two", Provider: "openrouter", Model: "m2", PromptVersion: "trader-v3"}, CapUSD: 0.05},
+	}}}
+	body := do(engine(f), http.MethodGet, "/settings/jev-trial-panel", nil).Body.String()
+	if got := strings.Count(body, `<option value="/alpha/decisions" selected`); got != 1 {
+		t.Errorf("%d arms show /alpha/decisions selected, want 1", got)
+	}
+	if got := strings.Count(body, `<option value="" selected`); got < 1 {
+		t.Errorf("the arm without an endpoint does not show the default selected")
 	}
 }
 
