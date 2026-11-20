@@ -24,6 +24,14 @@
 // so a candidate that passes under Paper's good passes in the replay). The
 // report's first line names it.
 //
+// -compare-legacy (issue #1114) replaces the reproducibility check with the
+// comparison of the live entry rule (meta-labeling) and the pre-#765
+// confidence-threshold rule over the same period (backtest.CompareEntryRules):
+// 件数・勝率・Expectancy・PF・MaxDD・純損益 of each and Meta minus Legacy. It
+// honours -replay-mode and the period flags, is display only (nothing is
+// stored or traded on) and exits 0, or 2 when the replay cannot be read.
+// Without it nothing changes.
+//
 // It is read-only: the database is opened with SQLite mode=ro (no migration;
 // SQLite may still create the empty -wal/-shm side files next to a WAL
 // database, see sqlitedb.OpenReadOnly) and nothing is stored. -db defaults to
@@ -34,6 +42,7 @@
 //	backtestverify -db pitha.db -from 2026-10-01 -to 2026-10-16
 //	backtestverify -db pitha.db
 //	backtestverify -db pitha.db -replay-mode paper
+//	backtestverify -db pitha.db -from 2026-10-01 -to 2026-10-16 -compare-legacy
 package main
 
 import (
@@ -75,20 +84,24 @@ type verifier interface {
 // run parses args, opens the database read-only and verifies; it returns the
 // process exit code.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer, now func() time.Time) int {
-	dbPath, period, mode, err := parseArgs(args, stderr, now())
+	opts, err := parseArgs(args, stderr, now())
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
 			_, _ = fmt.Fprintln(stderr, "backtestverify:", err)
 		}
 		return exitError
 	}
-	state, err := bootstrap.Run(bootstrap.Config{DBPath: dbPath, ReadOnly: true})
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: opts.dbPath, ReadOnly: true})
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "backtestverify:", err)
 		return exitError
 	}
 	defer func() { _ = state.Close() }()
-	return verify(ctx, backtestsource.NewForDB(state.DB, state.Strategy, state.Risk, mode), period, stdout, stderr)
+	source := backtestsource.NewForDB(state.DB, state.Strategy, state.Risk, opts.mode)
+	if opts.compareLegacy {
+		return compareLegacy(ctx, source, backtest.CompareEntryRules, opts.period, stdout, stderr)
+	}
+	return verify(ctx, source, opts.period, stdout, stderr)
 }
 
 // verify runs the check over period against parity.Provisional and maps the
@@ -118,26 +131,35 @@ func modeDescription(mode backtestsource.ReplayMode) string {
 	return "Live用 policy.*"
 }
 
-// parseArgs returns the -db value ("" lets bootstrap resolve it), the period to
-// verify and the replay mode; now is the end of the default window.
-func parseArgs(args []string, stderr io.Writer, now time.Time) (dbPath string, period backtest.Period, mode backtestsource.ReplayMode, err error) {
+// options are the parsed flags.
+type options struct {
+	dbPath        string // "" lets bootstrap resolve it
+	period        backtest.Period
+	mode          backtestsource.ReplayMode
+	compareLegacy bool
+}
+
+// parseArgs returns the parsed flags; now is the end of the default window.
+func parseArgs(args []string, stderr io.Writer, now time.Time) (options, error) {
 	fs := flag.NewFlagSet("backtestverify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	db := fs.String("db", "", "path to the pitha-trador SQLite database (opened read-only; default PITHA_DB_PATH, then the per-user pitha.db)")
 	fromText := fs.String("from", "", "first day, JST, YYYY-MM-DD (default: with -to unset, the last 30 business days)")
 	toText := fs.String("to", "", "last day (inclusive), JST, YYYY-MM-DD")
 	modeText := fs.String("replay-mode", string(backtestsource.ReplayLive), "min_entry_quality the replay judges by: live (policy.*, default) or paper (policy.paper.*)")
+	compare := fs.Bool("compare-legacy", false, "instead of the reproducibility check, print the live (meta-labeling) vs legacy (confidence-threshold) entry rule comparison over the period; display only, honours -replay-mode, exit 0 unless it fails")
 	if err := fs.Parse(args); err != nil {
-		return "", backtest.Period{}, "", err
+		return options{}, err
 	}
 	if fs.NArg() > 0 {
-		return "", backtest.Period{}, "", fmt.Errorf("unexpected argument %q", fs.Arg(0))
+		return options{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
-	if mode, err = backtestsource.ParseReplayMode(*modeText); err != nil {
-		return "", backtest.Period{}, "", fmt.Errorf("-replay-mode: %w", err)
+	mode, err := backtestsource.ParseReplayMode(*modeText)
+	if err != nil {
+		return options{}, fmt.Errorf("-replay-mode: %w", err)
 	}
-	period, err = parsePeriod(*fromText, *toText, now)
-	return *db, period, mode, err
+	period, err := parsePeriod(*fromText, *toText, now)
+	return options{dbPath: *db, period: period, mode: mode, compareLegacy: *compare}, err
 }
 
 // parsePeriod turns the inclusive JST day range into [from, to+1 day), or, with

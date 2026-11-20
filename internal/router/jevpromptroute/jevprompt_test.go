@@ -25,6 +25,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset/jevaudit"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -55,7 +56,7 @@ func newApp(t *testing.T) *app {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	svc := jevprompt.New(db)
+	svc := jevaudit.New(jevprompt.New(db), db) // as wired in production (internal/bootstrap/router_options.go)
 	svc.SetClock(func() time.Time { return now })
 	a := &app{t: t, db: db, settings: system.NewRuntimeSettingsRepository(db)}
 	a.engine = router.New(router.WithSecretsStore(fullSecrets{}), router.WithJevPromptSettings(svc))

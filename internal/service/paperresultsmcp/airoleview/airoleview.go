@@ -25,7 +25,7 @@ import (
 // model: the live Jev role decides what is traded, so those settings are the Settings screen's alone (and none of
 // their keys is on the settings_set whitelist).
 const Description = "AI の役割（Jev の売買判断 / Sol の改善提案 / Opus の提案の検証 / Luna のニュース分類）ごとの、プロバイダー（custom＝独自 API / openrouter）とモデルの設定。" +
-	"configured（再起動後に効く設定。source は stored＝Settings で保存した値 / default＝既定。既定は今までと同じ接続先・キー・モデル）・running（最後の起動で実際に使い始めた組。記録がなければ null）・live（取引に使われる役割）と、" +
+	"configured（効く設定。Sol・Opus・Luna は保存後の次の呼び出しから、Jev は再起動後。source は stored＝Settings で保存した値 / default＝既定。既定は今までと同じ接続先・キー・モデル）・running（最後の起動で実際に使い始めた組。Jev ではこれが実際に動いている組。記録がなければ null）・live（取引に使われる役割）と、" +
 	"直近の変更の履歴（Settings での保存 saved と、起動時の記録 started。いつ・何から何へ）を返す。" +
 	"API キー・接続先 URL などの秘密は返さない（キーの有無も返さない）。どの役割も MCP からは変えられない（changeable_via_mcp は常に false。変更は Settings 画面だけ。読み取り専用）"
 
@@ -45,7 +45,7 @@ type Role struct {
 	Name string `json:"name"`
 	// Live marks the role that decides what is traded.
 	Live bool `json:"live"`
-	// Configured is the setting in force after the next restart; Source says
+	// Configured is the stored setting (Sol, Opus and Luna use it from their next call, the live Jev after a restart); Source says
 	// whether it is the stored setting ("stored") or the default ("default").
 	Configured Pair   `json:"configured"`
 	Source     string `json:"source"`

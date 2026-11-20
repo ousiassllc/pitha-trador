@@ -22,8 +22,8 @@ type RoleRow struct {
 	Description string
 	// Live marks the role that decides what is traded.
 	Live bool
-	// Provider and Model are the form's current values (the setting in force
-	// after a restart).
+	// Provider and Model are the form's current values (the setting in force:
+	// from the next call for Sol, Opus and Luna, after a restart for the live Jev).
 	Provider string
 	Model    string
 	// Stored is true when they are a saved value rather than the default.
@@ -32,7 +32,7 @@ type RoleRow struct {
 	Damaged string
 	// ModelHint is what an empty model means for this role.
 	ModelHint string
-	// Running is "provider / model" the role has run on since the last start
+	// Running is "provider / model" the live Jev role has run on since the last start
 	// ("" when no start is recorded yet).
 	Running string
 	// Notice is the outcome of the action on this role ("" for none).
@@ -64,7 +64,7 @@ templ Panel(props PanelProps) {
 		<p class="text-mute">
 			役割ごとに、どのプロバイダーのどのモデルで AI を呼ぶかを選びます。接続先 URL と API キーはプロバイダーごとに 1 か所で持つので、役割ごとに別のキーを入れる必要はありません。
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-ai-roles", Label: "役割ごとのモデルの説明"}) {
-				保存しなければ、どの役割も今までと同じ接続先・キー・モデルで呼びます（Jev は独自 API の接続、Sol・Opus・Luna は役割ごとの上書き、なければ Jev）。OpenRouter を選んだ役割は、OpenRouter の API キーと、ここで入れたモデル名（例: provider/model）で呼びます。保存や既定に戻した内容の反映にはアプリの再起動が必要です。変更は履歴に残ります。Jev の売買判断のプロバイダーとモデルは、この画面でだけ変えられます（MCP からは変えられません）。モデル比較トライアルのアームは、トライアルの設定でアームごとに選びます。
+				保存しなければ、どの役割も今までと同じ接続先・キー・モデルで呼びます（Jev は独自 API の接続、Sol・Opus・Luna は役割ごとの上書き、なければ Jev）。OpenRouter を選んだ役割は、OpenRouter の API キーと、ここで入れたモデル名（例: provider/model）で呼びます。Sol・Opus・Luna は保存後すぐに反映されます（次の呼び出しから。保存した値が正しくないときは、その役割は動かさず、別のプロバイダーには切り替えません）。Jev の売買判断は再起動が必要です（保存や既定に戻した内容は、アプリを再起動するまで反映されません）。変更は履歴に残ります。Jev の売買判断のプロバイダーとモデルは、この画面でだけ変えられます（MCP からは変えられません）。モデル比較トライアルのアームは、トライアルの設定でアームごとに選びます。
 			}
 		</p>
 		if props.Notice != "" {

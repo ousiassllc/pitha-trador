@@ -1,18 +1,14 @@
-package bootstrap
+package wiringflow_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
-
-// tradingHours is a fixed instant inside the 前場 (2026-09-29 10:00 JST):
-// paper entries are session-gated, so tests must not enter at time.Now().
-var tradingHours = time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
 
 func approvedLongSignal(inst domain.Instrument) domain.TradeSignal {
 	return domain.TradeSignal{
@@ -22,7 +18,7 @@ func approvedLongSignal(inst domain.Instrument) domain.TradeSignal {
 }
 
 // enterPaper stores snap (zero spread: fills at the touch) as the latest quote Risk's Check reads, then executes an approved signal on it.
-func enterPaper(t *testing.T, svc *Services, inst domain.Instrument, snap domain.Snapshot) {
+func enterPaper(t *testing.T, svc *bootstrap.Services, inst domain.Instrument, snap domain.Snapshot) {
 	t.Helper()
 	snap.SpreadBps, snap.RawDataJSON = new(float64), "{}"
 	if _, err := svc.Snapshots.Insert(context.Background(), snap); err != nil {
@@ -33,7 +29,7 @@ func enterPaper(t *testing.T, svc *Services, inst domain.Instrument, snap domain
 	}
 }
 
-func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, price float64) domain.Position {
+func mustOpenPaperPosition(t *testing.T, svc *bootstrap.Services, inst domain.Instrument, price float64) domain.Position {
 	t.Helper()
 	enterPaper(t, svc, inst, domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: price, Timestamp: tradingHours})
 	position, err := svc.Positions.GetOpenByInstrument(context.Background(), inst.ID)

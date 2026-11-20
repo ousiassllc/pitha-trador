@@ -1,21 +1,25 @@
 // Package airolewire turns the AI provider layer (internal/config/airole, issue
-// #1080) into the clients the composition root builds: it resolves every role's
-// connection once at start-up from the stored role settings and the stored
-// secrets (read only: nothing here writes a setting or a secret), gives Sol, Opus
-// and Luna their override client and Jev-protocol fallback, fills in the
-// connections of a trial arm's provider, and records which provider and model
-// each role runs on.
+// #1080) into the clients the composition root builds: it resolves the live Jev
+// role's connection once at start-up from the stored role settings and the
+// stored secrets (read only: nothing here writes a setting or a secret), gives
+// Sol, Opus and Luna a backend that re-reads their setting on every call (issue
+// #1112), fills in the connections of a trial arm's provider, and records which
+// provider and model each role runs on.
 //
 // With nothing stored every role is on the custom provider, which is exactly the
-// connection it had before the layer existed. A change needs a restart, like the
-// secrets themselves.
+// connection it had before the layer existed. A provider or model saved for Sol,
+// Opus or Luna applies to their next call; the live Jev (what is traded) and the
+// secrets themselves (keys, URLs) change only with a restart.
 package airolewire
 
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/airole"
@@ -26,26 +30,42 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trial"
 )
 
-// Roles is every role's resolved connection and the store of their settings and history.
+// Roles is every role's connection as resolved at start-up (the live Jev's is the
+// one in use until a restart), the secrets and settings Sol, Opus and Luna
+// resolve against on every call, and the store of the roles' settings and history.
 type Roles struct {
-	conns map[string]airole.Connection
-	store *system.AIRoleRepository
+	conns    map[string]airole.Connection
+	settings airole.Getter
+	secrets  config.Secrets
+	keys     config.SecretsRepository // nil: Sol, Opus and Luna keep the start-up OpenRouter key and URL
+	store    *system.AIRoleRepository
 }
 
 // Resolve reads each role's setting from settings (runtime_settings, read only) and
 // resolves it against secrets. A setting that cannot be read or parsed falls back
-// to the default, never to a different provider. db holds the roles' history.
+// to the default (live Jev) or is skipped at call time (Sol, Opus, Luna), never
+// moved to a different provider. db holds the roles' history.
+// The result keeps settings and secrets: Sol, Opus and Luna read their setting
+// again on every call (Backend).
 func Resolve(ctx context.Context, db *sql.DB, settings airole.Getter, secrets config.Secrets) Roles {
-	g := settings
-	loaded := airole.Load(ctx, g)
+	loaded := airole.Load(ctx, settings)
 	for role, why := range loaded.Damaged {
-		slog.Warn("bootstrap: ai role setting ignored; running on the default", "role", role, "reason", why)
+		slog.Warn("bootstrap: ai role setting ignored; the live Jev runs on the default, Sol, Opus and Luna are skipped", "role", role, "reason", why)
 	}
 	conns := make(map[string]airole.Connection, len(loaded.Settings))
 	for role, set := range loaded.Settings {
 		conns[role] = airole.Resolve(role, set, secrets)
 	}
-	return Roles{conns: conns, store: system.NewAIRoleRepository(db)}
+	return Roles{conns: conns, settings: settings, secrets: secrets, store: system.NewAIRoleRepository(db)}
+}
+
+// WithSecretStore makes Sol, Opus and Luna read the OpenRouter key and base URL
+// from keys on every call, so a key saved on the Settings screen applies to their
+// next call too. The start-up value is not used as a fallback when the read fails:
+// the role is skipped for that call. The live Jev keeps its start-up connection.
+func (r Roles) WithSecretStore(keys config.SecretsRepository) Roles {
+	r.keys = keys
+	return r
 }
 
 // Settings is the Settings screen's service over the roles' settings and history;
@@ -54,48 +74,91 @@ func (r Roles) Settings(settings airole.Getter, keys airoles.KeyStore) *airoles.
 	return airoles.New(settings, r.store, keys)
 }
 
-// Connection is role's connection.
+// Connection is role's connection as resolved at start-up.
 func (r Roles) Connection(role string) airole.Connection { return r.conns[role] }
 
-// AssistBackend returns the override client and the Jev-protocol fallback of a
-// Sol, Opus or Luna role. own is the role's own SOL_*/OPUS_*/LUNA_* override and
-// live the live Jev client. On the custom provider that is the connection the
-// role always had (its own override, else the live Jev). On OpenRouter the
-// override is dropped and the fallback is a client for OpenRouter with the
-// role's key and model, so the role is never served by the live Jev connection:
-// without an OpenRouter key it is skipped, not silently moved to another provider.
-func (r Roles) AssistBackend(role string, own assist.Config, live assist.Asker) (*assist.Client, assist.Asker) {
-	c := r.conns[role]
-	if c.Delegated {
-		return assist.NewClient(own), live
-	}
+// Backend is the backend of a Sol, Opus or Luna role, resolved on every call
+// from the role's setting as stored at that moment (issue #1112): the override
+// client and the Jev-protocol fallback. own is the role's own SOL_*/OPUS_*/LUNA_*
+// override and live the live Jev client. On the custom provider that is the
+// connection the role always had (its own override, else the live Jev). On
+// OpenRouter the override is dropped and the fallback is a client for OpenRouter
+// with the role's key and model, so the role is never served by the live Jev
+// connection: without an OpenRouter key it is skipped, not silently moved to
+// another provider. A stored value that cannot be read or parsed skips the role
+// as well (an error wrapping assist.ErrNotConfigured); it is never read as
+// "nothing saved". Keys and URLs are never logged.
+func (r Roles) Backend(role string, own assist.Config, live assist.Asker) assist.Backend {
+	custom := assist.NewClient(own)
 	own.BaseURL, own.APIKey = "", ""
-	return assist.NewClient(own), jev.NewClient(jev.Config{BaseURL: c.BaseURL, APIKey: c.APIKey, Model: c.Model})
+	none := assist.NewClient(own) // not configured: the role is served by its fallback only
+	var (
+		mu     sync.Mutex
+		cached airole.Connection
+		asker  assist.Asker
+	)
+	return func(ctx context.Context) (*assist.Client, assist.Asker, error) {
+		c, err := r.current(ctx, role)
+		if err != nil {
+			slog.Warn("airolewire: ai role skipped: its stored setting is unusable", "role", role, "reason", err.Error())
+			return nil, nil, fmt.Errorf("%w: %s setting is unusable", assist.ErrNotConfigured, role)
+		}
+		if c.Delegated {
+			return custom, live, nil
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if asker == nil || c != cached {
+			cached, asker = c, jev.NewClient(jev.Config{BaseURL: c.BaseURL, APIKey: c.APIKey, Model: c.Model})
+		}
+		return none, asker, nil
+	}
 }
 
-// Assist is AssistBackend in the form NewLuna, NewSol and NewOpus take their arguments: the override
-// client and the Jev-protocol fallback as the option that sets it.
-func (r Roles) Assist(role string, own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
-	client, asker := r.AssistBackend(role, own, live)
-	return client, assist.WithJev(asker)
+// current is role's connection from the setting (and, with WithSecretStore, the
+// OpenRouter key and URL) stored now. The reason of an error never contains a
+// stored value.
+func (r Roles) current(ctx context.Context, role string) (airole.Connection, error) {
+	set := airole.DefaultSetting()
+	raw, ok, err := r.settings.Get(ctx, airole.Key(role))
+	if err != nil {
+		return airole.Connection{}, errors.New("cannot read the stored setting")
+	}
+	if ok {
+		if set, err = airole.Parse(role, raw); err != nil {
+			return airole.Connection{}, errors.New("the stored setting is invalid")
+		}
+	}
+	secrets := r.secrets
+	if set.Provider == airole.ProviderOpenRouter && r.keys != nil {
+		if secrets.OpenRouterAPIKey, _, err = r.keys.Get(ctx, config.KeyOpenRouterAPIKey); err != nil {
+			return airole.Connection{}, errors.New("cannot read the stored OpenRouter key")
+		}
+		if secrets.OpenRouterBaseURL, _, err = r.keys.Get(ctx, config.KeyOpenRouterBaseURL); err != nil {
+			return airole.Connection{}, errors.New("cannot read the stored OpenRouter URL")
+		}
+	}
+	return airole.Resolve(role, set, secrets), nil
 }
 
-// Luna, Sol and Opus are Assist for that role, in the form assist.NewLuna, NewSol and NewOpus take their arguments.
-func (r Roles) Luna(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
-	return r.Assist(airole.RoleLuna, own, live)
+// Luna is Backend for the Luna role, in the form assist.NewLuna takes it
+// (assist.NewLuna(nil, roles.Luna(...))).
+func (r Roles) Luna(own assist.Config, live assist.Asker) assist.Option {
+	return assist.WithBackend(r.Backend(airole.RoleLuna, own, live))
 }
 
-// Sol is Assist for the Sol role.
-func (r Roles) Sol(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
-	return r.Assist(airole.RoleSol, own, live)
+// Sol is Backend for the Sol role, in the form assist.NewSol takes it.
+func (r Roles) Sol(own assist.Config, live assist.Asker) assist.Option {
+	return assist.WithBackend(r.Backend(airole.RoleSol, own, live))
 }
 
-// Opus is Assist for the Opus role.
-func (r Roles) Opus(own assist.Config, live assist.Asker) (*assist.Client, assist.Option) {
-	return r.Assist(airole.RoleOpus, own, live)
+// Opus is Backend for the Opus role, in the form assist.NewOpus takes it.
+func (r Roles) Opus(own assist.Config, live assist.Asker) assist.Option {
+	return assist.WithBackend(r.Backend(airole.RoleOpus, own, live))
 }
 
-// JevConfig is base with the live Jev role's connection (URL, key, model) filled in.
+// JevConfig is base with the live Jev role's connection (URL, key, model) filled
+// in, as resolved at start-up: the live Jev is not hot reloaded.
 func (r Roles) JevConfig(base jev.Config) jev.Config {
 	c := r.conns[airole.RoleJev]
 	base.BaseURL, base.APIKey, base.Model = c.BaseURL, c.APIKey, c.Model

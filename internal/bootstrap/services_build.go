@@ -111,14 +111,14 @@ func (s *Services) buildExternalClients(db *sql.DB, secrets config.Secrets, aler
 	s.OrderFlow = orderflow.NewTracker()
 	s.rankingWatchMaxAge = snapshotagesettings.Load(context.Background(), s.Settings)
 	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, s.rankingWatchMaxAge, alertChannels.BrokerNotices(s.Activity))
-	s.aiRoles = airolewire.Resolve(context.Background(), db, s.Settings, secrets)
+	s.aiRoles = airolewire.Resolve(context.Background(), db, s.Settings, secrets).WithSecretStore(system.NewSecretsRepository(db))
 	s.Jev = jev.NewClient(s.aiRoles.JevConfig(jev.Config{ // the default (custom) provider is JEV_BASE_URL / JEV_MODEL / JEV_API_KEY as before
 		Alerts: alertChannels.JevAlerts(),
 		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
 		MaxAttempts: cfg.jevMaxAttempts,
 	}))
 
-	luna := assist.NewLuna(s.aiRoles.Luna(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}, s.Jev))
+	luna := assist.NewLuna(nil, s.aiRoles.Luna(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}, s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
 	s.newsEnabled = feedOn && luna.Configured()
 	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath, s.newsEnabled)
@@ -202,8 +202,8 @@ func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, se
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
 		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()), metalabeljob.ChangeGuard(db),
-		selfimprove.WithSol(assist.NewSol(s.aiRoles.Sol(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey}, s.Jev))),
-		selfimprove.WithOpus(assist.NewOpus(s.aiRoles.Opus(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey}, s.Jev))))
+		selfimprove.WithSol(assist.NewSol(nil, s.aiRoles.Sol(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey}, s.Jev))),
+		selfimprove.WithOpus(assist.NewOpus(nil, s.aiRoles.Opus(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey}, s.Jev))))
 }
 
 // buildScheduler builds the Scheduler with its maintenance tasks and, when

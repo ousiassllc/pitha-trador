@@ -87,9 +87,9 @@ func (g *Gate) Recent(ctx context.Context, limit int) ([]Entry, error) {
 // Watches reports whether changes of key are recorded: the whitelisted keys.
 func (g *Gate) Watches(key string) bool { return mcpwritesettings.IsAllowed(key) }
 
-// recordOn appends the audit row of a GUI change of key through ex (a
+// RecordGUIChange appends the audit row of a GUI change of key through ex (a
 // transaction, when the row must commit with the change).
-func recordOn(ctx context.Context, ex sqlutil.Execer, now time.Time, key string, before, after opsettings.Value, reset bool) error {
+func RecordGUIChange(ctx context.Context, ex sqlutil.Execer, now time.Time, key string, before, after opsettings.Value, reset bool) error {
 	if reset && !before.Overridden {
 		return nil // nothing was stored: nothing changed
 	}

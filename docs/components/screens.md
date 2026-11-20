@@ -67,7 +67,7 @@
 | 立花 スクリーニング | `/settings/broker#modal-tachibana-screen` | 日足から監視銘柄を選ぶ指標・重み・上位件数を編集します。 | 証券会社・データ |
 | 立花 研究用の日足収集 | `/settings/broker#modal-research-tachibana-bars` | kabu のままでも立花の日足を夜間に記録し、過去分（最大 20 年）を銘柄ごとに 1 回で埋め戻す研究用の収集のオン・オフを編集します（既定はオフ。取得速度・開始時刻・市場区分・除外銘柄は「立花 夜間日足バッチ」を使う。取引・監視銘柄には使わない）。 | 証券会社・データ |
 | 立花 研究用の時価記録 | `/settings/broker#modal-research-tachibana-quotes` | kabu で見ている銘柄に手動指定または前日のスクリーニング上位を足し（合計 120 銘柄まで）、立花の日中の時価を 1 分ごとに研究用の別テーブルへ記録するスイッチと、追加銘柄・上限・EVENT 接続の予算・REST 時価の最短間隔・保持期間を編集します（既定はオフ。取引には使わない）。 | 証券会社・データ |
-| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続・反映に再起動。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
+| 役割ごとのプロバイダーとモデル | `/settings/integrations#modal-ai-roles` | Jev（売買判断）・Sol・Opus・Luna が、どのプロバイダー（独自 API／OpenRouter）のどのモデルで AI を呼ぶかを選びます（保存しなければ今までと同じ接続。Sol・Opus・Luna は保存後すぐに反映、Jev の売買判断は再起動が必要。Jev の設定はこの画面でだけ変更。保存・起動時の履歴を表示）。「AI のプロバイダー」の接続（独自 API・OpenRouter）の次に並びます。 | 外部連携・AI |
 | 独自 API（Jev） | `/settings/integrations#modal-jev` | 独自 API（Jev が使う接続）の API キー・接続先・モデルを設定します。「AI のプロバイダー」に並びます。 | 外部連携・AI |
 | Luna | `/settings/integrations#modal-luna` | ニュース分類の AI（Luna）の接続を設定します（既定は Jev）。 | 外部連携・AI |
 | Sol | `/settings/integrations#modal-sol` | しきい値の変更案を作る AI（Sol）の接続を設定します（既定は Jev）。 | 外部連携・AI |

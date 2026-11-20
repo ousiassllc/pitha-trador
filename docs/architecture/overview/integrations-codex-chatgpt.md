@@ -76,8 +76,24 @@ Codex に System One は無いので、FR-TRADER-1 の 6 問（`jev.TraderQuesti
 | 画面（既定オフ・保存・理由の表示）・MCP（`subscription`・`limits.codex`） | `jevtrialroute`の`codex_test.go`・`trialtests.TestCostReportsTheSubscriptionApartFromUSDAndTheCodexLimits` |
 | マイグレーション000058（行の保存・`subscription`の CHECK・巻き戻し） | `db.TestMigration000058_*` |
 
+## 5. 運用手順の根拠（issue #1110）
+
+手順そのものは`environment/setup/ai-providers.md`の「運用手順の詳細」（A〜F）。ここには根拠だけを置く。新しい設定・呼び出し・コードの変更は無い。
+
+| 手順 | 根拠（実装・公式文書。2026-11-18 に読んだ公開ページ） |
+|------|------|
+| A: 専用`CODEX_HOME`でのデバイスコードのログイン | `codex login --device-auth`・ChatGPT のセキュリティ設定／ワークスペースの権限でデバイスコードを有効にする・`CODEX_HOME`のディレクトリは先に存在する（[認証](https://learn.chatgpt.com/docs/auth)・[環境変数](https://learn.chatgpt.com/docs/config-file/environment-variables)）。`codex login status`は[認証](https://learn.chatgpt.com/docs/auth)の「認証の確認」。pitha 側の判定は`codexwire.Login.check` |
+| B: `auth.json`はパスワードと同じ | [認証](https://learn.chatgpt.com/docs/auth)の「認証情報の保存」。pitha は開かない（`codexwire`の`doc.go`・`codexwire.TestLogin_*`） |
+| C: 子プロセスの環境変数の許可リスト | `internal/service/jev/codexwire/config.go`の`allowedEnv`（`PATH`・`HOME`・`LANG`・`LC_ALL`・`LC_CTYPE`・`TZ`・`TMPDIR`・Windows の 7 つ）と`childEnv`（`CODEX_HOME`は常に専用の値）。`codexwire.TestTrader_ChildEnvironmentIsAnAllowListWithTheDedicatedHome`。`codex exec`は`CODEX_API_KEY`があるとそのキーで動く（[非対話モード](https://learn.chatgpt.com/docs/non-interactive-mode)） |
+| D: キーリング保存でないことの確認 | `cli_auth_credentials_store`は`file`・`keyring`・`auto`・`ephemeral`（[認証](https://learn.chatgpt.com/docs/auth)の「認証情報の保存」・[設定リファレンス](https://learn.chatgpt.com/docs/config-file/config-reference)）。既定値は公式文書に見当たらず、公開ソース（openai/codex の`codex-rs/config/src/types.rs`の`AuthCredentialsStoreMode`）で`file`。OS の項目名`Codex Auth`は同`codex-rs/login/src/auth/storage.rs`。**ログインしての実機確認はしていない**。`--ignore-user-config`との関係は推測 |
+| E: アカウント側のクレジット・自動リロード | [クレジット（個人プラン）](https://help.openai.com/en/articles/12642688-using-credits-for-flexible-usage-in-chatgpt-personal-plans)（Settings > Usage／Codex アプリの Usage & Billing・自動リロード・「枠を使い切るとクレジットが自動で使われる」）。切り替えの画面の細部・ワークスペース側の場所は**未確認**。pitha は強制できない |
+| F: モデルの退役 | [モデル](https://learn.chatgpt.com/docs/models)の退役の案内（`gpt-5.4`・`gpt-5.5`・`gpt-5.3-codex-spark`などが ChatGPT ログインで退役）。pitha 側: `jevtrialsettings.Arm.Validate`は`model`の長さ（1〜100 文字）だけ。`trial.NewCallers`はアームの設定が変わると呼び出し側を作り直す。アームはライブの判断ごとに読み直す（`trial.Submit`）。停止の記録`jev.trial.codex.halt`は保存では消えない（`jevtrial.Service.Save`は触らない） |
+
+直接 Responses を叩く別経路（SIWC）の公開情報だけの調査は`research/chatgpt-plan-usage-direct-responses.md`（issue #1111。この経路は置き換えない）。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-15 | 新規作成。調べた結果・設計・テスト | issue #1081 |
+| 1.1 | 2026-11-18 | §5「運用手順の根拠」を追加（`setup/ai-providers.md`の運用手順 A〜F の根拠）。SIWC の直接 Responses 経路の調査メモへの参照を追加 | issue #1110 / #1111 |

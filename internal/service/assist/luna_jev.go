@@ -47,9 +47,9 @@ type lunaState struct {
 
 // classifyWithJev classifies item with two Jev choice questions. Jev has no
 // free-text output, so the summary is the headline (code side).
-func (l *Luna) classifyWithJev(ctx context.Context, item NewsItem) (Classification, error) {
+func classifyWithJev(ctx context.Context, jev Asker, item NewsItem) (Classification, error) {
 	state := lunaState{News: LunaRequest{Symbol: item.Symbol, Headline: item.Headline, Body: item.Body, PublishedAt: item.PublishedAt}}
-	result, err := l.jev.Ask(ctx, "luna", state, lunaQuestions)
+	result, err := jev.Ask(ctx, "luna", state, lunaQuestions)
 	if err != nil {
 		return Classification{}, err
 	}

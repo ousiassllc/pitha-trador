@@ -32,8 +32,8 @@ var opusQuestions = map[string]systemone.Question{
 // reviewWithJev asks Jev the adoption question about req and maps the
 // noul answer onto the Opus verdict. Jev returns no free text, so the
 // reason is built from the probability.
-func (o *Opus) reviewWithJev(ctx context.Context, req opusRequest) (OpusResponse, error) {
-	result, err := o.jev.Ask(ctx, "opus", req, opusQuestions)
+func reviewWithJev(ctx context.Context, jev Asker, req opusRequest) (OpusResponse, error) {
+	result, err := jev.Ask(ctx, "opus", req, opusQuestions)
 	if err != nil {
 		return OpusResponse{}, err
 	}
