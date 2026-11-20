@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,31 @@ type notesGate struct {
 
 func (g notesGate) ResearchNotes(ctx context.Context, f researchnote.Filter, limit int) ([]researchnote.Row, error) {
 	return g.gate.ResearchNotes(ctx, f, limit)
+}
+
+// writeMarkup matches anything that would let the research-note section write:
+// a POST form (method or formmethod, any case, quoted or not, spaces around =)
+// or an htmx write attribute. A GET filter form is allowed.
+var writeMarkup = regexp.MustCompile(`(?i)(form)?method\s*=\s*["']?post|hx-(post|put|patch|delete)`)
+
+// The write-markup guard must fire on every spelling it exists to catch, and
+// stay quiet on the GET filter form.
+func TestWriteMarkupGuardCatchesEverySpelling(t *testing.T) {
+	for _, bad := range []string{
+		`<form method="post">`, `<form method='post'>`, `<form method='POST'>`, `<FORM METHOD="POST">`,
+		`<form method = post>`, `<form method=post>`, `<button formmethod="post">`, `<button FORMMETHOD='Post'>`,
+		`<div hx-post="/x">`, `<div HX-POST="/x">`, `<div hx-put="/x">`, `<div HX-Put="/x">`,
+		`<div hx-patch="/x">`, `<div HX-PATCH="/x">`, `<div hx-delete="/x">`, `<div Hx-Delete="/x">`,
+	} {
+		if !writeMarkup.MatchString(bad) {
+			t.Errorf("the guard lets %q through", bad)
+		}
+	}
+	for _, ok := range []string{`<form method="get" hx-get="/settings/mcp/research-notes">`, `<form hx-get="/x">`, `<div hx-get="/x">`} {
+		if writeMarkup.MatchString(ok) {
+			t.Errorf("the guard rejects the read-only %q", ok)
+		}
+	}
 }
 
 // The Settings card loads a read-only research-note list under the write
@@ -87,10 +113,13 @@ func TestResearchNotesSectionIsAReadOnlyList(t *testing.T) {
 			t.Errorf("the list does not contain %q: %s", want, body)
 		}
 	}
-	for _, banned := range []string{"#1095", "1095", "issue", "TODO", `method="post"`, "hx-post", "hx-put", "hx-patch", "hx-delete"} {
+	for _, banned := range []string{"#1095", "1095", "issue", "TODO"} {
 		if strings.Contains(strings.ToLower(body), strings.ToLower(banned)) {
 			t.Errorf("the section contains %q", banned)
 		}
+	}
+	if m := writeMarkup.FindString(body); m != "" {
+		t.Errorf("the section contains write markup %q", m)
 	}
 	// Read-only: there is no write route for notes.
 	if rec := a.post("/settings/mcp/research-notes", url.Values{"question": {"x"}}, true); rec.Code == http.StatusOK {
