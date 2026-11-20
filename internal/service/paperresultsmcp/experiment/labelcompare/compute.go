@@ -44,7 +44,7 @@ func InputOf(c experiment.Comparison, before, after query.Range) Input {
 // Error (limit_exceeded or failed), so the trade-based answer it accompanies is
 // never lost to it.
 func Compute(ctx context.Context, q query.Q, in Input) (Result, error) {
-	res := Result{Caution: Caution, Before: newWindow(in.Before), After: newWindow(in.After)}
+	res := Result{Caution: Caution, IntervalMethod: IntervalMethod, IntervalLagDays: NeweyWestLagDays, Before: newWindow(in.Before), After: newWindow(in.After)}
 	res.Before.Skips, res.After.Skips = skipsOf(in.Rejections[0]), skipsOf(in.Rejections[1])
 	if err := res.read(ctx, q, in); err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
