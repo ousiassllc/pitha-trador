@@ -33,6 +33,7 @@ func TestResearchFXRecordIsReadOnlyByItsRecorderAndTheResearchTools(t *testing.T
 		"internal/bootstrap/researchextrawire/",                    // registers that task (one line)
 		"internal/domain/researchfx/",                              // the record's value types
 		"internal/config/researchfxsettings/",                      // the switch and the pairs
+		"internal/config/researchrecordsettings/",                  // the one view of the FX and index settings that opsettings reaches them through
 		"internal/service/fx/gmo/",                                 // the adapter itself
 		"internal/service/paperresultsmcp/fxdiag/",                 // the read-only MCP queries and the join
 		"internal/service/paperresultsmcp/jev_models_tool.go",      // registers fx_series_summary (next to the other read-only research tools)

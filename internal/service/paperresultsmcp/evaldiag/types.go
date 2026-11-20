@@ -217,6 +217,8 @@ type Cohort struct {
 	LLMByEntry           []EntrySplit `json:"llm_by_entry"`
 	// FXContext is present only when the call names fx_symbol (fxcontext.go).
 	FXContext *FxContext `json:"fx_context,omitempty"`
+	// IndexContext is present only when the call names index_symbol (indexcontext.go).
+	IndexContext *IndexContext `json:"index_context,omitempty"`
 }
 
 // CostBps is the label cost (bps, round trip) of each side.

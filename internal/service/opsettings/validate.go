@@ -247,8 +247,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
-	case isResearchFX(key):
-		return validateResearchFX(key, encoded)
+	case isResearchRecord(key):
+		return validateResearchRecord(key, encoded)
 	case researchonlysettings.IsKey(key):
 		if err := researchonlysettings.Validate(key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
