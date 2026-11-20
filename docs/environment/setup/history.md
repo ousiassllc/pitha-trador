@@ -64,3 +64,4 @@
 | 1.65 | 2026-11-15 | 環境変数`PITHA_CODEX_HOME`・`PITHA_CODEX_BIN`と、ChatGPT のサブスク（Codex CLI のログイン）をトライアルのアームに使う手順を`setup/ai-providers.md`に追加 | issue #1081 |
 | 1.66 | 2026-11-15 | 「J-Quants の取り込み」節と手順書`setup/jquants.md`を追加（API キー`JQUANTS_API_KEY`・契約の内容・1日の要求数の上限・解約時の削除）。環境変数の許可キー一覧に`JQUANTS_API_KEY`を追記 | issue #1093 |
 | 1.67 | 2026-11-18 | `setup/ai-providers.md`の ChatGPT のサブスクの節に、運用手順の詳細（A: 専用`CODEX_HOME`へのデバイスコードのログイン、B: `auth.json`の扱い、C: 子プロセスの環境変数の許可リストと確認、D: キーリング保存でないことの確認、E: アカウント側のクレジット残高・自動リロードの確認、F: モデル退役時の直し方）を追加。既存の最小手順は変えていない | issue #1110 |
+| 1.68 | 2026-11-15 | 自動更新の署名確認を必須にした（`ci.md`のリリース署名）: 公開鍵が埋め込まれていないビルドは署名を確認できないため更新しない（新バージョンの検知は続ける）。リリース前に`RELEASE_SIGNING_PUBLIC_KEY`変数と`RELEASE_SIGNING_KEY`シークレットの両方が設定されている前提を明記 | issue #891 |

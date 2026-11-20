@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
@@ -161,6 +163,52 @@ func TestChecker_CheckForUpdate_EmbeddedPublicKey(t *testing.T) {
 			}
 			if err == nil || result.Ready {
 				t.Fatalf("CheckForUpdate = %+v, %v; want a verification error", result, err)
+			}
+		})
+	}
+}
+
+// Issue #891: a build without an embedded public key cannot verify
+// checksums.txt.sig, so it must refuse to install even a release whose
+// checksums.txt matches (SHA256 alone does not detect a replaced release).
+// The check itself keeps running: it still reports the newer version.
+func TestChecker_CheckForUpdate_NoPublicKeyRefusesUpdate(t *testing.T) {
+	setVersion(t, "v0.1.0")
+	version.ReleasePublicKey = ""
+	checksums := fmt.Sprintf("%s  %s\n", installerChecksum(t), installerName)
+	sig := signChecksums(checksums)
+
+	for name, signature := range map[string]*string{"signed release": &sig, "unsigned release": nil} {
+		t.Run(name, func(t *testing.T) {
+			tmp := t.TempDir()
+			t.Setenv("TMPDIR", tmp)
+			server := signedReleaseMock(t, checksums, signature)
+			var downloads atomic.Int32
+			inner := server.Config.Handler
+			server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/download/") {
+					downloads.Add(1)
+				}
+				inner.ServeHTTP(w, r)
+			})
+
+			checker := newChecker(server, allowGate())
+			result, err := checker.CheckForUpdate(context.Background())
+			if err == nil || result.Ready {
+				t.Fatalf("CheckForUpdate = %+v, %v; want a verification error", result, err)
+			}
+			status := checker.Status()
+			if status.ErrorKind != updater.ErrorVerification {
+				t.Errorf("ErrorKind = %q, want %q (err: %v)", status.ErrorKind, updater.ErrorVerification, err)
+			}
+			if !status.Available || status.Version != "v0.2.0" {
+				t.Errorf("Status = %+v, want the newer release still reported as Available", status)
+			}
+			if n := downloads.Load(); n != 0 {
+				t.Errorf("%d asset downloads, want none before the key is known", n)
+			}
+			if entries, _ := os.ReadDir(tmp); len(entries) != 0 {
+				t.Errorf("temp dir not clean: %d entries", len(entries))
 			}
 		})
 	}

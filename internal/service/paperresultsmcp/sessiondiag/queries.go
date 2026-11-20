@@ -96,6 +96,32 @@ FROM watch_lists l WHERE l.list_date >= ? AND l.list_date < ?`, from, to)
 	return lists, nil
 }
 
+// runtimeWatchListsByDay reads the runtime watch list sizes (watch_list_runtime_days,
+// issue #920) of the JST dates [from, to). A day with several sources reads as the
+// largest one (today only 'ranking' exists). Counts and a source only; no symbol.
+func runtimeWatchListsByDay(ctx context.Context, q query.Q, from, to string) (map[string]WatchListDay, error) {
+	days := map[string]WatchListDay{}
+	rows, err := q.QueryContext(ctx, `
+SELECT session_date, source, entries, peak_entries FROM watch_list_runtime_days
+WHERE session_date >= ? AND session_date < ? ORDER BY session_date, peak_entries`, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("query: runtime watch list sizes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var date, source string
+		var entries, peak int
+		if err := rows.Scan(&date, &source, &entries, &peak); err != nil {
+			return nil, fmt.Errorf("query: scan runtime watch list sizes: %w", err)
+		}
+		days[date] = WatchListDay{Present: true, Source: &source, Entries: entries, PeakEntries: &peak}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query: runtime watch list sizes: %w", err)
+	}
+	return days, nil
+}
+
 // succeededWithoutSnapshot counts the market-data jobs that succeeded on day
 // and left no market_snapshots row for their instrument between their start
 // and finish (the handler stamps the row with its own clock inside that

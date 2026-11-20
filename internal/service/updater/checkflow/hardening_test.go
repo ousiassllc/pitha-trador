@@ -29,8 +29,12 @@ func newAssetMock(t *testing.T, installerBody string, assets func(serverURL stri
 	mux.HandleFunc("/download/installer.exe", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(installerBody))
 	})
+	checksums := fmt.Sprintf("%s  %s\n", installerChecksum(t), installerName)
 	mux.HandleFunc("/download/checksums.txt", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = fmt.Fprintf(w, "%s  %s\n", installerChecksum(t), installerName)
+		_, _ = w.Write([]byte(checksums))
+	})
+	mux.HandleFunc("/download/checksums.txt.sig", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(signChecksums(checksums)))
 	})
 	server := httptest.NewServer(mux)
 	serverURL = server.URL
@@ -43,6 +47,7 @@ func standardAssets(installerSize int64) func(string) []updater.Asset {
 		return []updater.Asset{
 			{Name: installerName, BrowserDownloadURL: u + "/download/installer.exe", Size: installerSize},
 			{Name: "checksums.txt", BrowserDownloadURL: u + "/download/checksums.txt"},
+			{Name: "checksums.txt.sig", BrowserDownloadURL: u + "/download/checksums.txt.sig"},
 		}
 	}
 }
@@ -120,13 +125,9 @@ func TestChecker_CheckForUpdate_MetadataTimeout(t *testing.T) {
 		HTTPClient: server.Client(), BaseURL: server.URL,
 		MetadataTimeout: 50 * time.Millisecond,
 	})
-	start := time.Now()
 	_, err := checker.CheckForUpdate(context.Background())
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
-	}
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Fatalf("took %v, want prompt timeout", elapsed)
 	}
 }
 

@@ -1,8 +1,11 @@
 package updater_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,14 +19,30 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/version"
 )
 
+// testPrivateKey/testPublicKey are a throwaway ed25519 pair derived from a
+// fixed, public test seed; they sign nothing outside these tests.
+var (
+	testPrivateKey = ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))
+	testPublicKey  = testPrivateKey.Public().(ed25519.PublicKey)
+)
+
+// signChecksums is checksums.txt.sig's body for content under testPrivateKey.
+func signChecksums(content string) string {
+	return base64.StdEncoding.EncodeToString(ed25519.Sign(testPrivateKey, []byte(content)))
+}
+
 // setVersion overrides internal/version.Version for the duration of the
 // test (t.Cleanup restores it), since Checker.CheckForUpdate compares the
-// latest release's tag_name against this build-time-embedded global.
+// latest release's tag_name against this build-time-embedded global. It
+// also embeds testPublicKey as internal/version.ReleasePublicKey, as a
+// release build does: a Checker without a key refuses every update (issue
+// #891).
 func setVersion(t *testing.T, v string) {
 	t.Helper()
-	original := version.Version
+	original, originalKey := version.Version, version.ReleasePublicKey
 	version.Version = v
-	t.Cleanup(func() { version.Version = original })
+	version.ReleasePublicKey = base64.StdEncoding.EncodeToString(testPublicKey)
+	t.Cleanup(func() { version.Version, version.ReleasePublicKey = original, originalKey })
 }
 
 // allowGate is a SafeGate every call to SafeToUpdate reports safe for -
@@ -62,6 +81,7 @@ func newGitHubMock(t *testing.T, tagName string, checksumsBody string) *httptest
 			Assets: []updater.Asset{
 				{Name: "pitha-trador-windows-amd64-installer.exe", BrowserDownloadURL: serverURL + "/download/installer.exe"},
 				{Name: "checksums.txt", BrowserDownloadURL: serverURL + "/download/checksums.txt"},
+				{Name: "checksums.txt.sig", BrowserDownloadURL: serverURL + "/download/checksums.txt.sig"},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -73,6 +93,11 @@ func newGitHubMock(t *testing.T, tagName string, checksumsBody string) *httptest
 	mux.HandleFunc("/download/checksums.txt", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(checksumsBody))
 	})
+	// Release authenticity is mandatory (issue #891): the mock signs
+	// checksumsBody with testPrivateKey; setVersion embeds the matching key.
+	mux.HandleFunc("/download/checksums.txt.sig", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(signChecksums(checksumsBody)))
+	})
 
 	server := httptest.NewServer(mux)
 	serverURL = server.URL
@@ -80,6 +105,8 @@ func newGitHubMock(t *testing.T, tagName string, checksumsBody string) *httptest
 	return server
 }
 
+// newChecker relies on setVersion's embedded testPublicKey, the key
+// newGitHubMock signs with.
 func newChecker(server *httptest.Server, gate updater.SafeGate) *updater.Checker {
 	return updater.NewChecker(updater.Config{
 		Owner:      "ousiassllc",

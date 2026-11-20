@@ -36,14 +36,16 @@
 // also publishes checksums.txt.sig, a base64 detached ed25519 signature of
 // checksums.txt made with a GitHub Actions secret, and the matching public
 // key is embedded in the binary (internal/version.ReleasePublicKey,
-// overridable by Config.PublicKey). When a key is configured,
-// downloadAndVerify verifies the signature right after fetching
+// overridable by Config.PublicKey). Verification is mandatory (issue
+// #891): downloadAndVerify verifies the signature right after fetching
 // checksums.txt - before the installer is downloaded or run - and a
 // missing, malformed or mismatching signature (or a malformed key) is a
-// Permanent ErrorVerification that removes every downloaded file. Known
-// limitation: a build without a public key (no signing key provisioned)
-// skips the signature check, logs a warning and relies on SHA256 alone;
-// Authenticode code signing is not implemented.
+// Permanent ErrorVerification that removes every downloaded file. A build
+// without a public key (no signing key provisioned) cannot verify
+// anything, so it logs a warning and refuses to update (ErrorVerification,
+// before any asset is downloaded) instead of trusting SHA256 alone; the
+// check itself keeps running and still reports the newer release in
+// Status. Authenticode code signing is not implemented.
 //
 // A 404 on the latest-release lookup (no release published, or repository
 // not accessible) is not a failure: the check succeeds with Status.NoRelease

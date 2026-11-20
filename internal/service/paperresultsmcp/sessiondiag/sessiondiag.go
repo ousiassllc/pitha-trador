@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/budget"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -27,6 +28,7 @@ type reader struct {
 
 	succeeded, failed, other map[string]int
 	lists                    map[string]WatchListDay
+	runtime                  map[string]WatchListDay // runtime watch list sizes (kabu; issue #920)
 	recorded                 map[string]sessionrecord.Diagnostic
 	// provider is the stored broker selection (BrokerProvider).
 	provider string
@@ -87,6 +89,11 @@ func Read(ctx context.Context, q query.Q, per query.Range, now time.Time) (Diagn
 	}
 	r.lists, err1 = watchListsByDay(soft, q, from.In(query.JST).Format(time.DateOnly), per.To.In(query.JST).Format(time.DateOnly))
 	if _, err := r.try("watch_lists", err1); err != nil {
+		return Diagnostics{}, err
+	}
+
+	r.runtime, err1 = runtimeWatchListsByDay(soft, q, from.In(query.JST).Format(time.DateOnly), per.To.In(query.JST).Format(time.DateOnly))
+	if _, err := r.try("runtime_watch_lists", err1); err != nil {
 		return Diagnostics{}, err
 	}
 
@@ -153,6 +160,11 @@ func (r *reader) sessionDay(day time.Time) (Day, error) {
 	if r.lists != nil {
 		l := r.lists[date]
 		d.WatchList = &l
+		// With kabu the day's runtime watch list size (issue #920) is what the
+		// app really ran with; it replaces the 立花 table's row, which kabu does not write.
+		if rt, ok := r.runtime[date]; ok && r.provider == config.BrokerKabu {
+			d.WatchList = &rt
+		}
 	}
 	if rec, ok := r.recorded[date]; ok {
 		d.Recorded = &rec

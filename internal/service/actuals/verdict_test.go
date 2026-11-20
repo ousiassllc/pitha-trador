@@ -40,7 +40,7 @@ func TestJudge_Boundaries(t *testing.T) {
 	}{
 		{"all at the boundary pass", func(*Stats) {}, StatusPass, CheckTrades, StatusPass},
 		{"99 trades is 判定不能", func(s *Stats) { s.N = c.MinTrades - 1 }, StatusUndetermined, CheckTrades, StatusUndetermined},
-		{"19 days is 判定不能", func(s *Stats) { s.Days = c.MinDays - 1 }, StatusUndetermined, CheckPeriodDays, StatusUndetermined},
+		{"29 days is 判定不能", func(s *Stats) { s.Days = c.MinDays - 1 }, StatusUndetermined, CheckPeriodDays, StatusUndetermined},
 		{"EV lower bound exactly 0 fails", func(s *Stats) { s.EVBps.Lo = 0 }, StatusFail, CheckEVLowerBound, StatusFail},
 		{"EV lower bound just above 0 passes", func(s *Stats) { s.EVBps.Lo = 1e-9 }, StatusPass, CheckEVLowerBound, StatusPass},
 		{"unreliable EV is 判定不能", func(s *Stats) { s.EVBps.Reliable = false }, StatusUndetermined, CheckEVLowerBound, StatusUndetermined},
@@ -253,5 +253,24 @@ func TestJudge_DrawdownCapThroughSummarize(t *testing.T) {
 		if v.Status != tc.want || status(v, CheckMaxDrawdown) != tc.check {
 			t.Errorf("%s: verdict %v, drawdown %v (%.12g%%); want %v, %v", tc.name, v.Status, status(v, CheckMaxDrawdown), s.MaxDrawdownPct.Value, tc.want, tc.check)
 		}
+	}
+}
+
+// The default 合格ライン is pinned: the period floor is 30 trading days (issue
+// #780), the same as the shadow backtest's (assist.MinBacktestDays), and 29
+// days is 判定不能 under the defaults.
+func TestDefaultCriteria_PeriodFloorIs30TradingDays(t *testing.T) {
+	c := DefaultCriteria()
+	if c.MinDays != 30 || c.MinTrades != 100 {
+		t.Fatalf("floor = %d days / %d trades, want 30 / 100 (issue #780 decision)", c.MinDays, c.MinTrades)
+	}
+	s := goodStats()
+	s.Days = 29
+	if got := status(judge(s, 1_000_000, c), CheckPeriodDays); got != StatusUndetermined {
+		t.Errorf("29 days = %v, want 判定不能", got)
+	}
+	s.Days = 30
+	if got := status(judge(s, 1_000_000, c), CheckPeriodDays); got != StatusPass {
+		t.Errorf("30 days = %v, want pass", got)
 	}
 }

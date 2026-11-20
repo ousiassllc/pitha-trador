@@ -12,13 +12,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/service/watchlistsize"
 )
 
-// Start launches every background goroutine this build's composition root owns: the broker session
-// (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
-// worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
-// the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the once-a-minute failed-job
-// summary by error code (jobfailurelog, #803), the trading-hours health alert check (#802) and the MCP order-proposal
+// Start launches every background goroutine this build's composition root owns: the broker session (broker.Session.Start) and PUSH
+// subscription, the candidate-refresh ticker (issue #45), the Scheduler's worker pool + cron triggers (scheduler.Scheduler.Start; Recover
+// first resets jobs a crash left "running"), the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the
+// once-a-minute failed-job summary by error code (jobfailurelog, #803), the trading-hours health alert check (#802), the MCP order-proposal
 // processor (#828), and (with News Ingest) the disclosure skip record (#935). All run until ctx is done or Stop is called.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
@@ -64,6 +64,7 @@ func (s *Services) Start(ctx context.Context) error {
 
 	s.proposalExec.Launch(ctx, &s.wg) // order proposals of the Paper results MCP (issue #828)
 	s.startRankingWatch(ctx)
+	watchlistsize.Start(ctx, &s.wg, s.watchListSizes, s.rankingWatcher != nil, s.watchlist.Len) // kabu only; read-only (issue #920)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
 	s.research.Start(ctx, &s.wg)

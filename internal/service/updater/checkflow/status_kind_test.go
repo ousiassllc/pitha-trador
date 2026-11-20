@@ -46,6 +46,26 @@ func TestChecker_Status_BlockedKindNamesTheFailingGate(t *testing.T) {
 	}
 }
 
+// newUnreachableServer returns a server whose connections are accepted and
+// then dropped without a response, so every request fails at the transport
+// level (a network error). It deliberately stays listening: closing an
+// httptest server frees its ephemeral port, which a server created later in
+// the same test, or by a parallel test process, can be handed - turning the
+// "unreachable" API into a live one and flaking the test under load (#877).
+func newUnreachableServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Errorf("hijack: %v", err)
+			return
+		}
+		_ = conn.Close()
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
 // Each failure class the Settings panel distinguishes (issue #241) must
 // come out of a real failing check as its own ErrorKind.
 func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
@@ -90,6 +110,7 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(updater.Release{TagName: "v0.2.0", Assets: []updater.Asset{
 				{Name: installerName, BrowserDownloadURL: serverURL + "/download/installer.exe"},
 				{Name: "checksums.txt", BrowserDownloadURL: serverURL + "/download/checksums.txt"},
+				{Name: "checksums.txt.sig", BrowserDownloadURL: serverURL + "/download/checksums.txt.sig"},
 			}})
 		})
 		mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
@@ -104,8 +125,7 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		return server
 	}
 
-	unreachable := newGitHubMock(t, "v0.2.0", "")
-	unreachable.Close()
+	unreachable := newUnreachableServer(t)
 
 	cases := []struct {
 		name   string
@@ -142,9 +162,7 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 // A later successful check clears the earlier failure's kind.
 func TestChecker_Status_SuccessClearsErrorKind(t *testing.T) {
 	setVersion(t, "v0.1.0")
-	server := newGitHubMock(t, "v0.1.0", "")
-	checker := newChecker(server, allowGate())
-	server.Close()
+	checker := newChecker(newUnreachableServer(t), allowGate())
 	if _, err := checker.CheckForUpdate(context.Background()); err == nil {
 		t.Fatal("CheckForUpdate err = nil, want a network error")
 	}

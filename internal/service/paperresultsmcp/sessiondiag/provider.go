@@ -52,9 +52,18 @@ func (r *reader) readProvider() string {
 // for none. Only the 立花 adapter writes them (tachibanawatch.Decider); with
 // kabu the table stays empty by design, so an empty day is
 // ObsWatchListNotApplicable, not ObsWatchListEmpty (the kabu watch list lives
-// in memory and is not stored).
+// in memory; only its daily size is stored, issue #920, and the day is then
+// judged from that size).
 func watchListObservation(provider string, l *WatchListDay) string {
 	if l == nil || l.Entries != 0 {
+		return ""
+	}
+	if l.PeakEntries != nil {
+		// A kabu runtime record (issue #920): a real size. 0 all session is a
+		// finding; a nonzero peak means the list was filled and then emptied.
+		if *l.PeakEntries == 0 {
+			return ObsWatchListEmpty
+		}
 		return ""
 	}
 	if provider == config.BrokerKabu {

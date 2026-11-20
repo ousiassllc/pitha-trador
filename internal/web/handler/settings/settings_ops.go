@@ -10,10 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/costpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/entryqualitypanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/researchjobpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
@@ -73,6 +76,8 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 		props.Derived = append(h.bucketDerived(ctx), stockBudgetNoAutoRiseWarning)
 	case "policy-long", "policy-short":
 		props.Derived, props.DerivedTitle = entryqualitypanel.Load(ctx, h.ops, group.id), entryqualitypanel.Title
+	case costGroup.id, tripleBarrierGroupID:
+		props.Derived, props.DerivedTitle = costpanel.Derived(ctx, h.ops), costpanel.Title
 	case metaLabelGroup.id:
 		props.Derived = h.metaLabelDerived(ctx)
 		props.DerivedTitle = "LLM cutoff の状態"
@@ -242,13 +247,19 @@ func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 // derivedSiblings returns the other groups whose 計算結果 panel depends on key
 // and so must be refreshed out-of-band with the saved group's: the daily
 // guard's operating capital sits in the Paper group but feeds the daily
-// guard's panel, and each group's 整合チェック compares the other's values.
+// guard's panel, each group's 整合チェック compares the other's values, and the
+// cost and triple-barrier groups share the cost consistency panel.
 func (h *SettingsHandler) derivedSiblings(ctx context.Context, key string, saved opsGroup) []molecules.SettingGroupProps {
-	if !dailyguardsettings.IsKey(key) && !papersettings.IsKey(key) {
-		return nil
+	var dependents []opsGroup
+	switch {
+	case dailyguardsettings.IsKey(key) || papersettings.IsKey(key):
+		dependents = []opsGroup{dailyGuardGroup, paperRiskGroup}
+	case costsettings.IsKey(key) || barriersettings.IsKey(key):
+		barrier, _ := opsGroupByKey(barriersettings.KeyCostBps)
+		dependents = []opsGroup{costGroup, barrier}
 	}
 	var out []molecules.SettingGroupProps
-	for _, group := range []opsGroup{dailyGuardGroup, paperRiskGroup} {
+	for _, group := range dependents {
 		if group.id != saved.id {
 			out = append(out, h.opsGroupProps(ctx, group, "", ""))
 		}

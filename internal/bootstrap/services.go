@@ -36,6 +36,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/repository/watchlistruntime"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
@@ -112,14 +113,14 @@ type Services struct {
 	newsEnabled   bool
 	researchExtra *researchextrawire.Wire // J-Quants, EDINET and replay (issues #1093, #1096, #1085)
 	candidates    *candidates.Refresher
-	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
-	// (rankingwatch_start.go); tachibanaMonitor is the 立花 counterpart, set
-	// whenever the 立花 adapter is selected (watchlist_start.go).
+	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true (rankingwatch_start.go);
+	// tachibanaMonitor is the 立花 counterpart, set whenever 立花 is selected (watchlist_start.go).
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
-	research         *researchwire.Wire     // the 立花 research-only collections, off by default
-	proposalExec     proposalexec.Processor // the Paper results MCP's order proposals (issue #828)
+	watchListSizes   *watchlistruntime.Repository // kabu runtime watch list size per day (issue #920)
+	research         *researchwire.Wire           // the 立花 research-only collections, off by default
+	proposalExec     proposalexec.Processor       // the Paper results MCP's order proposals (issue #828)
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -198,7 +199,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	}
 	alertChannels := alerts.New(secrets)
 
-	svc := &Services{strategy: state.Strategy}
+	svc := &Services{strategy: state.Strategy, watchListSizes: watchlistruntime.New(state.DB)}
 	svc.buildRepositories(state.DB)
 	svc.researchExtra = researchextrawire.New(state.DB, svc.Settings, secrets, state.Paths.DBPath)
 	svc.wireActivity()

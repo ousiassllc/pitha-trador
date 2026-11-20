@@ -33,7 +33,12 @@ func (c *Checker) downloadAndVerify(ctx context.Context, assets releaseAssets) (
 	case c.publicKeyErr != nil:
 		return "", withKind(ErrorVerification, c.publicKeyErr)
 	case c.publicKey == nil:
-		slog.Warn("updater: no release public key configured; installer authenticity is checked against checksums.txt only")
+		// Issue #891: SHA256 alone only detects corruption, not a replaced
+		// release, so a build that cannot verify the signature never
+		// installs. The check itself keeps running (and keeps reporting
+		// the failure in Status) so a later signed build recovers by itself.
+		slog.Warn("updater: no release public key embedded; refusing to update because checksums.txt.sig cannot be verified")
+		return "", kindErrorf(ErrorVerification, "no release public key is embedded in this build, refusing to install an unverifiable release")
 	case assets.signature.Name == "":
 		return "", kindErrorf(ErrorVerification, "release has no %s, refusing unsigned installer", signatureAssetName)
 	}
@@ -56,14 +61,12 @@ func (c *Checker) downloadAndVerify(ctx context.Context, assets releaseAssets) (
 		return "", fmt.Errorf("download %s: %w", assets.checksums.Name, err)
 	}
 
-	if c.publicKey != nil {
-		sigPath := filepath.Join(dir, signatureAssetName)
-		if err = c.downloadTo(ctx, assets.signature, sigPath, maxSignatureBytes); err != nil {
-			return "", fmt.Errorf("download %s: %w", assets.signature.Name, err)
-		}
-		if err = verifySignature(c.publicKey, checksumsPath, sigPath); err != nil {
-			return "", err
-		}
+	sigPath := filepath.Join(dir, signatureAssetName)
+	if err = c.downloadTo(ctx, assets.signature, sigPath, maxSignatureBytes); err != nil {
+		return "", fmt.Errorf("download %s: %w", assets.signature.Name, err)
+	}
+	if err = verifySignature(c.publicKey, checksumsPath, sigPath); err != nil {
+		return "", err
 	}
 
 	installerPath = filepath.Join(dir, filepath.Base(installerAsset.Name))
