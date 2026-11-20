@@ -19,7 +19,7 @@
 - 枠を残す例外: 入力・セレクト・テキストエリア・チェックボックス・スイッチのトラック（`border-border`）、`:focus-visible` の輪、danger のバナー（40%）、浮かぶ面（モーダルは `border border-line-soft` で、見出し行・フッターの区切りも `border-line-soft`。ツールチップも 1px の枠）。カード・表・サブナビ・バナーに 1px の枠を足さない
 - 入力欄（input・select・textarea）の角は 8px（`rounded-md`）。ピルにしない（チェックボックスだけ 18px の箱なので `rounded-sm`）
 - Kill ボタンは `--danger` の塗りのピル。Jev の「この版をライブに昇格」など、ほかの主操作は `--accent` の主ボタン（`bg-accent text-bone`）
-- 浮いている面（モーダル・ポップオーバー・メニュー）は `--line-soft` の 1px の枠を付ける。ink 塗りのトースト（`bg-ink`）は枠を付けない
+- 浮いている面の枠は今のまま。モーダル・確認ダイアログは `border-line-soft` の 1px（SSR のツールチップは `border-border`、Lit のツールチップは `--line-soft`、ink 塗りのトースト `bg-ink` は枠なし）
 - この節の範囲外: #1039 / #1042 / #1043 は、ブランドガイドの追補待ちのため含めない
 
 ## フォントとタイポグラフィ（issue #941）
