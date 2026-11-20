@@ -31,9 +31,9 @@ func TestRejectReasons_ListedByCountWithLabels(t *testing.T) {
 	if got := inner(t, body, "home-reject-reasons"); !strings.Contains(got, "20 件") {
 		t.Errorf("total missing from %q", got)
 	}
-	// The total is a value line, not a note (brand-guide §2, T3; issue #1006).
-	if !strings.Contains(body, `<p class="text-sm text-mute">計 20 件</p>`) || strings.Contains(body, `<p class="text-xs text-mute">計`) {
-		t.Errorf("the reject total must be text-sm text-mute: %s", body)
+	// The total is a caption line: the 13px note step (app UI 3 steps; issue #1006 / #1139).
+	if !strings.Contains(body, `<p class="text-note text-mute">計 20 件</p>`) || strings.Contains(body, `<p class="text-xs text-mute">計`) {
+		t.Errorf("the reject total must be text-note text-mute: %s", body)
 	}
 }
 
@@ -125,8 +125,8 @@ func TestScan_FunnelAndEmptyState(t *testing.T) {
 	if got := inner(t, body, "scan-cycle-meta"); !strings.Contains(got, "10-20 10:00") {
 		t.Errorf("cycle meta = %q", got)
 	}
-	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="scan-cycle-meta">`) {
-		t.Errorf("cycle meta is a value line and must be text-sm text-mute: %s", body)
+	if !strings.Contains(body, `<p class="text-note text-mute" data-testid="scan-cycle-meta">`) {
+		t.Errorf("cycle meta is a description line and must be text-note text-mute: %s", body)
 	}
 }
 
@@ -184,8 +184,8 @@ func TestModel_AdoptedNotAdoptedAndSkippedRetraining(t *testing.T) {
 	if got := inner(t, body, "model-trained-at"); got != "学習日時 10-19 09:00" {
 		t.Errorf("trained at = %q", got)
 	}
-	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="model-trained-at">`) {
-		t.Errorf("trained-at is a value line and must be text-sm text-mute: %s", body)
+	if !strings.Contains(body, `<p class="text-note text-mute" data-testid="model-trained-at">`) {
+		t.Errorf("trained-at is a timestamp line and must be text-note text-mute: %s", body)
 	}
 	f.source.health.MetaAdopted = false
 	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"
@@ -228,23 +228,23 @@ func TestDetails_IsACollapsibleSectionOnThePage(t *testing.T) {
 }
 
 // The trade and Kill Switch lists are the content of their blocks, not notes:
-// 14px (text-sm), with only the time kept at 12px (brand-guide §2, T3).
+// body text (text-item), with only the time kept as the 13px note (app UI 3 steps).
 func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
 	f := newFixture()
 	f.source.trades = []home.Trade{{Symbol: "7203", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
 	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, 0), Detail: "reason=daily_loss_limit resolved_by=manual"})
 	body := f.mustGet(t, "/home/details")
-	if n := strings.Count(body, `<ul class="flex flex-col gap-1 text-sm">`); n != 2 {
-		t.Errorf("text-sm lists = %d, want 2 (trades, Kill Switch): %s", n, body)
+	if n := strings.Count(body, `<ul class="flex flex-col gap-1 text-item">`); n != 2 {
+		t.Errorf("text-item lists = %d, want 2 (trades, Kill Switch): %s", n, body)
 	}
-	if strings.Contains(body, `<ul class="flex flex-col gap-1 text-xs">`) {
-		t.Errorf("a list must not be 12px: %s", body)
+	if strings.Contains(body, `<ul class="flex flex-col gap-1 text-note">`) || strings.Contains(body, `<ul class="flex flex-col gap-1 text-xs">`) {
+		t.Errorf("a list must not be a note or 12px: %s", body)
 	}
 }
 
 // The proposals block is data, not a note: the status counts and the latest
-// rows are 14px, and only the status and time of a row are 12px (brand-guide
-// §2, T3; issue #958).
+// rows are body text, and only the status and time of a row are the 13px note
+// (app UI 3 steps; issue #958 / #1139).
 func TestDetails_ProposalListsAreBodyText(t *testing.T) {
 	f := newFixture()
 	f.source.proposals = home.Proposals{
@@ -253,14 +253,14 @@ func TestDetails_ProposalListsAreBodyText(t *testing.T) {
 		Latest:   []home.ProposalItem{{ID: 7, Symbol: "7203", Action: "open_long", Status: "received", ReceivedAt: jst(20, 9, 5)}},
 	}
 	body := f.mustGet(t, "/home/details")
-	if !strings.Contains(body, `<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">`) {
-		t.Errorf("status counts are not text-sm: %s", body)
+	if !strings.Contains(body, `<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-item text-ink">`) {
+		t.Errorf("status counts are not text-item: %s", body)
 	}
-	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n < 1 {
-		t.Errorf("latest proposals are not text-sm: %s", body)
+	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-item">`); n < 1 {
+		t.Errorf("latest proposals are not text-item: %s", body)
 	}
-	if !strings.Contains(body, `<span class="text-xs text-mute">`) {
-		t.Errorf("status and time of a row should be the 12px note: %s", body)
+	if !strings.Contains(body, `<span class="text-note text-mute">`) {
+		t.Errorf("status and time of a row should be the 13px note: %s", body)
 	}
 }
 

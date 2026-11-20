@@ -13,7 +13,7 @@ const AttentionBadgeURL = "/home/attention-badge"
 templ AttentionBadge(count int) {
 	if count > 0 {
 		<a
-			class="inline-flex items-center rounded-full border tone-warning px-3 py-1 text-xs"
+			class="inline-flex items-center rounded-pill tone-warning px-3 py-1 text-note"
 			href="/"
 			data-testid="attention-badge"
 			data-count={ strconv.Itoa(count) }

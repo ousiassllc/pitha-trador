@@ -17,16 +17,16 @@ import (
 // these fields).
 templ DecisionHistoryList(decisions []domain.JevDecision) {
 	<section class="mt-12" id="decision-history" data-testid="decision-history">
-		<h2 class="text-2xl font-semibold text-ink">判断の履歴</h2>
-		<table class="mt-6 w-full border-collapse text-left text-sm" aria-label="Jev判断履歴">
+		<h2 class="text-item font-semibold text-ink">判断の履歴</h2>
+		<table class="mt-4 w-full border-collapse text-left text-item" aria-label="Jev判断履歴">
 			<thead>
-				<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
-					<th scope="col" class="px-3 py-2.5">日時</th>
-					<th scope="col" class="px-3 py-2.5">種別</th>
-					<th scope="col" class="px-3 py-2.5">方向</th>
-					<th scope="col" class="px-3 py-2.5 text-right">確信度</th>
-					<th scope="col" class="px-3 py-2.5">相場状態</th>
-					<th scope="col" class="px-3 py-2.5">エントリー品質</th>
+				<tr>
+					<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">日時</th>
+					<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">種別</th>
+					<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">方向</th>
+					<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">確信度</th>
+					<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">相場状態</th>
+					<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">エントリー品質</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -39,7 +39,7 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 }
 
 templ decisionRow(d domain.JevDecision) {
-	<tr class="border-b border-border" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
+	<tr class="border-b border-line-soft last:border-b-0" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
 		<td class="px-3 py-2.5">{ atoms.FormatJST(d.Timestamp) }</td>
 		<td class="px-3 py-2.5">{ d.DecisionType }</td>
 		<td class="px-3 py-2.5">{ nilableString(d.Direction) }</td>

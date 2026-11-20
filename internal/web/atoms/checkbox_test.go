@@ -17,7 +17,7 @@ func TestCheckbox_IsTheGuideBoxNotTheOSControl(t *testing.T) {
 	for _, want := range []string{
 		`type="checkbox"`, `name="kinds"`, `value="trades"`, ` checked`, `data-testid="cb"`,
 		"appearance-none", "h-[18px] w-[18px]", "rounded-sm", "border-mute", "bg-surface",
-		"checked:bg-accent", "after:border-bone", "focus-visible:ring-focus/40", "disabled:opacity-50",
+		"checked:bg-accent", "after:border-bone", "focus-visible:ring-focus/40", "disabled:opacity-40",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Checkbox lacks %q: %s", want, body)

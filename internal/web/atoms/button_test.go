@@ -38,11 +38,12 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		not   string
 	}{
 		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-danger text-bone", "bg-accent text-bone"},
-		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "bg-transparent text-ink not-disabled:hover:bg-accent-soft", "bg-accent text-bone"},
-		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink not-disabled:hover:bg-accent-soft", "border-border"},
-		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
-		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9", "min-h-8"},
-		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
+		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "bg-surface-sel text-ink not-disabled:hover:bg-surface-sel-hover", "border"},
+		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink not-disabled:hover:bg-surface-sel", "border-border"},
+		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8 px-3 text-item", "py-2"},
+		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9 px-3 text-item", "min-h-8"},
+		{"medium", atoms.ButtonProps{}, "min-h-10 px-4 text-item", "text-base"},
+		{"pill", atoms.ButtonProps{}, "rounded-pill", "rounded-md"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

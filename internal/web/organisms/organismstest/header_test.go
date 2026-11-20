@@ -81,7 +81,7 @@ func TestMainNav_MarksOnlyCurrent(t *testing.T) {
 	if !regexp.MustCompile(`<a[^>]*href="/performance"[^>]*aria-current="page"[^>]*>成績</a>`).MatchString(html) {
 		t.Errorf("aria-current not on 成績 link: %s", html)
 	}
-	if !regexp.MustCompile(`class="[^"]*\btext-ink"[^>]*href="/performance"`).MatchString(html) {
+	if !regexp.MustCompile(`class="[^"]*\btext-ink\b[^"]*\bbg-surface-sel"[^>]*href="/performance"`).MatchString(html) {
 		t.Errorf("current link not emphasised: %s", html)
 	}
 	if strings.Contains(renderComponent(t, organisms.MainNav(organisms.NavNone)), "aria-current") {
@@ -101,11 +101,12 @@ func TestMainNav_MarksHomeOnTheHomePage(t *testing.T) {
 	}
 }
 
-// The main nav items follow the guide's menu recipe (brand-guide §3): 8 between
-// items (gap-x-2), each 40 high with 12 left/right (min-h-10, px-3).
+// The main nav items are pills (brand-guide #app-ui): 8 between items
+// (gap-x-2), each 40 high with 16 left/right (min-h-10, px-4), the current
+// one on the --surface-sel ground.
 func TestHeader_NavItemsFollowTheMenuRecipe(t *testing.T) {
 	html := renderComponent(t, organisms.MainNav(organisms.NavScanner))
-	for _, want := range []string{"gap-x-2", `class="inline-flex min-h-10 items-center px-3 text-ink"`, `class="inline-flex min-h-10 items-center px-3 hover:text-ink"`} {
+	for _, want := range []string{"gap-x-2", `class="inline-flex min-h-10 items-center rounded-pill px-4 text-item font-semibold text-ink bg-surface-sel"`, `class="inline-flex min-h-10 items-center rounded-pill px-4 text-item font-semibold text-ink hover:bg-surface-sel"`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("MainNav lacks %q: %s", want, html)
 		}

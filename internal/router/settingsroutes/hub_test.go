@@ -247,7 +247,7 @@ func TestPages_LinkBackToTheHub(t *testing.T) {
 		if body := get(engine, page.Path()).Body.String(); !strings.Contains(body, `data-testid="settings-breadcrumb"`) || !strings.Contains(body, `href="/settings"`) {
 			t.Errorf("%s has no breadcrumb back to /settings", page.Path())
 		}
-		if body := get(engine, page.Path()).Body.String(); !strings.Contains(body, `class="text-sm text-mute print:hidden" data-testid="settings-breadcrumb"`) {
+		if body := get(engine, page.Path()).Body.String(); !strings.Contains(body, `class="text-note text-mute print:hidden" data-testid="settings-breadcrumb"`) {
 			t.Errorf("%s breadcrumb must be print:hidden", page.Path())
 		}
 	}

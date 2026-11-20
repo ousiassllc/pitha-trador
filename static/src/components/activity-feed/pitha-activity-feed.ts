@@ -223,8 +223,8 @@ export class PithaActivityFeed extends LitElement {
       ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-12">
-        <h2 class="mb-6 text-2xl font-semibold text-ink">最近の動き</h2>
-        <div class="mb-2 flex gap-4 text-sm">
+        <h2 class="mb-4 text-item font-semibold text-ink">最近の動き</h2>
+        <div class="mb-2 flex gap-4 text-item">
           <label>
             種別
             <select data-filter="type" class=${lightDomFieldClass} .value=${this.typeFilter} @change=${this.onTypeChange}>
@@ -240,10 +240,10 @@ export class PithaActivityFeed extends LitElement {
             </select>
           </label>
         </div>
-        <table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
-          ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-mute">${formatJstDateTime(this.asOf)} 時点</caption>` : nothing}
+        <table class="w-full border-collapse text-left text-item" aria-label="アクティビティフィード">
+          ${this.asOf ? html`<caption class="mb-2 text-left text-note text-mute">${formatJstDateTime(this.asOf)} 時点</caption>` : nothing}
           <thead>
-            <tr class="border-b border-border text-xs font-semibold text-mute">
+            <tr class="text-note font-normal text-mute">
               <th scope="col" class="px-3 py-2.5">時刻</th>
               <th scope="col" class="px-3 py-2.5">種別</th>
               <th scope="col" class="px-3 py-2.5">銘柄</th>
@@ -254,7 +254,7 @@ export class PithaActivityFeed extends LitElement {
           <tbody>
             ${this.events.map(
               (e) => html`
-                <tr class="border-b border-border" data-event-type=${e.type}>
+                <tr class="border-b border-line-soft last:border-b-0 hover:bg-surface-sel" data-event-type=${e.type}>
                   <td class="px-3 py-2.5">${formatJstDateTime(e.timestamp)}</td>
                   <td class="px-3 py-2.5 text-ink">${activityTypeLabel(e.type)}</td>
                   <td class="px-3 py-2.5 font-mono">${e.symbol ?? '—'}</td>

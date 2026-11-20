@@ -13,19 +13,19 @@ import (
 templ aiSections(props SettingsProps) {
 	if len(props.AIProviders) > 0 {
 		<section aria-labelledby="settings-ai-providers-heading">
-			<h2 id="settings-ai-providers-heading" class="mb-6 flex items-center gap-2 text-2xl font-semibold text-ink">
+			<h2 id="settings-ai-providers-heading" class="mb-4 flex items-center gap-2 text-item font-semibold text-ink">
 				AI のプロバイダー
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-ai-providers", Label: "AI のプロバイダーの説明"}) {
 					AI を呼ぶ先ごとの接続（URL・API キー）です。独自 API は URL とキー（今までの Jev の接続）、OpenRouter は OpenRouter のキーです。どの役割がどちらを使うかは、下の「役割ごとのモデル」で選びます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。
 				}
 			</h2>
-			<p class="mb-3 text-sm text-mute" data-testid="ai-providers-reflect-note">Sol・Opus・Luna は保存後すぐに反映されます。Jev の売買判断は再起動が必要です（独自 API の接続先・キーの変更も再起動後に反映されます）。</p>
+			<p class="mb-3 text-note text-mute" data-testid="ai-providers-reflect-note">Sol・Opus・Luna は保存後すぐに反映されます。Jev の売買判断は再起動が必要です（独自 API の接続先・キーの変更も再起動後に反映されます）。</p>
 			@organisms.ConnectionList(props.AIProviders)
 		</section>
 	}
 	if props.AIRoles && props.Has("modal-ai-roles") {
 		<section aria-labelledby="settings-ai-roles-heading">
-			<h2 id="settings-ai-roles-heading" class="mb-6 text-2xl font-semibold text-ink">役割ごとのモデル</h2>
+			<h2 id="settings-ai-roles-heading" class="mb-4 text-item font-semibold text-ink">役割ごとのモデル</h2>
 			<ul class="flex flex-col gap-3" data-testid="ai-roles-list">
 				@molecules.SettingsCard(molecules.SettingsCardProps{
 					ID:          "ai-roles",

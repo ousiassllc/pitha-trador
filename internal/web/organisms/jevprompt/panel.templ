@@ -64,7 +64,7 @@ type PanelProps struct {
 // answer apart; it never trades. The promotion switches the live prompt and is
 // the only way a version becomes live.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="jev-prompt-panel">
+	<section class="flex flex-col gap-4 rounded-card bg-surface p-card text-item text-ink" data-testid="jev-prompt-panel">
 		<h3 class="sr-only">Jev プロンプトの版とシャドー比較</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>
@@ -73,11 +73,11 @@ templ Panel(props PanelProps) {
 			<p class="text-warning" role="status" data-testid="jev-prompt-not-paper">この動作モードは Paper ではないため、シャドーは動きません。</p>
 		}
 		<dl class="flex flex-col gap-1" data-testid="jev-prompt-live">
-			<dt class="text-ink">ライブの版</dt>
+			<dt class="text-item font-semibold text-ink">ライブの版</dt>
 			<dd><code data-testid="jev-prompt-live-version">{ props.LiveVersion }</code></dd>
 		</dl>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-cost">
-			<span class="flex items-center gap-2 text-ink">
+			<span class="flex items-center gap-2 text-item font-semibold text-ink">
 				シャドーの費用
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cost", Label: "シャドーの費用の説明"}) {
 					費用の合計は、各呼び出しの費用の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
@@ -92,30 +92,30 @@ templ Panel(props PanelProps) {
 			}
 			<span data-testid="jev-prompt-cost-estimated">うち見積り: 今日 <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</span>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</span>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
 			if len(props.Daily) > 0 {
-				<table class="w-full text-left text-sm" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
+				<table class="w-full text-left text-item" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日（JST）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">回数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">日（JST）</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">回数</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">費用（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-note font-normal text-mute">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
-							<tr data-testid="jev-prompt-daily-row"><td class="px-2 py-1.5">{ d.Date }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(d.Calls) }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.USD }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
+							<tr class="border-b border-line-soft last:border-b-0" data-testid="jev-prompt-daily-row"><td class="px-2 py-1.5">{ d.Date }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(d.Calls) }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.USD }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
 						}
 					</tbody>
 				</table>
 			}
 		</div>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-promotions">
-			<span class="text-ink">昇格の記録</span>
+			<span class="text-item font-semibold text-ink">昇格の記録</span>
 			if len(props.Promotions) == 0 {
-				<span class="text-sm text-mute" data-testid="jev-prompt-promotions-empty">昇格の記録はありません。</span>
+				<span class="text-note text-mute" data-testid="jev-prompt-promotions-empty">昇格の記録はありません。</span>
 			} else {
-				<table class="w-full text-left text-sm" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
+				<table class="w-full text-left text-item" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
 					<thead>
-						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">変更元</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前の版</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後の版</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">日時</th><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">変更元</th><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">前の版</th><th scope="col" class="px-2 py-1.5 text-note font-normal text-mute">後の版</th></tr>
 					</thead>
 					<tbody>
 						for _, p := range props.Promotions {
-							<tr data-testid="jev-prompt-promotion-row"><td class="px-2 py-1.5">{ p.At }</td><td class="px-2 py-1.5">{ p.By }</td><td class="px-2 py-1.5"><code>{ p.From }</code></td><td class="px-2 py-1.5"><code>{ p.To }</code></td></tr>
+							<tr class="border-b border-line-soft last:border-b-0" data-testid="jev-prompt-promotion-row"><td class="px-2 py-1.5">{ p.At }</td><td class="px-2 py-1.5">{ p.By }</td><td class="px-2 py-1.5"><code>{ p.From }</code></td><td class="px-2 py-1.5"><code>{ p.To }</code></td></tr>
 						}
 					</tbody>
 				</table>
@@ -131,7 +131,7 @@ templ Panel(props PanelProps) {
 				}
 			</div>
 			<div class="flex flex-col gap-2">
-				<label for="jev-prompt-candidate" class="text-ink">候補の版</label>
+				<label for="jev-prompt-candidate" class="text-item font-semibold text-ink">候補の版</label>
 				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
 					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
 					for _, v := range props.Versions {
@@ -143,13 +143,13 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
-					<label for="jev-prompt-cap" class="text-ink">1 日あたりの費用上限（USD。日本時間の日）</label>
+					<label for="jev-prompt-cap" class="text-item font-semibold text-ink">1 日あたりの費用上限（USD。日本時間の日）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cap", Label: "費用上限の説明"}) {
 						超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。欄を空のまま保存すると既定値が使われます。変えたいときは値を入力して保存してください。保存した値を消して既定値に戻すには、欄を空にして保存します。失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど）は課金されても費用の合計に入らないため、1 日の回数の上限も別にあります。この回数は固定で、この画面では変えられません。
 					}
 				</div>
 				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "w-auto", Attrs: capAttrs(props)})
-				<span class="text-sm text-mute" data-testid="jev-prompt-cap-note">
+				<span class="text-note text-mute" data-testid="jev-prompt-cap-note">
 					if props.CapIsDefault {
 						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</span>（既定値）。
 					} else {
@@ -167,7 +167,7 @@ templ Panel(props PanelProps) {
 			</div>
 		</form>
 		<form class="flex flex-col gap-2" hx-post="/settings/jev-prompt/promote" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" hx-confirm="ライブの Jev プロンプトの版を切り替えます。以後のすべてのライブの判断（取引の入力）が新しい版になります。よろしいですか？" data-testid="jev-prompt-promote-form">
-			<span class="flex items-center gap-2 text-ink">
+			<span class="flex items-center gap-2 text-item font-semibold text-ink">
 				昇格（ライブの版を切り替える）
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-promote", Label: "昇格の説明"}) {
 					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP からの昇格）だけで行われます。昇格は上の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP からも見られます。
@@ -182,7 +182,7 @@ templ Panel(props PanelProps) {
 						}
 					}
 				}
-				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDanger, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
 					この版をライブに昇格
 				}
 			</div>

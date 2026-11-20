@@ -9,24 +9,24 @@ import (
 // PositionPanel is Symbol Detail's "Position" panel: the symbol's open
 // position as a one-row table, or a notice when position is nil.
 templ PositionPanel(position *domain.Position) {
-	<section class="mb-12 rounded-lg border border-border bg-surface p-6" id="position-panel" data-testid="position-panel">
-		<h2 class="mb-6 text-2xl font-semibold text-ink">ポジション</h2>
+	<section class="mb-12 rounded-card bg-surface p-card" id="position-panel" data-testid="position-panel">
+		<h2 class="mb-4 text-item font-semibold text-ink">ポジション</h2>
 		if position == nil {
-			<p class="rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute">保有中のポジションはありません。</p>
+			<p class="rounded-card bg-surface-sel px-6 py-12 text-center text-note text-mute-on-soft">保有中のポジションはありません。</p>
 		} else {
-			<table class="w-full border-collapse text-left text-sm" aria-label="ポジション">
+			<table class="w-full border-collapse text-left text-item" aria-label="ポジション">
 				<thead>
-					<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
-						<th scope="col" class="px-3 py-2.5">銘柄</th>
-						<th scope="col" class="px-3 py-2.5">売買</th>
-						<th scope="col" class="px-3 py-2.5 text-right">数量</th>
-						<th scope="col" class="px-3 py-2.5 text-right">建値</th>
-						<th scope="col" class="px-3 py-2.5 text-right">現在値</th>
-						<th scope="col" class="px-3 py-2.5 text-right">評価損益</th>
-						<th scope="col" class="px-3 py-2.5 text-right">実現損益</th>
-						<th scope="col" class="px-3 py-2.5">建玉日時</th>
-						<th scope="col" class="px-3 py-2.5">決済日時</th>
-						<th scope="col" class="px-3 py-2.5">
+					<tr>
+						<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">銘柄</th>
+						<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">売買</th>
+						<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">数量</th>
+						<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">建値</th>
+						<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">現在値</th>
+						<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">評価損益</th>
+						<th scope="col" class="px-3 py-2.5 text-right text-note font-normal uppercase text-mute">実現損益</th>
+						<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">建玉日時</th>
+						<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">決済日時</th>
+						<th scope="col" class="px-3 py-2.5 text-note font-normal uppercase text-mute">
 							決済理由・操作
 							@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-position-close", Label: "決済の説明"}) {
 								Close は成行で決済します。昼休み・大引け後などの立会時間外は約定しないので決済できません。次の立会で再度お試しください。

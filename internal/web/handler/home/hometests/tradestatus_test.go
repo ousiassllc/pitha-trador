@@ -230,7 +230,7 @@ func TestTradeStatus_DetailIsInk(t *testing.T) {
 	f := newFixture()
 	f.halt = lossLimitHalt()
 	body := f.mustGet(t, "/home/trade-status")
-	if !strings.Contains(body, `<p class="mt-1 text-sm text-ink" data-testid="trade-status-detail">`) {
-		t.Errorf("detail must be text-sm text-ink: %s", body)
+	if !strings.Contains(body, `<p class="mt-1 text-item text-ink" data-testid="trade-status-detail">`) {
+		t.Errorf("detail must be text-item text-ink: %s", body)
 	}
 }

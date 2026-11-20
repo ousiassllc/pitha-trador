@@ -19,10 +19,9 @@ const fieldBox = "h-10 px-3"
 // single-line input's text (do not shave the vertical padding to match it).
 const textareaBox = "p-3"
 
-// fieldFocus is the form focus state (brand-guide C3): --focus border and a
-// 2px --ring (--focus at 40%). `outline-none` is safe only because the ring
-// is always drawn on the same element.
-const fieldFocus = "focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+// fieldFocus is the form focus state: a 2px --focus outline, offset 2, the
+// same as Button and the other focusable parts (not a border plus a 40% halo).
+const fieldFocus = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 
 // InputProps is Input's input. Type is empty for "text". Class carries the
 // layout/spacing classes appended to the shared border style (empty keeps

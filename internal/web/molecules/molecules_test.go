@@ -157,7 +157,7 @@ func TestFieldRows_LabelIsEightAboveTheField(t *testing.T) {
 		"setting": render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L"})),
 		"secret":  render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L"})),
 	} {
-		if !strings.Contains(html, `class="flex flex-col gap-2 text-sm text-ink"`) {
+		if !strings.Contains(html, `class="flex flex-col gap-2 text-item text-ink"`) {
 			t.Errorf("%s row must be gap-2 between label and field: %s", name, html)
 		}
 	}
@@ -206,18 +206,18 @@ func TestFieldRows_HintSitsFourBelowTheInputAndEmptyErrorSlotTakesNoGap(t *testi
 	}
 }
 
-// issue #987: the 計算結果 panel nests inside a card, so it is a --bone panel on --r-md
-// (brand-guide S1/§4) with the small-card padding (16).
-func TestSettingGroupDerived_IsANestedMediumRadiusPanel(t *testing.T) {
+// The 計算結果 panel nests inside a card, so it is a --surface-sel panel on --r-card
+// (brand-guide #app-ui) with the small-card padding (16) and no frame.
+func TestSettingGroupDerived_IsANestedSelectedGroundPanel(t *testing.T) {
 	html := render(t, molecules.SettingGroupDerived(molecules.SettingGroupProps{ID: "g"}, false))
-	if !strings.Contains(html, "rounded-md border border-border bg-bone p-4") || strings.Contains(html, "rounded-lg") {
-		t.Errorf("the derived panel must be rounded-md p-4: %s", html)
+	if !strings.Contains(html, "rounded-card bg-surface-sel p-4") || strings.Contains(html, "border-border") || strings.Contains(html, "rounded-md") {
+		t.Errorf("the derived panel must be a frameless rounded-card bg-surface-sel p-4: %s", html)
 	}
 }
 
-// A settings row's title is neither a heading nor a button, so it is Regular
-// (brand-guide §2 T2: SemiBold is for headings and buttons only; issue #986).
-func TestSettingsCards_NameIsRegular(t *testing.T) {
+// A settings row's title is an item name, so it is text-item SemiBold
+// (brand-guide #app-ui type steps: SemiBold for headings and item names).
+func TestSettingsCards_NameIsItemSemibold(t *testing.T) {
 	card := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", ActionLabel: "設定"}))
 	link := render(t, molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{ID: "l", Name: "画面名", Href: "/x", ActionLabel: "開く"}))
 	for name, html := range map[string]string{"SettingsCard": card, "SettingsLinkCard": link} {
@@ -228,8 +228,11 @@ func TestSettingsCards_NameIsRegular(t *testing.T) {
 		if i := strings.Index(title, "<a "); i >= 0 {
 			title = title[:i]
 		}
-		if strings.Contains(title, "font-semibold") {
-			t.Errorf("%s: the title must be Regular: %s", name, title)
+		if !strings.Contains(title, "text-item font-semibold text-ink") {
+			t.Errorf("%s: the title must be text-item font-semibold: %s", name, title)
+		}
+		if !strings.Contains(html, "rounded-card bg-surface p-card") || strings.Contains(html, "border-border") {
+			t.Errorf("%s: the card must be a frameless rounded-card bg-surface p-card: %s", name, html)
 		}
 	}
 }
@@ -248,32 +251,32 @@ func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
 }
 
 // issue #989 (C6): a connection card's description carries what the operator
-// must do, so it is body text (text-ink), not an auxiliary caption (text-mute).
+// must do, so it is body text (text-item text-ink), not an auxiliary caption (text-mute).
 func TestSettingsCard_DescriptionIsInk(t *testing.T) {
 	html := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", Description: "本番の第二暗証番号は保存できません", ActionLabel: "設定"}))
-	if !strings.Contains(html, `<p class="text-sm text-ink">本番の第二暗証番号は保存できません</p>`) {
-		t.Errorf("description must be text-sm text-ink: %s", html)
+	if !strings.Contains(html, `<p class="text-item text-ink">本番の第二暗証番号は保存できません</p>`) {
+		t.Errorf("description must be text-item text-ink: %s", html)
 	}
 	if strings.Contains(html, "text-mute") {
 		t.Errorf("description must not be text-mute: %s", html)
 	}
 }
 
-// issue #990 (T3): the save/delete outcome is a notice, so its body is text-sm.
+// issue #990 (T3): the save/delete outcome is a notice, so its body is text-item.
 func TestSecretFieldRow_NoticeIsBodySize(t *testing.T) {
 	html := render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L", Notice: "保存しました"}))
-	if !strings.Contains(html, `<p class="text-sm text-success" role="status" data-testid="notice-k">`) {
-		t.Errorf("notice must be text-sm: %s", html)
+	if !strings.Contains(html, `<p class="text-item text-success" role="status" data-testid="notice-k">`) {
+		t.Errorf("notice must be text-item: %s", html)
 	}
 }
 
-// The panel title is a heading (h3 under the modal's h2, text-xl) and a list
+// The panel title is a heading (h3 under the modal's h2, text-item SemiBold) and a list
 // item's label is Regular, told apart by size and colour (brand-guide T2;
 // issue #1005).
 func TestSettingGroupDerived_TitleIsAHeadingAndItemLabelIsRegular(t *testing.T) {
 	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{{Key: "h", Heading: true, Label: "整合チェック"}}}
 	html := render(t, molecules.SettingGroupDerived(props, false))
-	for _, want := range []string{`<h3 class="text-xl font-semibold text-ink">計算結果</h3>`, `<span class="text-base text-ink">整合チェック</span>`} {
+	for _, want := range []string{`<h3 class="text-item font-semibold text-ink">計算結果</h3>`, `<span class="text-item text-ink">整合チェック</span>`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q: %s", want, html)
 		}
@@ -283,17 +286,17 @@ func TestSettingGroupDerived_TitleIsAHeadingAndItemLabelIsRegular(t *testing.T) 
 	}
 }
 
-// issue #1006 (T3): "N/M 項目" is a count the operator reads, so it is text-sm
-// text-mute; only the status pills beside it stay at 12px.
+// issue #1006 (T3): "N/M 項目" is a caption on the --mute ground (text-note
+// text-mute); the status pills beside it are text-note chips.
 func TestSettingCounts_AreValueLinesNotNotes(t *testing.T) {
 	connection := render(t, molecules.ConnectionStatus(molecules.ConnectionProps{ID: "c"}, false))
 	group := render(t, molecules.SettingGroupStatus(molecules.SettingGroupProps{ID: "g"}, false))
 	for name, tc := range map[string]struct{ html, want string }{
-		"ConnectionStatus":   {connection, `<span class="text-sm text-mute">0/0 項目</span>`},
-		"SettingGroupStatus": {group, `<span class="text-sm font-normal text-mute">0/0 項目</span>`},
+		"ConnectionStatus":   {connection, `<span class="text-note font-normal text-mute">0/0 項目</span>`},
+		"SettingGroupStatus": {group, `<span class="text-note font-normal text-mute">0/0 項目</span>`},
 	} {
 		if !strings.Contains(tc.html, tc.want) {
-			t.Errorf("%s: the item count must be text-sm: %s", name, tc.html)
+			t.Errorf("%s: the item count must be text-note: %s", name, tc.html)
 		}
 	}
 }

@@ -107,7 +107,7 @@ func TestResearchNotesSectionIsAReadOnlyList(t *testing.T) {
 	}
 	for _, want := range []string{
 		`data-conclusion="supported"`, `data-conclusion="pending"`, ">支持<", ">保留<", "版 2", "版 1", "2026-10-14 12:30", "2026-10-14 11:30",
-		`<code class="rounded-sm bg-surface px-2">volume</code>`, "根拠リンク 1 件", "コスト控除後は改善せず", "出来高が増えると改善する",
+		`<code class="rounded-pill bg-surface px-3">volume</code>`, "根拠リンク 1 件", "コスト控除後は改善せず", "出来高が増えると改善する",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the list does not contain %q: %s", want, body)

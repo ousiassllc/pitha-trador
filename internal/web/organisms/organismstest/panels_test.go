@@ -60,7 +60,7 @@ func TestRiskAndJevPanels_FiguresAreMonoTabular(t *testing.T) {
 		"risk": renderComponent(t, organisms.RiskPanel(organisms.RiskParams{AllowedPositionPct: 2, StopLossPct: 0.6, TakeProfitPct: 1.2})),
 		"jev":  renderComponent(t, organisms.JevPanel(&domain.JevDecision{ToxicFlow: &toxic})),
 	} {
-		if !strings.Contains(html, `<dd class="text-xl text-ink font-mono tabular-nums">`) {
+		if !strings.Contains(html, `<dd class="text-item text-ink font-mono tabular-nums">`) || strings.Contains(html, "text-xl") {
 			t.Errorf("%s panel figures must be font-mono tabular-nums: %s", name, html)
 		}
 	}
@@ -78,8 +78,8 @@ func TestPositionPanel_CloseNoteIsAHelpMark(t *testing.T) {
 	}
 }
 
-// A card heading is an h2 (32px, brand-guide §2): the 24px gap below it is its
-// own `mb-6` (brand-guide §3 S2; issues #968, #993), so the body carries no
+// A card heading is an h2 at the 15/600 step: the 16px gap below it is its
+// own `mb-4` (brand-guide app UI; issues #968, #993), so the body carries no
 // `mt-*` of its own.
 func TestCardPanels_BodyFollowsTheHeadingTwentyFourPxBelow(t *testing.T) {
 	regime := "trend"
@@ -88,24 +88,24 @@ func TestCardPanels_BodyFollowsTheHeadingTwentyFourPxBelow(t *testing.T) {
 		"jev":      renderComponent(t, organisms.JevPanel(&domain.JevDecision{Regime: &regime})),
 		"position": renderComponent(t, organisms.PositionPanel(nil)),
 	} {
-		if !strings.Contains(html, `<h2 class="mb-6 text-2xl `) {
-			t.Errorf("%s panel: heading is not a 32px h2 with 24px (mb-6) below it: %s", name, html)
+		if !strings.Contains(html, `<h2 class="mb-4 text-item font-semibold text-ink`) {
+			t.Errorf("%s panel: heading is not a text-item h2 with 16px (mb-4) below it: %s", name, html)
 		}
 	}
 }
 
-// The 判断の履歴 heading is an h2 (24px): the table follows 24px below it.
+// The 判断の履歴 heading is an h2 (15/600): the table follows 16px below it.
 func TestDecisionHistoryList_TableFollowsTheH2TwentyFourPxBelow(t *testing.T) {
 	html := renderComponent(t, organisms.DecisionHistoryList(nil))
-	if !strings.Contains(html, `<table class="mt-6 `) {
-		t.Errorf("history table is not 24px (mt-6) below its h2: %s", html)
+	if !strings.Contains(html, `<table class="mt-4 `) {
+		t.Errorf("history table is not 16px (mt-4) below its h2: %s", html)
 	}
 }
 
-// issue #974: an empty state is a dashed frame (brand-guide §3), as on Home.
-func TestPositionPanel_EmptyStateIsADashedFrame(t *testing.T) {
+// An empty state is a surface-sel ground without a frame (brand-guide app UI), as on Home.
+func TestPositionPanel_EmptyStateIsASoftGround(t *testing.T) {
 	html := renderComponent(t, organisms.PositionPanel(nil))
-	if !strings.Contains(html, "rounded-lg border border-dashed border-border") {
-		t.Errorf("the empty position state must be a dashed frame: %s", html)
+	if !strings.Contains(html, "rounded-card bg-surface-sel") || strings.Contains(html, "border-dashed") {
+		t.Errorf("the empty position state must be a surface-sel ground without a dashed frame: %s", html)
 	}
 }

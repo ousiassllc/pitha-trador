@@ -134,9 +134,9 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
     ${renderCutoff(cutoff)}
     <dl class="pitha-calibration-heatmap-summary" data-testid="calibration-metamodel" aria-label="メタラベリングモデル（OOS）">
       <dt>モデル</dt>
-      <dd data-testid="calibration-metamodel-version">${model.version}（${modelAlgorithmLabel(model.algorithm)}）</dd>
+      <dd class="text" data-testid="calibration-metamodel-version">${model.version}（${modelAlgorithmLabel(model.algorithm)}）</dd>
       <dt>状態</dt>
-      <dd data-testid="calibration-metamodel-status">${renderStatus(model)}</dd>
+      <dd class="text" data-testid="calibration-metamodel-status">${renderStatus(model)}</dd>
       <dt>学習日時</dt>
       <dd>${formatJstDateTime(model.trained_at)}</dd>
       <dt>

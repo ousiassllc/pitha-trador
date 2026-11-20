@@ -48,12 +48,12 @@ describe('pitha-kill-switch-panel', () => {
     expect(css).not.toMatch(/background:\s*#/);
     // C4: hover keeps the --danger token (no derived colour), and still
     // out-ranks buttonStyles' accent-soft hover so the white label stays legible.
-    // The visible hover cue is a --ink border, not a derived colour.
+    // The visible hover cue is a --ink inset 1px edge, not a derived colour.
     const hover = css.match(
       /pitha-kill-switch-panel-kill:hover:not\(:disabled\)\s*\{([^}]*)\}/,
     )?.[1];
     expect(hover).toMatch(/background:\s*var\(--danger\)\s*;/);
-    expect(hover).toMatch(/border-color:\s*var\(--ink\)\s*;/);
+    expect(hover).toMatch(/box-shadow:\s*inset 0 0 0 1px var\(--ink\)\s*;/);
     expect(css).not.toContain('color-mix');
   });
 

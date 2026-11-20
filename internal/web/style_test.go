@@ -172,13 +172,14 @@ func TestCompiledInlineAlertExitFadesOut(t *testing.T) {
 // headingTagRe finds an h1-h4 opening tag in a .templ file.
 var headingTagRe = regexp.MustCompile(`<h([1-4])(\s[^>]*)?>`)
 
-// headingSizes is brand-guide §2's heading scale: h1 3xl 40, h2 2xl 32, h3 xl
-// 24, h4 lg 18 (issue #993). The size follows the tag, so the outline and the
-// look cannot drift apart again.
-var headingSizes = map[string]string{"1": "text-3xl", "2": "text-2xl", "3": "text-xl", "4": "text-lg"}
+// headingSizes is the brand-guide "app UI" type scale (3 steps): the page title
+// (h1) is text-title 28 / 700, every section / card / panel heading (h2-h4) is
+// text-item 15 / 600. The size follows the tag, so the outline and the look
+// cannot drift apart again (issues #993, #1141).
+var headingSizes = map[string]string{"1": "text-title", "2": "text-item", "3": "text-item", "4": "text-item"}
 
 // TestTemplHeadingsFollowTheGuideScale is issue #993's regression test: every
-// visible h1-h4 in a .templ file carries the guide's size for its tag
+// visible h1-h4 in a .templ file carries the guide's step for its tag
 // (`sr-only` headings take no size), and the home cards' shared title class
 // (`cardTitleClass`, used on an h3) does too.
 func TestTemplHeadingsFollowTheGuideScale(t *testing.T) {
@@ -206,7 +207,7 @@ func TestTemplHeadingsFollowTheGuideScale(t *testing.T) {
 				continue
 			}
 			if !regexp.MustCompile(`\b` + want + `\b`).MatchString(attrs) {
-				t.Errorf("%s: %q lacks %s (brand-guide §2: h%s = %s)", rel, m[0], want, m[1], want)
+				t.Errorf("%s: %q lacks %s (brand-guide app UI: h%s = %s)", rel, m[0], want, m[1], want)
 			}
 		}
 		return nil
@@ -218,8 +219,8 @@ func TestTemplHeadingsFollowTheGuideScale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cards), `cardTitleClass  = "text-xl font-semibold text-ink"`) {
-		t.Error("homepanels cardTitleClass must be text-xl text-ink (h3 = 24px, brand-guide §2; headings are not --mute, C6, issue #994)")
+	if !strings.Contains(string(cards), `cardTitleClass  = "text-item font-semibold text-ink"`) {
+		t.Error("homepanels cardTitleClass must be text-item font-semibold text-ink (h3 = 15 / 600, brand-guide app UI; headings are not --mute, C6, issue #994)")
 	}
 }
 
@@ -278,18 +279,18 @@ func TestCompiledDarkTokensFollowTheOSAndDataTheme(t *testing.T) {
 	}
 }
 
-// TestCompiledTableHeadingsAreSemiBold pins issue #963 (brand-guide §2/§4):
-// Tailwind's preflight leaves the UA's `th { font-weight: bold }` in place, so
-// without a base rule every <th> renders at 700 whatever its row inherits. Row
-// headings (`scope="row"`) are body text and stay Regular.
-func TestCompiledTableHeadingsAreSemiBold(t *testing.T) {
+// TestCompiledTableHeadingsAreRegular pins issue #963 / #984 (brand-guide #app-ui
+// "表の見出し 13px / 400 mute"): Tailwind's preflight leaves the UA's
+// `th { font-weight: bold }` in place, so without a base rule every <th> renders
+// at 700 whatever its row inherits. Table headings are Regular, and so are row
+// headings (`scope="row"`), which are body text.
+func TestCompiledTableHeadingsAreRegular(t *testing.T) {
 	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
 	if err != nil {
 		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
 	}
 	for _, want := range []string{
-		"th{font-weight:600}",
-		"th[scope=row]{font-weight:400}",
+		"th{font-weight:400}",
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Errorf("compiled stylesheet lacks %q", want)

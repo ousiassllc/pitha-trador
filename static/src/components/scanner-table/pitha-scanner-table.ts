@@ -167,21 +167,21 @@ export class PithaScannerTable extends LitElement {
 
     const items = this.sortedItems();
     return html`
-      <p class="mb-3 text-sm text-mute" data-testid="scanner-count">
+      <p class="mb-3 text-note text-mute" data-testid="scanner-count">
         候補
-        <span class="text-lg font-mono tabular-nums text-ink">${items.length}</span>
+        <span class="text-item font-mono tabular-nums text-ink">${items.length}</span>
         件
         ${renderLightHelpMark('help-scanner-count', '候補銘柄の説明', COUNT_HELP_TEXT)}
       </p>
-      <div class="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
+      <div class="overflow-x-auto rounded-card bg-surface">
+        <table class="w-full border-collapse text-left text-item" aria-label="スキャナー候補">
           ${
             this.asOf
-              ? html`<caption class="border-b border-border px-3 py-2 text-left text-xs text-mute">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `${formatJstDateTime(this.asOf)} 時点`}</caption>`
+              ? html`<caption class="px-3 py-2 text-left text-note text-mute">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `${formatJstDateTime(this.asOf)} 時点`}</caption>`
               : ''
           }
           <thead>
-            <tr class="border-b border-border bg-bone text-xs font-semibold text-mute">
+            <tr class="text-note font-normal text-mute">
               ${COLUMNS.map((column) => this.renderHeader(column))}
             </tr>
           </thead>
@@ -192,7 +192,7 @@ export class PithaScannerTable extends LitElement {
       </div>
       ${
         items.length === 0
-          ? html`<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" role="status" data-testid="scanner-empty">
+          ? html`<p class="mt-3 rounded-card bg-surface-sel px-6 py-12 text-center text-note text-mute-on-soft" role="status" data-testid="scanner-empty">
               現在、条件を満たす候補銘柄はありません。
             </p>`
           : ''
@@ -234,7 +234,7 @@ export class PithaScannerTable extends LitElement {
   private renderRow(item: ScannerItem) {
     const numeric = 'px-3 py-2.5 text-right font-mono tabular-nums';
     return html`
-      <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
+      <tr class="border-b border-line-soft last:border-b-0 hover:bg-surface-sel" data-symbol=${item.symbol}>
         <td class="px-3 py-2.5 font-mono">
           <a class="text-accent underline decoration-mute" href=${item.detail_url}>${item.symbol}</a>
         </td>

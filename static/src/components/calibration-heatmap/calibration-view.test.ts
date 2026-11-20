@@ -66,10 +66,10 @@ describe('heatmapColors', () => {
 describe('bucketColors', () => {
   const emptyBand = { sample_count: 0, direction_accuracy: 0 } as CalibrationBucket;
 
-  test('uses the flat --bone background and --mute text for a band without samples', () => {
+  test('uses the flat --surface-sel background and --mute-on-soft text for a band without samples', () => {
     const colors = bucketColors(emptyBand);
     expect(colors.background).toBe(NO_DATA_COLOR);
-    expect(colors.color).toBe('var(--mute)');
+    expect(colors.color).toBe('var(--mute-on-soft)');
     expect(colors.background).not.toBe(heatmapColors(0).background);
   });
 

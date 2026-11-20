@@ -44,7 +44,7 @@ type ArmEditorProps struct {
 templ ArmEditor(props ArmEditorProps) {
 	<div id="jev-trial-arm-editor" class="flex flex-col gap-3" data-testid="jev-trial-arms">
 		if len(props.Fields) == 0 {
-			<p class="text-sm text-mute" data-testid="jev-trial-arm-fields-empty">アームはありません。</p>
+			<p class="text-note text-mute" data-testid="jev-trial-arm-fields-empty">アームはありません。</p>
 		}
 		for i, f := range props.Fields {
 			@armCard(i, f, props.PromptVersions)
@@ -58,8 +58,8 @@ templ ArmEditor(props ArmEditorProps) {
 }
 
 templ armCard(i int, f ArmField, versions []string) {
-	<fieldset class="flex flex-col gap-3 rounded-md border border-border p-3" data-testid="jev-trial-arm-field-row">
-		<legend class="px-1 text-sm text-mute">アーム { strconv.Itoa(i + 1) }</legend>
+	<fieldset class="flex flex-col gap-3 rounded-card bg-surface-sel p-4" data-testid="jev-trial-arm-field-row">
+		<legend class="px-1 text-item font-semibold text-ink">アーム { strconv.Itoa(i + 1) }</legend>
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 			@armLabel(i, "id", "アーム名") {
 				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "id"), Name: armName(i, "id"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.ID, "required": true, "maxlength": "48", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-id"}})
@@ -89,7 +89,7 @@ templ armCard(i int, f ArmField, versions []string) {
 				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "list_price_usd_per_mtok"), Name: armName(i, "list_price_usd_per_mtok"), Class: "w-full", Attrs: templ.Attributes{"value": f.ListPrice, "inputmode": "decimal", "placeholder": "不明", "autocomplete": "off", "data-testid": "jev-trial-arm-list-price"}})
 			}
 			@armLabel(i, "provider_only", "送り先の提供元（カンマ区切り）") {
-				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "provider_only"), Name: armName(i, "provider_only"), Class: "w-full font-mono", Attrs: templ.Attributes{"value": f.ProviderOnly, "placeholder": "指定しない", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-provider-only"}})
+				@atoms.Input(atoms.InputProps{ID: armDOMID(i, "provider_only"), Name: armName(i, "provider_only"), Class: "w-full font-mono placeholder:font-sans", Attrs: templ.Attributes{"value": f.ProviderOnly, "placeholder": "指定しない", "autocomplete": "off", "spellcheck": "false", "data-testid": "jev-trial-arm-provider-only"}})
 			}
 			@armLabel(i, "data_collection", "データの扱い") {
 				@atoms.Select(atoms.SelectProps{ID: armDOMID(i, "data_collection"), Name: armName(i, "data_collection"), Class: "w-full", Attrs: templ.Attributes{"data-testid": "jev-trial-arm-data-collection"}}) {
@@ -118,7 +118,7 @@ templ armCard(i int, f ArmField, versions []string) {
 
 templ armLabel(i int, field, text string) {
 	<div class="flex flex-col gap-1">
-		<label for={ armDOMID(i, field) } class="text-sm text-ink">{ text }</label>
+		<label for={ armDOMID(i, field) } class="text-item font-semibold text-ink">{ text }</label>
 		{ children... }
 	</div>
 }

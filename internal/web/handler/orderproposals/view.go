@@ -52,8 +52,8 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 		{Label: "損切り価格（案）", Value: optYen(s.StopLossPrice)},
 		{Label: "利確価格（案）", Value: optYen(s.TakeProfitPrice)},
 		{Label: "適用された損切り価格", Value: optYen(s.EffectiveStopLossPrice), Help: "提案の損切り価格と、アプリが定めた損切り価格のうち、遠い方です。"},
-		{Label: "決済の約定は損切りに届いたか", Value: reached(r.StopLossReached)},
-		{Label: "決済の約定は利確に届いたか", Value: reached(r.TakeProfitReached)},
+		{Label: "決済の約定は損切りに届いたか", Value: reached(r.StopLossReached), Text: true},
+		{Label: "決済の約定は利確に届いたか", Value: reached(r.TakeProfitReached), Text: true},
 	}
 	p.Loss = []pages.ProposalField{
 		{Label: "AIの見込み", Value: optYen(r.MaxLoss.ProposedJPY), Help: "AIが提案で見込んだ最大損失です。"},
@@ -79,8 +79,8 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 func linked(r proposal.Result, status string) []pages.ProposalLinked {
 	var out []pages.ProposalLinked
 	if sg := r.Signal; sg != nil {
-		risk := pages.ProposalField{Label: "リスク判定", Value: passed(sg.RiskPassed)}
-		reject := pages.ProposalField{Label: "拒否の理由", Value: reasonName(deref(sg.RejectCode))}
+		risk := pages.ProposalField{Label: "リスク判定", Value: passed(sg.RiskPassed), Text: true}
+		reject := pages.ProposalField{Label: "拒否の理由", Value: reasonName(deref(sg.RejectCode)), Text: true}
 		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards
 			risk.Value, reject.Label = laterRejection, "理由"
 		} else if end, ok := afterRiskEnd[status]; ok && !sg.RiskPassed { // passed Risk, no order came of it for another reason
@@ -94,8 +94,8 @@ func linked(r proposal.Result, status string) []pages.ProposalLinked {
 	}
 	if o := r.Order; o != nil {
 		out = append(out, pages.ProposalLinked{Title: labels.Numbered("注文", o.ID), Fields: []pages.ProposalField{
-			{Label: "売買 / 種別", Value: named(sideNames, o.Side) + " / " + named(orderTypeNames, o.OrderType)},
-			{Label: "状態", Value: named(orderStatusNames, o.Status)},
+			{Label: "売買 / 種別", Value: named(sideNames, o.Side) + " / " + named(orderTypeNames, o.OrderType), Text: true},
+			{Label: "状態", Value: named(orderStatusNames, o.Status), Text: true},
 			{Label: "数量", Value: shares(o.Quantity)},
 			{Label: "発注（JST）", Value: jst(o.SubmittedAt)},
 			{Label: "約定（JST）", Value: optJST(o.FilledAt)},
@@ -109,13 +109,13 @@ func linked(r proposal.Result, status string) []pages.ProposalLinked {
 			status = "決済済み"
 		}
 		out = append(out, pages.ProposalLinked{Title: labels.Numbered("ポジション", pos.ID), Fields: []pages.ProposalField{
-			{Label: "状態", Value: status},
+			{Label: "状態", Value: status, Text: true},
 			{Label: "数量", Value: shares(pos.Quantity)},
 			{Label: "建値", Value: yen(pos.EntryPrice)},
 			{Label: "建玉（JST）", Value: jst(pos.OpenedAt)},
 			{Label: "決済（JST）", Value: optJST(pos.ClosedAt)},
 			{Label: "決済価格", Value: optYen(pos.ExitPrice)},
-			{Label: "決済理由", Value: exitReasonName(pos.ExitReason)},
+			{Label: "決済理由", Value: exitReasonName(pos.ExitReason), Text: true},
 			{Label: "保有時間", Value: minutes(pos.HoldingMinutes)},
 			{Label: "手数料", Value: optYen(pos.FeesJPY), Help: "買いと売りの合計です。"},
 			{Label: "実現損益", Value: optYen(pos.RealizedPnl), Sign: sign(pos.RealizedPnl)},

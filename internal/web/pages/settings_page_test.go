@@ -290,11 +290,11 @@ func TestSetupPage_ContinueLinkOnlyWhenComplete(t *testing.T) {
 	}
 }
 
-// issue #974: the #update-panel target ring has the same radius as the card inside it.
+// issue #974: the #update-panel target ring has the card's radius (rounded-card, 16px).
 func TestSettingsPage_UpdatePanelRingMatchesTheCardRadius(t *testing.T) {
 	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
-	if !strings.Contains(body, `id="update-panel" class="scroll-mt-4 rounded-lg target:ring-1`) {
-		t.Errorf("#update-panel wrapper must be rounded-lg: %s", body)
+	if !strings.Contains(body, `id="update-panel" class="scroll-mt-4 rounded-card target:ring-1`) {
+		t.Errorf("#update-panel wrapper must be rounded-card: %s", body)
 	}
 }
 
@@ -306,17 +306,17 @@ func TestSetupPage_StepsParagraphIsInk(t *testing.T) {
 	if form < 0 {
 		t.Fatalf("SetupPage lacks setup-form: %s", body)
 	}
-	if !strings.Contains(body[form:], `<p class="text-sm text-ink">`) {
-		t.Errorf("setup steps paragraph must be text-sm text-ink: %s", body[form:])
+	if !strings.Contains(body[form:], `<p class="text-item text-ink">`) {
+		t.Errorf("setup steps paragraph must be text-item text-ink: %s", body[form:])
 	}
 }
 
-// issue #991 (S2): each section's h2 is followed by 24px (mb-6), not the 12px
-// gap-3 of the section's flex column.
+// issue #991 (S2): each section's h2 is followed by 16px (mb-4) of the app UI
+// scale, not the 12px gap-3 of the section's flex column.
 func TestSettingsPage_SectionH2HasTheH2GapBelow(t *testing.T) {
 	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
-	if !strings.Contains(body, `<h2 id="settings-connections-heading" class="mb-6 `) {
-		t.Errorf("connections h2 must be mb-6: %s", body)
+	if !strings.Contains(body, `<h2 id="settings-connections-heading" class="mb-4 `) {
+		t.Errorf("connections h2 must be mb-4: %s", body)
 	}
 	if strings.Contains(body, `<section class="flex flex-col gap-3" aria-labelledby="settings-`) {
 		t.Errorf("a section still stacks its h2 with gap-3: %s", body)

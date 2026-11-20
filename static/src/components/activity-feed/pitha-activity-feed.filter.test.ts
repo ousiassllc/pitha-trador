@@ -105,9 +105,8 @@ describe('pitha-activity-feed filter selects', () => {
       for (const cls of [
         'rounded-md',
         'border-border',
-        'focus-visible:border-focus',
-        'focus-visible:ring-2',
-        'focus-visible:ring-focus/40',
+        'focus-visible:outline-2',
+        'focus-visible:outline-focus',
       ]) {
         expect(select.classList.contains(cls)).toBe(true);
       }

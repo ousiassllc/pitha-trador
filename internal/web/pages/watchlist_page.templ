@@ -19,27 +19,27 @@ import (
 // renders it; it is server-rendered only (no island).
 templ WatchlistPage(view domain.WatchListView) {
 	@layout.Shell("監視リスト", organisms.NavScanner) {
-		<h1 class="text-3xl font-semibold text-ink">
+		<h1 class="text-title font-bold text-ink">
 			監視リスト
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist", Label: "監視リストの説明"}) {
 				立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。
 			}
 		</h1>
-		<p class="mt-2 text-sm text-ink">
+		<p class="mt-2 text-item text-ink">
 			設定は
 			<a class="text-accent underline decoration-mute" href="/settings/broker">設定 ＞ 証券会社・データ</a>
 			で変更できます。
 		</p>
 		@molecules.TabNav("候補銘柄のタブ", candidateTabs(tabWatchlist))
 		if !view.Enabled {
-			<p class="mt-6 rounded-md border border-border bg-bone px-4 py-3 text-sm text-ink" data-testid="watchlist-disabled">
+			<p class="mt-6 rounded-card bg-surface px-4 py-3 text-item text-ink" data-testid="watchlist-disabled">
 				監視リストは立花証券を選択しているときだけ確定されます。
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist-disabled", Label: "監視リストが使われない場合の説明"}) {
 					kabuステーションを選択しているときは、監視リストの代わりにランキング監視（/ranking）を使います。
 				}
 			</p>
 		} else if len(view.Lists) == 0 {
-			<p class="mt-6 rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-mute" data-testid="watchlist-empty">
+			<p class="mt-6 rounded-card bg-surface-sel px-6 py-12 text-center text-item text-mute-on-soft" data-testid="watchlist-empty">
 				確定済みの監視リストはありません。最初の夜間バッチ（日足取得）の後に作られます。
 			</p>
 		}
@@ -51,42 +51,42 @@ templ WatchlistPage(view domain.WatchListView) {
 
 templ watchlistSection(list domain.WatchList, active bool) {
 	<section class="mt-12" data-testid="watchlist" data-list-date={ list.ListDate } data-source={ list.Source } data-active={ strconv.FormatBool(active) }>
-		<h2 class="mb-6 text-2xl font-semibold text-ink">
+		<h2 class="mb-4 text-item font-semibold text-ink">
 			{ list.ListDate } の監視リスト
 			if active {
-				<span class="ml-2 rounded-full border tone-success px-2 py-1 text-xs" data-testid="watchlist-active">使用中</span>
+				<span class="ml-2 rounded-pill tone-success px-3 py-1 text-note" data-testid="watchlist-active">使用中</span>
 			}
 			if list.Fallback() {
-				<span class="ml-2 rounded-full border tone-warning px-2 py-1 text-xs" data-testid="watchlist-fallback">代替リスト</span>
+				<span class="ml-2 rounded-pill tone-warning px-3 py-1 text-note" data-testid="watchlist-fallback">代替リスト</span>
 			}
 		</h2>
-		<dl class="grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
-			<dt class="">確定方法</dt>
-			<dd>{ label(watchSourceLabels, list.Source) }</dd>
+		<dl class="grid gap-x-4 gap-y-1 text-ink sm:grid-cols-[max-content_1fr]">
+			<dt class="text-note text-mute">確定方法</dt>
+			<dd class="text-item">{ label(watchSourceLabels, list.Source) }</dd>
 			if list.BasisDate != "" {
-				<dt class="">基準日（日足）</dt>
-				<dd>{ list.BasisDate }</dd>
+				<dt class="text-note text-mute">基準日（日足）</dt>
+				<dd class="text-item">{ list.BasisDate }</dd>
 			}
-			<dt class="">確定時刻</dt>
-			<dd>{ atoms.FormatJST(list.DecidedAt) }</dd>
-			<dt class="">内容</dt>
-			<dd>{ list.Reason }</dd>
-			<dt class="">銘柄数</dt>
-			<dd>{ strconv.Itoa(len(list.Entries)) } 件</dd>
+			<dt class="text-note text-mute">確定時刻</dt>
+			<dd class="text-item">{ atoms.FormatJST(list.DecidedAt) }</dd>
+			<dt class="text-note text-mute">内容</dt>
+			<dd class="text-item">{ list.Reason }</dd>
+			<dt class="text-note text-mute">銘柄数</dt>
+			<dd class="text-item">{ strconv.Itoa(len(list.Entries)) } 件</dd>
 		</dl>
-		<table class="mt-3 w-full text-left text-sm">
+		<table class="mt-3 w-full text-left text-item">
 			<caption class="sr-only">{ list.ListDate } の監視銘柄一覧</caption>
-			<thead class="border-b border-border text-xs text-mute">
+			<thead class="text-note text-mute">
 				<tr>
-					<th scope="col" class="px-3 py-2.5 text-right">順</th>
-					<th scope="col" class="px-3 py-2.5">銘柄</th>
-					<th scope="col" class="px-3 py-2.5">枠の由来</th>
-					<th scope="col" class="px-3 py-2.5">選ばれた指標</th>
+					<th scope="col" class="px-3 py-2.5 text-right font-normal">順</th>
+					<th scope="col" class="px-3 py-2.5 font-normal">銘柄</th>
+					<th scope="col" class="px-3 py-2.5 font-normal">枠の由来</th>
+					<th scope="col" class="px-3 py-2.5 font-normal">選ばれた指標</th>
 				</tr>
 			</thead>
 			<tbody>
 				for i, e := range list.Entries {
-					<tr class="border-b border-border" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
+					<tr class="border-b border-line-soft last:border-b-0" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
 						<td class="px-3 py-2.5 text-right font-mono tabular-nums text-mute">{ strconv.Itoa(i + 1) }</td>
 						<td class="px-3 py-2.5 font-mono">
 							<a class="text-accent underline decoration-mute" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>

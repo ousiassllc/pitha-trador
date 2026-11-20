@@ -9,11 +9,11 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 templ periodSelector(p Period) {
 	<div class="mt-4 flex flex-wrap items-end gap-4" data-testid="evaluation-period">
 		<form class="flex flex-wrap items-end gap-4" method="get" action="/performance">
-			<div class="flex flex-col text-sm text-ink">
+			<div class="flex flex-col text-item font-semibold text-ink">
 				<label for="evaluation-from">評価期間の開始日</label>
 				@atoms.Input(atoms.InputProps{ID: "evaluation-from", Name: "eval_from", Type: "date", Class: "mt-2", Attrs: templ.Attributes{"value": p.From}})
 			</div>
-			<div class="flex flex-col text-sm text-ink">
+			<div class="flex flex-col text-item font-semibold text-ink">
 				<label for="evaluation-to">終了日</label>
 				@atoms.Input(atoms.InputProps{ID: "evaluation-to", Name: "eval_to", Type: "date", Class: "mt-2", Attrs: templ.Attributes{"value": p.To}})
 			</div>
@@ -21,7 +21,7 @@ templ periodSelector(p Period) {
 				期間を指定して表示
 			}
 		</form>
-		<ul class="flex flex-wrap gap-3 text-sm">
+		<ul class="flex flex-wrap gap-3 text-item">
 			for _, l := range p.Links {
 				<li>
 					if l.Current {
@@ -33,7 +33,7 @@ templ periodSelector(p Period) {
 			}
 		</ul>
 		if p.Error != "" {
-			<p class="w-full rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="evaluation-period-error">{ p.Error }</p>
+			<p class="w-full border banner-danger text-item" role="alert" data-testid="evaluation-period-error">{ p.Error }</p>
 		}
 	</div>
 }

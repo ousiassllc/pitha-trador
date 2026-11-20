@@ -4,6 +4,7 @@
 @import "tailwindcss";
 @import "./table.css" layer(base);
 @import "./dark.css";
+@import "./tone.css";
 
 /* internal/web (Templ templates) lives outside static/, so it falls
    outside Tailwind's automatic content detection root; register it
@@ -26,6 +27,16 @@
   --mute: #6b6b6e;
   --surface: #ffffff;
   --border: #e7e7e5;
+  /* App-UI surfaces (brand-guide #app-ui): areas are told apart by ground, not
+     by a 1px line. --surface-sel is the selected / hover / nested ground (Dark
+     is in dark.css). The rest derive from tokens: --line-soft the faint row
+     divider, --mute-on-soft is --mute for 13px text on --surface-sel (Light
+     --mute there is 4.45:1, under AA), --surface-sel-hover the quiet button's
+     hover. */
+  --surface-sel: #ebebea;
+  --line-soft: color-mix(in srgb, var(--accent) 6%, transparent);
+  --mute-on-soft: color-mix(in srgb, var(--mute) 85%, var(--ink));
+  --surface-sel-hover: color-mix(in srgb, var(--ink) 8%, var(--surface-sel));
   --accent: #050505;
   --accent-soft: #e7e7e5;
   --focus: #4a72d0;
@@ -43,6 +54,10 @@
   --r-lg: 0.75rem;
   --r-xl: 1rem;
   --r-full: 9999px;
+  /* App-UI shapes: a face (card, table, banner) is 16px, a button / chip /
+     selected nav item is a 999px pill. The two shapes are all there is. */
+  --r-card: 1rem;
+  --r-pill: 999px;
 
   /* Motion (brand-guide §5): fast 120 (hover, press), base 180 (state
      changes), slow 280 (ripple), fade-in 320 (modal, tooltip, toast, alert),
@@ -100,12 +115,28 @@
   --text-3xl: 2.5rem;
   --text-3xl--line-height: 1.3;
 
+  /* The three steps of an app screen (brand-guide #app-ui): title 28 / 700,
+     item 15 / 600 (headings, buttons, nav; body text is Regular) and note
+     13 / 400 --mute. Templates use these, not xs..3xl; the scale above stays
+     for long-form text. Weight and colour are font-* and text-* classes. */
+  --text-title: 1.75rem;
+  --text-title--line-height: 1.4;
+  --text-item: 0.9375rem;
+  --text-item--line-height: 1.6;
+  --text-note: 0.8125rem;
+  --text-note--line-height: 1.6;
+
+  /* Card inner padding (brand-guide: 20 to 24, standard 22): `p-card`. */
+  --spacing-card: 1.375rem;
+
   /* Radii (brand-guide §3): the `rounded-*` utilities read the guide's --r-*
      tokens defined on :root, which Lit shadow roots read too. */
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
+  --radius-card: var(--r-card);
+  --radius-pill: var(--r-pill);
 
   /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
      and toasts are separated by a 1px border and carry no shadow. */
@@ -136,6 +167,10 @@
   --color-mute: var(--mute);
   --color-surface: var(--surface);
   --color-border: var(--border);
+  --color-surface-sel: var(--surface-sel);
+  --color-surface-sel-hover: var(--surface-sel-hover);
+  --color-line-soft: var(--line-soft);
+  --color-mute-on-soft: var(--mute-on-soft);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-focus: var(--focus);
@@ -143,42 +178,6 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
-}
-
-/* Status pill / inline alert tone (brand-guide §1 "ステータスのピル・バッジ"):
-   text in the state token, border 40% and fill 10% of it. Callers add the
-   shape (`border`, radius, padding); the colors live here once. `mute` is
-   the neutral tone ("下書き" / not-yet-judged); its text is --ink, because
-   --mute text on the 10% mute fill over --bone is 4.30:1 in Light, under
-   AA 4.5:1 (issue #1022). */
-@utility tone-success {
-  border-color: color-mix(in srgb, var(--success) 40%, transparent);
-  background-color: color-mix(in srgb, var(--success) 10%, transparent);
-  color: var(--success);
-}
-
-@utility tone-warning {
-  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
-  background-color: color-mix(in srgb, var(--warning) 10%, transparent);
-  color: var(--warning);
-}
-
-@utility tone-danger {
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
-  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
-  color: var(--danger);
-}
-
-@utility tone-info {
-  border-color: color-mix(in srgb, var(--info) 40%, transparent);
-  background-color: color-mix(in srgb, var(--info) 10%, transparent);
-  color: var(--info);
-}
-
-@utility tone-mute {
-  border-color: color-mix(in srgb, var(--mute) 40%, transparent);
-  background-color: color-mix(in srgb, var(--mute) 10%, transparent);
-  color: var(--ink);
 }
 
 /* Body copy is base (16px) at the guide's 1.8 line height; the Japanese

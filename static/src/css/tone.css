@@ -1,0 +1,123 @@
+/* Status chips and banners (brand-guide #app-ui). Imported by app.css; the
+   utilities read the :root tokens, so Light and Dark need no copy here. */
+
+/* Status chip / pill tone (brand-guide §1 "ステータスのピル・バッジ"): text in
+   the state token on a 10% fill of it. Callers add the shape (`rounded-pill`,
+   padding) and no frame: chips carry no 1px border in the app UI. */
+@utility tone-success {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+@utility tone-warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  background-color: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--warning);
+}
+
+@utility tone-danger {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+@utility tone-info {
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+  background-color: color-mix(in srgb, var(--info) 10%, transparent);
+  color: var(--info);
+}
+
+/* Neutral chip ("下書き" / not-yet-judged): the --surface-sel ground with
+   --mute-on-soft text (--mute on --surface-sel is 4.45:1 in Light, under AA
+   4.5:1; --mute-on-soft is the guide's fix). Replaces issue #1022's --ink text
+   on a 10% fill. */
+@utility tone-mute {
+  border-color: transparent;
+  background-color: var(--surface-sel);
+  color: var(--mute-on-soft);
+}
+
+/* Banner (brand-guide #app-ui, 1. "線ではなく濃さで分ける"): an alert or notice
+   sits on --surface-sel with 16px corners and --ink text, and no 1px frame.
+   The state shows only as a leading dot in the state token (the text says it
+   too, so colour is never the only cue). A danger banner alone keeps its 40%
+   frame (`border banner-danger`). The utility owns the padding (16 / 12 and 36
+   on the left for the dot) so the dot lines up with the first line of a 15px
+   body; callers add only the layout (`flex`, `mt-*`) and the type step. */
+@utility banner-success {
+  position: relative;
+  border-radius: var(--r-card);
+  background-color: var(--surface-sel);
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  color: var(--ink);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 1.25rem;
+    left: 1rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--success);
+  }
+}
+
+@utility banner-warning {
+  position: relative;
+  border-radius: var(--r-card);
+  background-color: var(--surface-sel);
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  color: var(--ink);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 1.25rem;
+    left: 1rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--warning);
+  }
+}
+
+@utility banner-info {
+  position: relative;
+  border-radius: var(--r-card);
+  background-color: var(--surface-sel);
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  color: var(--ink);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 1.25rem;
+    left: 1rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--info);
+  }
+}
+
+@utility banner-danger {
+  position: relative;
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: var(--r-card);
+  background-color: var(--surface-sel);
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  color: var(--ink);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 1.25rem;
+    left: 1rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--danger);
+  }
+}

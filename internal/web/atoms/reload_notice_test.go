@@ -28,7 +28,7 @@ func TestReloadNotice_IsSilentPersistentAndKeyboardOperable(t *testing.T) {
 	if !strings.Contains(body, "再読み込み") {
 		t.Errorf("reload action lacks its label: %s", body)
 	}
-	for _, want := range []string{"data-reload-notice ", "data-reload-notice-message", "print:hidden", "tone-warning"} {
+	for _, want := range []string{"data-reload-notice ", "data-reload-notice-message", "print:hidden", "rounded-card bg-surface-sel", "text-warning"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("notice lacks %q: %s", want, body)
 		}

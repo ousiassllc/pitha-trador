@@ -4,18 +4,18 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 
 templ costSection(rows []CostRow) {
 	<section class={ sectionClass } data-testid="trial-cost">
-		<h2 class="mb-6 text-2xl font-semibold text-ink">
+		<h2 class="mb-4 text-item font-semibold text-ink">
 			費用（出どころ別）
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-cost", Label: "費用の説明"}) {
 				報告された費用は、応答が報告した実費です。定価からの推定は、定価 × 入力トークンで見積もった額です。不明は、どちらも分からない呼び出しで、費用は 0 円ではなく分かりません。不明は件数だけを出し、他の合計には混ぜていません。
 			}
 		</h2>
 		if len(rows) == 0 {
-			<p class="text-sm text-mute" data-testid="trial-cost-empty">この期間の呼び出しはありません。</p>
+			<p class="text-note text-mute" data-testid="trial-cost-empty">この期間の呼び出しはありません。</p>
 		} else {
 			<table class={ tableClass } aria-label="費用（出どころ別）">
 				<thead>
-					<tr class={ headRowClass }>
+					<tr>
 						<th scope="col" class={ thClass }>アーム</th>
 						<th scope="col" class={ thRightClass }>報告された費用</th>
 						<th scope="col" class={ thRightClass }>定価からの推定</th>
@@ -24,7 +24,7 @@ templ costSection(rows []CostRow) {
 				</thead>
 				<tbody>
 					for _, r := range rows {
-						<tr class="border-b border-border" data-cost-row={ r.Label }>
+						<tr class="border-b border-line-soft last:border-b-0" data-cost-row={ r.Label }>
 							<th scope="row" class={ "px-3 py-2.5 font-normal", templ.KV("font-mono", !r.Total), templ.KV("font-semibold", r.Total) }>{ r.Label }</th>
 							<td class={ numClass } data-metric="reported">{ sourceText(r.Reported) }</td>
 							<td class={ numClass } data-metric="list_price_estimate">{ sourceText(r.Estimate) }</td>
@@ -39,7 +39,7 @@ templ costSection(rows []CostRow) {
 
 templ proxySection(rows []ProxyRow) {
 	<section class={ sectionClass } data-testid="trial-proxy">
-		<h2 class="mb-6 text-2xl font-semibold text-ink">
+		<h2 class="mb-4 text-item font-semibold text-ink">
 			NONE と反実仮想（参考値・proxy）
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-trial-proxy", Label: "NONE と反実仮想の説明"}) {
 				NONE と答えた、または答えられなかった判断に付いている反実仮想のラベル（見送られた候補を、もしライブの方向で入っていたらどうなったか）の集計です。実際の結果ではなく、見送りが良かったかを見る目安の参考値（proxy）です。当たり外れや費用の指標には混ぜていません。
@@ -47,7 +47,7 @@ templ proxySection(rows []ProxyRow) {
 		</h2>
 		<table class={ tableClass } aria-label="NONE と反実仮想（参考値）">
 			<thead>
-				<tr class={ headRowClass }>
+				<tr>
 					<th scope="col" class={ thClass }>アーム</th>
 					<th scope="col" class={ thRightClass }>NONE の答え</th>
 					<th scope="col" class={ thRightClass }>答えなし</th>
@@ -60,7 +60,7 @@ templ proxySection(rows []ProxyRow) {
 			<tbody>
 				for _, r := range rows {
 					if len(r.Horizons) == 0 {
-						<tr class="border-b border-border" data-proxy-arm={ r.ArmID }>
+						<tr class="border-b border-line-soft last:border-b-0" data-proxy-arm={ r.ArmID }>
 							<th scope="row" class="px-3 py-2.5 font-mono font-normal">{ r.ArmID }</th>
 							<td class={ numClass } data-metric="none_answers">{ itoa(r.NoneAnswers) }</td>
 							<td class={ numClass } data-metric="no_answer">{ itoa(r.NoAnswer) }</td>
@@ -68,7 +68,7 @@ templ proxySection(rows []ProxyRow) {
 						</tr>
 					}
 					for _, h := range r.Horizons {
-						<tr class="border-b border-border" data-proxy-arm={ r.ArmID }>
+						<tr class="border-b border-line-soft last:border-b-0" data-proxy-arm={ r.ArmID }>
 							<th scope="row" class="px-3 py-2.5 font-mono font-normal">{ r.ArmID }</th>
 							<td class={ numClass } data-metric="none_answers">{ itoa(r.NoneAnswers) }</td>
 							<td class={ numClass } data-metric="no_answer">{ itoa(r.NoAnswer) }</td>

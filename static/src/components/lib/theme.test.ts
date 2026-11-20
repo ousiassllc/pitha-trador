@@ -141,14 +141,14 @@ describe('dark.css Dark tokens', () => {
   });
 });
 
-// Neutral pill (issue #1022, brand-guide C6): --mute text on the 10% mute fill
-// over --bone is 4.30:1 in Light, under AA 4.5:1, so tone-mute's text is --ink.
+// Neutral chip (brand-guide #app-ui chip): --mute on the --surface-sel ground is
+// 4.45:1 in Light, under AA 4.5:1, so tone-mute's text is --mute-on-soft.
 describe('tone-mute pill', () => {
-  const appCss = readFileSync(new URL('../../css/app.css', import.meta.url), 'utf8');
+  const toneCss = readFileSync(new URL('../../css/tone.css', import.meta.url), 'utf8');
 
-  test('text is --ink, not --mute', () => {
-    const rule = appCss.match(/@utility tone-mute\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(rule).toMatch(/(^|\s)color:\s*var\(--ink\)/);
+  test('text is --mute-on-soft, not --mute or --ink', () => {
+    const rule = toneCss.match(/@utility tone-mute\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/(^|\s)color:\s*var\(--mute-on-soft\)/);
     expect(rule).not.toMatch(/(^|\s)color:\s*var\(--mute\)/);
   });
 });
