@@ -69,6 +69,9 @@ func TestJob_AHangingGMOEndsAtTheChunkDeadlineWithoutAMarker(t *testing.T) {
 	if err == nil || errors.Is(err, maintenance.ErrSkipped) || errors.Is(err, maintenance.ErrMore) {
 		t.Fatalf("Run = %v, want a failure at the chunk deadline", err)
 	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run = %v, want the chunk deadline error (context.DeadlineExceeded)", err)
+	}
 	if hits.Load() == 0 {
 		t.Fatal("the hanging server was never reached")
 	}

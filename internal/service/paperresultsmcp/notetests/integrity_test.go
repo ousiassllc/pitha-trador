@@ -18,17 +18,25 @@ func TestConcurrentUpdatesWithTheSameExpectedVersionHaveOneWinner(t *testing.T) 
 
 	start := make(chan struct{})
 	results := make([]response, 2)
+	errs := make([]error, len(results))
 	var wg sync.WaitGroup
 	for i := range results {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start
-			results[i] = update(t, srv, n.ID, 1, map[string]any{"result_summary": "writer " + string(rune('A'+i))})
+			// No t.Fatal here (it may only be called from the test goroutine):
+			// the response or the error goes into the slices and is checked below.
+			results[i], errs[i] = srv.post("research_note_update", updateArgs(n.ID, 1, map[string]any{"result_summary": "writer " + string(rune('A'+i))}))
 		}()
 	}
 	close(start)
 	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("writer %d: %v", i, err)
+		}
+	}
 
 	won, conflicted := 0, 0
 	for _, r := range results {
