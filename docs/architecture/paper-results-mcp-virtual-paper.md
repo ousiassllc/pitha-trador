@@ -34,7 +34,7 @@
 - **溜まった日の上限**: 各プロファイルが記録する日は、`max(first_day, 今日 − 10 日)` から昨日まで（`BacklogDays` = 10）。長く止まっていても最近 10 日分だけ取り戻す。「同じ期間」は、プロファイルごとの `first_day` 以降の、記録を終えた日の共通部分で決まる（§4）。
 - **冪等・再開可能**: (プロファイル, 日) の取引と印（`virtual_paper_days`）を 1 トランザクションで書く。印の無い日（途中で止まった・未着手）は次の実行がやり直し、取引は `UNIQUE (profile_id, instrument_id, entry_at)` と `ON CONFLICT DO NOTHING` で二重にならない。
 - **データ終了で閉じた取引**: 再生がデータの終わりまで条件に当たらず強制的に閉じた取引（`exit_reason = data_ended`）は、その理由で記録するが、**比較の指標からは外す**（`unfinished` として数える）。再生は 1 日ごとなので、引け前に建てて手仕舞い条件に当たらなかった取引が該当する。
-- 失敗の扱い: 再生が失敗したプロファイルの日は `failed`（理由は 200 文字まで）の印を付け、同じ日を自動ではやり直さない（毎回同じ失敗で詰まらないため）。エラーは保守ランナーに返り、他のタスクとは独立に扱われる。設定の読み込み・書き込みの失敗は印を付けず返し、次の実行が再試行する。パニックはエラーに変えて返し、取引のプロセスを落とさない。
+- 失敗の扱い: 再生が失敗したプロファイルの日は `failed`（理由は 200 文字まで）の印を付け、同じ日を自動ではやり直さない（毎回同じ失敗で詰まらないため）。明示的に戻すには MCP の `virtual_paper_rerun_failed`（§5。issue #1131）で、その日の印だけを外す。印の無い日は次の実行が再生し、成功すれば `done`、足が無ければ `empty`、また失敗すれば `failed` になる（`failed` はまた自動ではやり直さない）。エラーは保守ランナーに返り、他のタスクとは独立に扱われる。設定の読み込み・書き込みの失敗は印を付けず返し、次の実行が再試行する。パニックはエラーに変えて返し、取引のプロセスを落とさない。
 - 書き込みは短い: 1 トランザクション = 1 プロファイル 1 日分（数十行）。
 
 ## 4. 比較（virtual_paper_compare）
@@ -47,7 +47,13 @@
 
 ## 5. MCP の書き込み（mcpset）
 
-`virtual_paper_profile_create` / `virtual_paper_profile_stop` は、`mcpset/researchwrite/virtualpaper.go` の 2 つのトランザクション（INSERT 1 回・UPDATE 1 回）で `virtual_paper_profiles` だけを書く。書き込みスイッチがオフのときは `write_disabled`（トランザクションの先頭で確かめる）。設定・監査ログ・注文・ポジションには触らない。取引・日の行を MCP が書くことはない。
+`virtual_paper_profile_create` / `virtual_paper_profile_stop` は、`mcpset/researchwrite/virtualpaper.go` の 2 つのトランザクション（INSERT 1 回・UPDATE 1 回）で `virtual_paper_profiles` だけを書く。書き込みスイッチがオフのときは `write_disabled`（トランザクションの先頭で確かめる）。設定・監査ログ・注文・ポジションには触らない。取引の行を MCP が書くことはない。
+
+`virtual_paper_rerun_failed`（issue #1131）は 3 つ目のトランザクション（`RerunVirtualPaperFailedDay`）で、`status = 'failed'` の `virtual_paper_days` の 1 行を削除するだけ（`virtualpaper.RerunFailedDay` → `repo.ResetFailedDay`）。再生はせず、再生は次の日次の記録（§3）が行う。`failed` の日は取引を持たない（失敗の日は取引を保存しない）ので、消えるのは印だけで、取引の表には触れない。
+
+- **自動の再実行は無い**: 呼ばない限り何も戻らない。戻した日がまた失敗すれば `failed` のままで、次はまた明示的に呼ぶまでやり直さない（毎回同じ失敗で詰まらない）。ツールは日次の保守タスクに触らず、ライブの経路は変えない。
+- **戻せる日**: 動いている（`active`）プロファイルの、`failed` の印があり、かつ今日（JST）から `BacklogDays`（10）日以内の日だけ。`done` / `empty` の日・印の無い日・日付でない値・存在しないプロファイル・停止したプロファイル・10 日より前の日（記録部品が再生しない）は `*virtualpaper.InvalidError`（`invalid_argument`。`detail` は項目名と理由だけで値を載せない）で拒否し、何も書かない。
+- 書き込みスイッチがオフのときは `write_disabled` で何も書かない（トランザクションの先頭で確かめる）。既定の挙動は変えない（呼ばない限り何も再実行されない）。
 
 ## 6. 量と保持
 

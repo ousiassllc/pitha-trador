@@ -19,8 +19,9 @@ import (
 
 // The virtual Paper tools (issue #1087; docs/api/endpoints/research-tools/paper-results-mcp-virtual-paper.md):
 // virtual_paper_profile_create (also the clone) and virtual_paper_profile_stop
-// write one virtual_paper_profiles row each (mcpset.Writer, behind the write
-// switch); virtual_paper_compare only reads. The virtual trades are recorded by
+// write one virtual_paper_profiles row each, and virtual_paper_rerun_failed
+// (issue #1131) takes one failed virtual_paper_days mark away (mcpset.Writer,
+// behind the write switch); virtual_paper_compare only reads. The virtual trades are recorded by
 // the application's daily maintenance task, never by a tool, and none of this
 // changes a setting, an order, a position or the capital.
 
@@ -57,7 +58,7 @@ func virtualPaperParamsSchema() map[string]any {
 	return s
 }
 
-// Defs are virtual_paper_profile_create, virtual_paper_profile_stop and virtual_paper_compare.
+// Defs are virtual_paper_profile_create, virtual_paper_profile_stop, virtual_paper_rerun_failed and virtual_paper_compare.
 func Defs() []tooldef.Def {
 	return []tooldef.Def{
 		{
@@ -132,6 +133,42 @@ func Defs() []tooldef.Def {
 					}
 					v, err := virtualpaper.ViewOf(p)
 					return map[string]any{"profile": v, "stopped": changed, "already_stopped": !changed}, 1, err
+				}, nil
+			},
+		},
+		{
+			Name: "virtual_paper_rerun_failed",
+			Description: "仮想 Paper のプロファイルの failed の日（再生が失敗して印が付いた日）を、再実行の対象に戻す。その日の印だけを外し、次の日次記録（本体の保守タスク。16:00 JST 以降）が同じ日をもう一度再生する。" +
+				"成功すれば done、足が無ければ empty、また失敗すれば failed になる。このツール自身は再生しない。failed の日は、このツールを呼ばない限り自動ではやり直されない（同じ失敗で詰まらないため）。" +
+				"戻せるのは、動いている（active）プロファイルの、今日から 10 日以内の failed の日だけ。done / empty の日・印の無い日・存在しない日付・停止したプロファイル・10 日より前の日は invalid_argument（detail に項目名と理由。値は載せない）、存在しない profile_id も invalid_argument。" +
+				"書き込むのは virtual_paper_days の 1 行の削除だけ（取引・注文・ポジション・資金・設定には触らない）。書き込み許可がオフのときは write_disabled で何も書かない",
+			Schema: tooldef.ObjectSchema(map[string]any{
+				"profile_id": map[string]any{"type": "integer", "minimum": 1},
+				"day":        map[string]any{"type": "string", "description": "戻す日（JST の YYYY-MM-DD）"},
+			}, "profile_id", "day"),
+			Writes:   true,
+			NoPeriod: true,
+			Decode: func(raw json.RawMessage) (tooldef.PeriodArgs, tooldef.Run, *tooldef.Failure) {
+				var a struct {
+					ProfileID *int64  `json:"profile_id"`
+					Day       *string `json:"day"`
+				}
+				if err := tooldef.StrictDecode(raw, &a); err != nil {
+					return tooldef.PeriodArgs{}, nil, err
+				}
+				if a.ProfileID == nil || *a.ProfileID < 1 || a.Day == nil {
+					return tooldef.PeriodArgs{}, nil, tooldef.Fail(tooldef.CodeInvalidArgument)
+				}
+				id, day := *a.ProfileID, *a.Day
+				return tooldef.PeriodArgs{}, func(ctx context.Context, e tooldef.Env) (any, int, error) {
+					w, err := e.Writer()
+					if err != nil {
+						return nil, 0, err
+					}
+					if err := researchwrite.RerunVirtualPaperFailedDay(ctx, w, id, day); err != nil {
+						return nil, 0, virtualPaperFailureOf(err)
+					}
+					return map[string]any{"profile_id": id, "day": day, "reset": true}, 1, nil
 				}, nil
 			},
 		},

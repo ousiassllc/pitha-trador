@@ -50,7 +50,7 @@ var researchStatusTools = []string{"research_daily_bars_status"}                
 var replayTools = []string{"replay_estimate", "replay_start", "replay_stop", "replay_progress", "replay_results"} // #1085; two write, pinned in replaytests
 var exportTools = []string{"training_dataset_export"}                                                             // #1094: writes files, not rows; pinned in exporttests
 // researchTools (issues #1086 / #1087): backtest_start and the virtual Paper profile create / stop write one research row each; the rest read.
-var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_compare"}
+var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed", "virtual_paper_compare"}
 var researchNoteTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary"} // #1095 / #1084: two notes writes, two reads, the FX summary
 
 // writingTools are the tools that change state; every other tool is annotated read-only.
@@ -59,7 +59,7 @@ var writingTools = []string{
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 	"experiment_create", "experiment_close",
 	"jev_prompt_promote", "replay_start", "replay_stop", "training_dataset_export", "research_note_create", "research_note_update",
-	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop",
+	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {
