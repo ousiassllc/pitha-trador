@@ -21,8 +21,8 @@ type notesGate struct {
 	gate *mcpset.Gate
 }
 
-func (g notesGate) ResearchNotes(ctx context.Context, limit int) ([]researchnote.Row, error) {
-	return g.gate.ResearchNotes(ctx, limit)
+func (g notesGate) ResearchNotes(ctx context.Context, f researchnote.Filter, limit int) ([]researchnote.Row, error) {
+	return g.gate.ResearchNotes(ctx, f, limit)
 }
 
 // The Settings card loads a read-only research-note list under the write
@@ -87,7 +87,7 @@ func TestResearchNotesSectionIsAReadOnlyList(t *testing.T) {
 			t.Errorf("the list does not contain %q: %s", want, body)
 		}
 	}
-	for _, banned := range []string{"#1095", "1095", "issue", "TODO", "<form", "hx-post", "hx-delete"} {
+	for _, banned := range []string{"#1095", "1095", "issue", "TODO", `method="post"`, "hx-post", "hx-put", "hx-patch", "hx-delete"} {
 		if strings.Contains(strings.ToLower(body), strings.ToLower(banned)) {
 			t.Errorf("the section contains %q", banned)
 		}

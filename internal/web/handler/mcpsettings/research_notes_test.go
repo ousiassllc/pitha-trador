@@ -12,7 +12,7 @@ func TestResearchNotesPropsFormatsTheRows(t *testing.T) {
 		{ID: 3, Question: "q3", Conclusion: researchnote.ConclusionSupported, Tags: []string{"a"}, EvidenceCount: 2, CurrentVersion: 4, UpdatedAt: "2026-10-14T01:30:00Z"},
 		{ID: 2, Question: "q2", Conclusion: researchnote.ConclusionUnsupported, CurrentVersion: 1, UpdatedAt: "bad"},
 		{ID: 1, Question: "q1", Conclusion: researchnote.ConclusionPending, CurrentVersion: 1},
-	})
+	}, researchnote.Filter{})
 	if len(props.Rows) != 3 {
 		t.Fatalf("%d rows, want 3", len(props.Rows))
 	}
@@ -25,6 +25,9 @@ func TestResearchNotesPropsFormatsTheRows(t *testing.T) {
 	if r := props.Rows[2]; r.ConclusionLabel != "保留" {
 		t.Errorf("row 2 = %+v", r)
 	}
+	if props.Filtered || props.Capped || props.Limit != researchNoteRows {
+		t.Errorf("props = %+v, want no filter, not capped, limit %d", props, researchNoteRows)
+	}
 	if got := conclusionLabel("other"); got != "other" {
 		t.Errorf("an unknown conclusion label = %q", got)
 	}
@@ -36,5 +39,18 @@ func TestResearchNotesWordingHasNoDevelopmentNotes(t *testing.T) {
 		if strings.ContainsAny(label, "#0123456789") {
 			t.Errorf("label %q has an issue number or a dev note", label)
 		}
+	}
+}
+
+// The applied filter is handed back to the form, and the list is capped at the
+// rows limit (a full page may have more behind it).
+func TestResearchNotesPropsKeepsTheFilterAndTheCap(t *testing.T) {
+	rows := make([]researchnote.Row, researchNoteRows)
+	props := researchNotesProps(rows, researchnote.Filter{Query: "q", Tag: "t", Conclusion: researchnote.ConclusionSupported})
+	if !props.Filtered || !props.Capped || props.Query != "q" || props.Tag != "t" || props.Conclusion != researchnote.ConclusionSupported {
+		t.Errorf("props = %+v", props)
+	}
+	if props := researchNotesProps(rows[:researchNoteRows-1], researchnote.Filter{Tag: "t"}); props.Capped || !props.Filtered {
+		t.Errorf("a short page is capped: %+v", props)
 	}
 }
