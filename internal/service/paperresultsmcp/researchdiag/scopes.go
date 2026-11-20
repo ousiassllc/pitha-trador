@@ -14,8 +14,8 @@ import (
 // snapshotsAcc reads the snapshots scope: the day sums research_label_day_stats
 // holds (every labeled snapshot of the recorded days, both sides) and a sample
 // of the rows for the medians.
-func snapshotsAcc(ctx context.Context, q query.Q, r query.Range, recorded map[string]bool) (*acc, error) {
-	a := newAcc()
+func snapshotsAcc(ctx context.Context, q query.Q, r query.Range, recorded map[string]bool, withFX bool) (*acc, error) {
+	a := newAcc(withFX)
 	fromDay, toDay := dayBounds(r)
 	rows, err := q.QueryContext(ctx, `SELECT horizon, side, day, row_count, sum_gross, sum_net, sum_cost, wins, spread_rows, sum_spread,
 	spread_above_cost, sum_gross_less_half_spread FROM research_label_day_stats WHERE day >= ? AND day < ?`, fromDay, toDay)
@@ -73,22 +73,27 @@ func samplePercent(n int) int {
 // percent as the observations of the medians (the index serves it: day, horizon,
 // bucket range).
 func (a *acc) readSample(ctx context.Context, q query.Q, day, horizon string, percent int) error {
-	rows, err := q.QueryContext(ctx, `SELECT long_gross_bps, long_net_bps, long_cost_bps, short_gross_bps, short_net_bps, short_cost_bps, spread_bps
+	rows, err := q.QueryContext(ctx, `SELECT snapshot_at, long_gross_bps, long_net_bps, long_cost_bps, short_gross_bps, short_net_bps, short_cost_bps, spread_bps
 FROM research_horizon_labels WHERE day = ? AND horizon = ? AND sample_bucket < ?`, day, horizon, percent)
 	if err != nil {
 		return fmt.Errorf("researchdiag: read research label sample of %s: %w", day, err)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var lg, ln, lc, sg, sn, sc, spread sql.NullFloat64
-		if err := rows.Scan(&lg, &ln, &lc, &sg, &sn, &sc, &spread); err != nil {
+		var (
+			at                             string
+			lg, ln, lc, sg, sn, sc, spread sql.NullFloat64
+		)
+		if err := rows.Scan(&at, &lg, &ln, &lc, &sg, &sn, &sc, &spread); err != nil {
 			return fmt.Errorf("researchdiag: scan research label sample: %w", err)
 		}
 		if ln.Valid {
 			a.observe(key{horizon, domain.JevDirectionLong}, day, lg.Float64, ln.Float64, lc.Float64, spread, false)
+			a.observeFX(key{horizon, domain.JevDirectionLong}, at, ln.Float64)
 		}
 		if sn.Valid {
 			a.observe(key{horizon, domain.JevDirectionShort}, day, sg.Float64, sn.Float64, sc.Float64, spread, false)
+			a.observeFX(key{horizon, domain.JevDirectionShort}, at, sn.Float64)
 		}
 	}
 	return rows.Err()
@@ -99,10 +104,10 @@ FROM research_horizon_labels WHERE day = ? AND horizon = ? AND sample_bucket < ?
 // snapshot at the decision's own direction. The rows are summed here: decisions
 // are far fewer than snapshots.
 func decisionsAcc(ctx context.Context, q query.Q, r query.Range, req Request, recorded map[string]bool) (*acc, error) {
-	a := newAcc()
+	a := newAcc(req.FXSymbol != "")
 	from, to := r.Bounds()
 	where, args := req.decisionWhere(from, to)
-	rows, err := q.QueryContext(ctx, `SELECT r.horizon, d.direction, r.day,
+	rows, err := q.QueryContext(ctx, `SELECT r.horizon, d.direction, r.day, r.snapshot_at,
 	CASE d.direction WHEN 'LONG' THEN r.long_gross_bps ELSE r.short_gross_bps END,
 	CASE d.direction WHEN 'LONG' THEN r.long_net_bps ELSE r.short_net_bps END,
 	CASE d.direction WHEN 'LONG' THEN r.long_cost_bps ELSE r.short_cost_bps END, r.spread_bps
@@ -115,15 +120,16 @@ WHERE `+where+` AND CASE d.direction WHEN 'LONG' THEN r.long_net_bps ELSE r.shor
 	for rows.Next() {
 		var (
 			k                key
-			day              string
+			day, at          string
 			gross, net, cost float64
 			spread           sql.NullFloat64
 		)
-		if err := rows.Scan(&k.horizon, &k.side, &day, &gross, &net, &cost, &spread); err != nil {
+		if err := rows.Scan(&k.horizon, &k.side, &day, &at, &gross, &net, &cost, &spread); err != nil {
 			return nil, fmt.Errorf("researchdiag: scan research label of a decision: %w", err)
 		}
 		if recorded[day] {
 			a.observe(k, day, gross, net, cost, spread, true)
+			a.observeFX(k, at, net)
 			a.percent[k.horizon] = 100
 		}
 	}

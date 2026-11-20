@@ -87,8 +87,13 @@
 
 `jev_evaluation`（`paper-results-mcp-jev-evaluation.md` §3.33）の任意の引数 `fx_symbol` は、この記録を判断の時刻に合わせて結合する。仕様は `paper-results-mcp-jev-evaluation.md` に書く。引数を指定しなければ、`jev_evaluation` の応答はこの記録が無かった頃と同じ。
 
+## 3.34 `research_horizon_summary` の `fx_symbol`
+
+`research_horizon_summary`（`paper-results-mcp-research-labels.md` §3.34）の任意の引数 `fx_symbol` も、この記録を行の対象時刻に合わせて結合し、`fx_context` を足す（区分は `jev_evaluation` と同じ）。仕様は `paper-results-mcp-research-labels.md` に書く。引数を指定しなければ、`research_horizon_summary` の応答はこの記録が無かった頃と同じ。
+
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規（USD/JPY の部分。指数は未実装で #1083 待ち） | issue #1084 |
+| 1.1 | 2026-11-20 | §3.34 に `research_horizon_summary` の `fx_symbol` への参照を追記 | issue #1134 |

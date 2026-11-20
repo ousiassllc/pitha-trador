@@ -26,10 +26,17 @@ type acc struct {
 	values map[key]*values
 	// percent is the share of the rows (per horizon) the observations are.
 	percent map[string]int
+	// fx holds the rows' snapshot times and net returns for fx_context (fx.go);
+	// nil unless the call named fx_symbol.
+	fx map[key]map[string]*fxCell
 }
 
-func newAcc() *acc {
-	return &acc{days: map[key]map[string]*dayRow{}, values: map[key]*values{}, percent: map[string]int{}}
+func newAcc(withFX bool) *acc {
+	a := &acc{days: map[key]map[string]*dayRow{}, values: map[key]*values{}, percent: map[string]int{}}
+	if withFX {
+		a.fx = map[key]map[string]*fxCell{}
+	}
+	return a
 }
 
 func (a *acc) day(k key, day string) *dayRow {

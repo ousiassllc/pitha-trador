@@ -51,6 +51,7 @@
 
 - `fxdiag.AtOrBefore(ctx, q, symbol, times, staleness)`: 判断の時刻ごとに、**その時刻以前で最新の、BID・ASK の両方がある足**を返す。足の `open_time` が時刻から `staleness`（既定 5 分）より古ければ「一致なし」（nil）。片側だけの分は飛ばす。主キー `(symbol, open_time)` の範囲で 1 件を引く読み取り専用の関数で、同じ分の時刻は結果を使い回す。価格は足の**始値**（`MidOpen` = BID 始値と ASK 始値の平均）を使う。終値は 1 分あとにしか分からないので、判断の時刻より後の価格を見ない。
 - `jev_evaluation` の任意の引数 `fx_symbol`（既定なし）: 指定すると、各 cohort に `fx_context` を足す。**llm アームの行**を、判断の時刻の直前 60 分の mid 価格の変化の符号（`up` / `flat`（変化なし）/ `down` / `unmatched`（判断の時刻・60 分前のどちらかに足が無い））に分け、件数と平均 net bps を返す。記述のみで、しきい値は無く、取引には使わない。指定しなければ `fx_context` というキーはなく、出力は引数が無かった頃と**バイト単位で同じ**（`evaltests` の `TestWithoutFXSymbolTheOutputIsByteIdentical` が、引数の追加前の `main` で取った応答と一致することを固定する）。実装は `internal/service/paperresultsmcp/evaldiag/fxcontext.go`（新ファイル）で、既存のロジックへの変更は決定の時刻を行に持たせる 1 フィールドと呼び出し 1 か所だけ。
+- `research_horizon_summary` の任意の引数 `fx_symbol`（issue #1134）: 同じ区分（`up` / `flat` / `down` / `unmatched`。`evaldiag.FxTrailingBuckets` を共有）を、ホライズン・側ごとの行の対象時刻（スナップショットの時刻。`trader` / `scout` では判断のあった足）に当て、`fx_context` として件数と平均 net bps を返す。記述のみで、記録の表は読むだけ。指定しなければ `fx_context` というキーはなく、出力は引数が無かった頃とバイト単位で同じ（`researchtests` の `TestWithoutFXSymbolTheOutputIsByteIdentical`）。`research.fx.enabled` には触れない。仕様は `docs/api/endpoints/paper-results-mcp-research-labels.md` §3.34、設計は `docs/architecture/paper-results-mcp-research-labels.md` §4。
 
 ## 6. 量
 
@@ -61,3 +62,4 @@
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規（USD/JPY の部分。指数は未実装で #1083 待ち） | issue #1084 |
+| 1.1 | 2026-11-20 | §5 に `research_horizon_summary` の `fx_symbol`（同じ区分を共有。省略時は出力不変）を追記 | issue #1134 |

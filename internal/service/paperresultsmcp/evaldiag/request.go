@@ -7,7 +7,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
-	"github.com/ousiassllc/pitha-trador/internal/config/researchfxsettings"
 )
 
 // Description is the tool's description (docs/api/endpoints/paper-results-mcp-jev-evaluation.md §3.33).
@@ -70,7 +69,7 @@ func (r Request) Validate() error {
 	if len(r.ModelID) > MaxModelIDLen {
 		return fmt.Errorf("evaldiag: model_id is at most %d characters", MaxModelIDLen)
 	}
-	if r.FXSymbol != "" && !researchfxsettings.ValidSymbol(r.FXSymbol) {
+	if r.FXSymbol != "" && !ValidFxSymbol(r.FXSymbol) {
 		return fmt.Errorf("evaldiag: fx_symbol %q is not a currency pair like USD_JPY", r.FXSymbol)
 	}
 	return nil
