@@ -239,7 +239,7 @@ pitha-trador/
 
 レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。ツリーで「テスト専用」と注記した`*_test.go`のみのディレクトリ（`organisms/organismstest`を含む）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
-`repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済み。上のツリーは主要なサブパッケージだけを載せており、全パッケージの一覧ではない。ツリーに載せていない`service`・`repository`・`domain`のサブパッケージは、1行ずつの責務を`overview/packages.md`に一覧する。新しいサブパッケージを足すときは、ツリーかこの一覧のどちらかに必ず載せる。**サブパッケージ共通の規約**:
+`repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済み。上のツリーは主要なサブパッケージだけを載せており、全パッケージの一覧ではない。ツリーに載せていない`service`・`repository`・`domain`のサブパッケージは`overview/packages.md`に、`bootstrap`・`router`・`config`・`web`のサブパッケージは`overview/packages-wiring.md`に、1行ずつの責務を一覧する。新しいサブパッケージを足すときは、ツリーかこれらの一覧のどれかに必ず載せる。**サブパッケージ共通の規約**:
 
 - 兄弟サブパッケージ同士は本番コードでimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）へ置く。**本番コードの例外は`market` → `snapshotcols`のみ**（`market_snapshots`のFeature列対応表を共有する`domain`のみに依存するリーフ。逆向きは禁止）
 - **テスト専用のクロスリソース読み取り例外**: `decisiontrade`・`decisionsnapshot`・`snapshotcols`の外部テスト（`_test.go`）は、データ準備と列対応の整合検証のため兄弟群（`judgement`/`market`/`trading`。`snapshotcols`のテストは`market`）の公開APIと`sqlitedb.Open`をimportしてよい。この例外は`_test.go`に閉じ、本番コードへ広げない。それ以外の群のテストは他リソース群のデータをSQLで直接用意する
