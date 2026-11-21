@@ -111,6 +111,11 @@ func parse(fs *flag.FlagSet, args []string) error {
 		}
 		return fmt.Errorf("%w: %w", errUsage, err)
 	}
+	// flag stops at the first non-flag word, so a stray word would silently
+	// drop every flag after it.
+	if fs.NArg() > 0 {
+		return usageErr("unexpected argument %q", fs.Arg(0))
+	}
 	return nil
 }
 

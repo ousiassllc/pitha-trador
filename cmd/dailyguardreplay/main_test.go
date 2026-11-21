@@ -179,6 +179,9 @@ func TestRun_RejectsBadFlags(t *testing.T) {
 		{"negative threshold", []string{"-db", db, "-from", "2026-10-14", "-to", "2026-10-14", "-loss-jpy", "-1"}},
 		{"percent above 100", []string{"-db", db, "-from", "2026-10-14", "-to", "2026-10-14", "-giveback-pct", "101"}},
 		{"not a number", []string{"-db", db, "-from", "2026-10-14", "-to", "2026-10-14", "-max-trades", "many"}},
+		// The stray word stops flag parsing, which would silently drop -loss-jpy.
+		{"stray word before thresholds", []string{"-db", db, "-from", "2026-10-14", "-to", "2026-10-14", "loss-jpy", "-5000", "-loss-jpy", "-5000"}},
+		{"trailing word", []string{"-db", db, "-from", "2026-10-14", "-to", "2026-10-14", "junk"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
