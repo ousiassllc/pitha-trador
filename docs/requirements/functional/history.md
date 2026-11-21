@@ -190,3 +190,4 @@
 | 1.185 | 2026-11-15 | §5.3の合格ライン（performance-evaluation.md §4、FR-EVAL-4）の期間基準を「取引のあった日数 ≥ 20日」から「≥ 30日（30営業日）」へ引き上げ、シャドーバックテストの足切り（FR-SELFIMPROVE-4）の30営業日と揃えた（`actuals.DefaultCriteria().MinDays`。引き締めのみで、件数100・EV下限・ドローダウン5%は変更なし） | issue #780の残件（actualsの`MinDays`を30営業日に揃える） |
 | 1.186 | 2026-11-15 | FR-COST-1に、Settings画面の「売買コストの想定」「トリプルバリアのコスト想定」へラベルと約定モデルのコスト整合パネル（`cost_mismatch`・`cost_direction_asymmetry`と同じ判定、警告のみ）を追加（既定値の変更なし）。ラベルのコスト記録（`cost_label_stale`）は要マイグレーションのため未実装と明記 | issue #779 |
 | 1.187 | 2026-11-15 | FR-SCHED-9にkabuの実行時の監視リストの日次の大きさ（件数と取得元だけを`watch_list_runtime_days`へ。銘柄コードは保存しない。`session_diagnostics`のkabuの日の`watch_list`に出す。読み取りのみで取引の経路は変えない。保持期間の削除対象外）を追加 | issue #920 |
+| 1.188 | 2026-11-22 | FR-MCP-4 のツール数を実装の 65 に合わせて訂正: バックテスト 3・仮想 Paper 4・研究ノートと FX・指数の系列 6（FR-MCP-46〜51）の列挙を足し、「合計 52」を「合計 65」にした。API 仕様 `endpoints/paper-results-mcp.md` の「研究ノートと FX の系列の 5 つ」も「FX・指数の系列の 6 つ」に訂正（実装は変更しない） | issue #1148 |
