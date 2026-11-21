@@ -7,6 +7,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 )
 
@@ -26,7 +27,7 @@ type decisionState struct {
 // recent disclosure, a neutral 0). A decision whose features cannot be
 // completed (a missing feature, an unreadable state or answer) is left out and
 // counted in dropped: a model never learns from a made-up value.
-func BuildRows(trs []repo.TrainingRow) (rows []Row, dropped int) {
+func BuildRows(trs []repo.TrainingRow) (rows []walkforward.Row, dropped int) {
 	rows, dropped, _ = BuildRowsReport(trs)
 	return rows, dropped
 }
@@ -38,7 +39,7 @@ func BuildRows(trs []repo.TrainingRow) (rows []Row, dropped int) {
 // the counts overlap and add up to more than dropped. It lets a read-only
 // caller (the Paper results MCP's metalabel_training_readiness) explain
 // dropped_incomplete with the trainer's own rule, decoding each decision once.
-func BuildRowsReport(trs []repo.TrainingRow) (rows []Row, dropped int, missing map[string]int) {
+func BuildRowsReport(trs []repo.TrainingRow) (rows []walkforward.Row, dropped int, missing map[string]int) {
 	missing = map[string]int{}
 	for _, tr := range trs {
 		features := buildFeatures(tr)
@@ -57,12 +58,12 @@ func BuildRowsReport(trs []repo.TrainingRow) (rows []Row, dropped int, missing m
 
 // rowFrom is the walk-forward row of tr with its rebuilt features, or false
 // when the model input cannot be formed.
-func rowFrom(tr repo.TrainingRow, features metalabel.Features) (Row, bool) {
+func rowFrom(tr repo.TrainingRow, features metalabel.Features) (walkforward.Row, bool) {
 	vector, err := features.Vector(tr.Direction)
 	if err != nil {
-		return Row{}, false
+		return walkforward.Row{}, false
 	}
-	return Row{
+	return walkforward.Row{
 		JevDecisionID: tr.JevDecisionID, DecidedAt: tr.DecidedAt, LabelEnd: tr.LabelEnd(),
 		JevModelID: tr.JevModelID, Symbol: tr.Symbol, Direction: tr.Direction, Features: features, Vector: vector, NetReturnBps: tr.NetReturnBps,
 	}, true
@@ -88,4 +89,12 @@ func buildFeatures(tr repo.TrainingRow) metalabel.Features {
 		tdnet = newsfeed.ScoreNewsContext(state.NewsContext.Items, tr.DecidedAt, newsfeed.DefaultTTL)
 	}
 	return metalabel.NewFeatures(tr.OrderFlow, state.SpreadBps, state.Return1m, jevScore, &tdnet)
+}
+
+func samples(rows []walkforward.Row) []metalabel.Sample {
+	out := make([]metalabel.Sample, len(rows))
+	for i, r := range rows {
+		out[i] = r.Sample()
+	}
+	return out
 }

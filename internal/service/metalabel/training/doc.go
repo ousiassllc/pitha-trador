@@ -3,7 +3,7 @@
 // internal/service/metalabel.
 //
 // Trainer reads the triple-barrier-labeled Jev decisions (BuildRows rebuilds
-// the features each one had when it was made), SplitWalkForward cuts them into
+// the features each one had when it was made), walkforward.SplitWalkForward cuts them into
 // fit < calibration < out-of-sample with purge and embargo and an OOS window
 // that never starts before the LLM's training-data cutoff (arXiv:2512.23847),
 // Evaluate scores the model out of sample, and the model is stored with its

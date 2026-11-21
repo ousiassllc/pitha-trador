@@ -8,6 +8,7 @@ import (
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // EvaluateForward is the forward (holdout) evaluation of an adopted model
@@ -15,8 +16,8 @@ import (
 // model was trained (rows decided at or after from, with a known label), which
 // no adoption decision ever saw. It is reported next to the adoption record and
 // never feeds the adoption criteria.
-func EvaluateForward(m metalabel.Model, rows []Row, from, now time.Time, decide metalabel.DecideConfig, c AcceptanceConfig, seed uint64) repo.Forward {
-	var window []Row
+func EvaluateForward(m metalabel.Model, rows []walkforward.Row, from, now time.Time, decide metalabel.DecideConfig, c AcceptanceConfig, seed uint64) repo.Forward {
+	var window []walkforward.Row
 	for _, r := range rows {
 		if !r.DecidedAt.Before(from) && !r.LabelEnd.After(now) {
 			window = append(window, r)

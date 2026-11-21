@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -15,7 +16,7 @@ import (
 // rows as of asOf and reports both sides against their required counts. The
 // real call decides train_ready and the skip code; when it fails, the OOS side
 // is still counted (describeOOS) so a skipped night shows both sides.
-func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit, error) {
+func readinessSplit(rows []walkforward.Row, asOf, cutoff time.Time) (ReadinessSplit, error) {
 	walk, bar := training.DefaultWalkForwardConfig(), training.DefaultAcceptanceConfig()
 	s := ReadinessSplit{
 		Train: TrainSide{
@@ -23,8 +24,8 @@ func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit
 		},
 		OOS: OOSSide{RequiredRows: bar.MinOOSSamples, RequiredDays: bar.MinOOSDays, RequiredTake: bar.MinTakes},
 	}
-	split, err := training.SplitWalkForward(rows, asOf, cutoff, walk)
-	var oos []training.Row
+	split, err := walkforward.SplitWalkForward(rows, asOf, cutoff, walk)
+	var oos []walkforward.Row
 	var oosStart time.Time
 	if err == nil {
 		fit, cal := len(split.Fit), len(split.Calibrate)
@@ -32,7 +33,7 @@ func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit
 		s.Train.Rows, s.Train.FitRows, s.Train.CalibrationRows = fit+cal, &fit, &cal
 		oosStart, oos = split.OOSStart, split.OOS
 	} else {
-		var short *training.InsufficientDataError
+		var short *walkforward.InsufficientDataError
 		if !errors.As(err, &short) {
 			return ReadinessSplit{}, fmt.Errorf("query: walk-forward split: %w", err)
 		}
@@ -63,12 +64,12 @@ func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit
 // 1 and two ancient padding rows so the fit/calibration side can always be
 // formed; the padding sits before every window and is never an OOS row, so
 // the OOS window and rows are exactly the real split's.
-func describeOOS(rows []training.Row, asOf, cutoff time.Time, walk training.WalkForwardConfig) (time.Time, []training.Row, error) {
+func describeOOS(rows []walkforward.Row, asOf, cutoff time.Time, walk walkforward.WalkForwardConfig) (time.Time, []walkforward.Row, error) {
 	walk.MinFit, walk.MinCalibration = 1, 1
 	ancient := asOf.AddDate(-100, 0, 0)
 	later := ancient.Add(2 * time.Hour) // far enough apart that neither is purged
-	padded := append([]training.Row{{DecidedAt: ancient, LabelEnd: ancient}, {DecidedAt: later, LabelEnd: later}}, rows...)
-	split, err := training.SplitWalkForward(padded, asOf, cutoff, walk)
+	padded := append([]walkforward.Row{{DecidedAt: ancient, LabelEnd: ancient}, {DecidedAt: later, LabelEnd: later}}, rows...)
+	split, err := walkforward.SplitWalkForward(padded, asOf, cutoff, walk)
 	if err != nil {
 		return time.Time{}, nil, fmt.Errorf("query: walk-forward OOS window: %w", err)
 	}
@@ -77,7 +78,7 @@ func describeOOS(rows []training.Row, asOf, cutoff time.Time, walk training.Walk
 
 // distinctJSTDays is the number of query.JST dates the rows' decisions fall on, what
 // the adoption bar counts as OOS trading days.
-func distinctJSTDays(rows []training.Row) int {
+func distinctJSTDays(rows []walkforward.Row) int {
 	days := map[string]struct{}{}
 	for _, r := range rows {
 		days[r.DecidedAt.In(query.JST).Format(time.DateOnly)] = struct{}{}

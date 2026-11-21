@@ -1,4 +1,8 @@
-package metalabel_test
+// Package metalabelflow_test holds the black-box tests of the meta-labeling
+// trainer and reporter (internal/service/metalabel). They only use its exported
+// API and live in their own directory to keep that package within the linterly
+// directory budget.
+package metalabelflow_test
 
 import (
 	"errors"

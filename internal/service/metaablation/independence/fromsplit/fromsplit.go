@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/manifest"
-	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // Windows returns the model windows of s (the walk-forward fold the model was
@@ -18,7 +18,7 @@ import (
 // CalibrationEnd is the decision time of the newest calibration row and
 // LabelEnd the latest LabelEnd among the fit, calibration and original OOS
 // rows (every row the model used or was tested on).
-func Windows(s training.Split, cfg training.WalkForwardConfig) manifest.Windows {
+func Windows(s walkforward.Split, cfg walkforward.WalkForwardConfig) manifest.Windows {
 	w := manifest.Windows{
 		TrainStart: s.TrainStart, TrainEnd: s.TrainEnd,
 		OOSStart: s.OOSStart, OOSEnd: s.OOSEnd, LLMCutoff: s.LLMCutoff,
@@ -29,7 +29,7 @@ func Windows(s training.Split, cfg training.WalkForwardConfig) manifest.Windows 
 			w.CalibrationEnd = r.DecidedAt
 		}
 	}
-	for _, rows := range [][]training.Row{s.Fit, s.Calibrate, s.OOS} {
+	for _, rows := range [][]walkforward.Row{s.Fit, s.Calibrate, s.OOS} {
 		for _, r := range rows {
 			if r.LabelEnd.After(w.LabelEnd) {
 				w.LabelEnd = r.LabelEnd
@@ -43,7 +43,7 @@ func Windows(s training.Split, cfg training.WalkForwardConfig) manifest.Windows 
 // independence.Config.OOSUsed: rows inside the OOS window that SplitWalkForward
 // dropped (their label window ends after the split time) are not in it, so the
 // model never saw them and they are not classed as reference.
-func OOSUsed(s training.Split) map[int64]struct{} {
+func OOSUsed(s walkforward.Split) map[int64]struct{} {
 	used := make(map[int64]struct{}, len(s.OOS))
 	for _, r := range s.OOS {
 		used[r.JevDecisionID] = struct{}{}

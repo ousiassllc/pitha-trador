@@ -1,4 +1,4 @@
-package metalabel_test
+package metalabelflow_test
 
 import (
 	"context"

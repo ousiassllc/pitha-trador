@@ -13,6 +13,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // DefaultLookback is how far back the nightly training reads labeled decisions.
@@ -33,7 +34,7 @@ type TrainingSource interface {
 // walkForBar is the walk-forward config with the OOS window raised to what the
 // acceptance bar asks for, so a window narrower than the bar can never be set
 // by one config without the other (issue #862).
-func (t *Trainer) walkForBar() WalkForwardConfig {
+func (t *Trainer) walkForBar() walkforward.WalkForwardConfig {
 	w := t.walk
 	w.OOSMinRows = max(w.OOSMinRows, t.acceptance.MinOOSSamples)
 	w.OOSMinDays = max(w.OOSMinDays, t.acceptance.MinOOSDays)
@@ -72,7 +73,7 @@ type Trainer struct {
 	source     TrainingSource
 	store      ModelStore
 	settings   SettingsLoader
-	walk       WalkForwardConfig
+	walk       walkforward.WalkForwardConfig
 	acceptance AcceptanceConfig
 	lookback   time.Duration
 	now        func() time.Time
@@ -99,7 +100,9 @@ type CohortSource func(ctx context.Context) (string, error)
 type TrainerOption func(*Trainer)
 
 // WithWalkForward overrides DefaultWalkForwardConfig.
-func WithWalkForward(cfg WalkForwardConfig) TrainerOption { return func(t *Trainer) { t.walk = cfg } }
+func WithWalkForward(cfg walkforward.WalkForwardConfig) TrainerOption {
+	return func(t *Trainer) { t.walk = cfg }
+}
 
 // WithAcceptance overrides DefaultAcceptanceConfig.
 func WithAcceptance(cfg AcceptanceConfig) TrainerOption {
@@ -209,7 +212,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	}
 	rows, dropped := BuildRows(stored)
 	walk := t.walkForBar()
-	split, err := SplitWalkForward(rows, now, cutoff, walk)
+	split, err := walkforward.SplitWalkForward(rows, now, cutoff, walk)
 	if err != nil {
 		return repo.Model{}, t.annotateSkip(ctx, err, from, now, dropped)
 	}
@@ -229,7 +232,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	})
 	if err != nil {
 		if errors.Is(err, metalabel.ErrInvalidTrainingData) || errors.Is(err, metalabel.ErrInvalidCalibration) {
-			return repo.Model{}, t.annotateSkip(ctx, &InsufficientDataError{
+			return repo.Model{}, t.annotateSkip(ctx, &walkforward.InsufficientDataError{
 				Code: repo.SkipTrainingDataUnusable, Usable: len(split.Fit) + len(split.Calibrate),
 				Required: walk.MinFit + walk.MinCalibration, OOSRows: new(len(split.OOS)), RequiredOOSRows: new(walk.OOSMinRows),
 				Detail: "the fit and calibration rows cannot be learned from", Cause: err,
@@ -281,14 +284,6 @@ func (t *Trainer) readCohort(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("metalabel: read the live prompt cohort: %w", err)
 	}
 	return cohort, nil
-}
-
-func samples(rows []Row) []metalabel.Sample {
-	out := make([]metalabel.Sample, len(rows))
-	for i, r := range rows {
-		out[i] = r.Sample()
-	}
-	return out
 }
 
 // derefFloat renders an optional metric for the log: NaN when undefined.
