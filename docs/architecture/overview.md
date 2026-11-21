@@ -166,7 +166,7 @@ pitha-trador/
 │   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信
 │   │   ├── updater/               # GitHub Releases自動アップデート（検知・安全ゲート・検証、desktopのみ配線、§9）
 │   │   │   ├── tempcleanup/       # 更新後に残るインストーラー一時ディレクトリの起動時掃除（`CleanupStale`、issue #590）。`updater`と`cmd/desktop`から使うリーフ
-│   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類のテスト。`updater`の行数上限のため分離（#398）
+│   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類・ダウンロード後の安全ゲート再確認（`recheck_test.go`）のテスト。`updater`の行数上限のため分離（#398・#1179）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
 │   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
 │   │   ├── actuals/               # 実績評価と合格ライン（issue #777、`requirements/functional/performance-evaluation.md`）: 期間・方向・exit_reason・メタモデル版・A/Bアーム別の指標と信頼区間、コスト内訳、OOS並列。読み取り専用・表示時計算

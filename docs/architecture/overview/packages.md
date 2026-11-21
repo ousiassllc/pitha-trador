@@ -1,6 +1,6 @@
 # アーキテクチャ設計: パッケージ一覧（service・repository・domain）
 
-`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
+`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。§4 は、ディレクトリ・ファイルの行数上限（linterly）のために `service`・`repository`・`domain`・`logging` の下へ切り出したサブパッケージ（本番コード 1 つとテスト専用）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
 
 共通の性質: 研究用（research-only）と書いたものは、Policy・Risk・発注・Paper ガード・Live・Jev のプロンプト・RAG・Calibration・メタモデルの入力に一切ならない（記録と読み出しだけ）。層のimport方向と兄弟サブパッケージ間の規約は `overview.md` §3 に従う。
 
@@ -68,3 +68,34 @@
 | `researchfx` | 研究用の FX 1 分足の記録（#1084。`research_fx_candles`・`research_fx_days`）の値型。取引の入力にならない |
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084。`research_index_minutes`・`research_index_days`）の値型。取引の入力にならない |
 | `researchlabel` | 研究用の固定ホライズンのラベル（#1074。`research_horizon_labels`）の値型。市場スナップショットのバーからホライズンの出口バーまで持った場合の、コスト前後のリターン |
+
+## 4. 行数上限のために切り出したサブパッケージ
+
+### 4.1 本番コード
+
+| パッケージ | 責務 |
+|-----------|------|
+| `service/metalabel/training/walkforward` | メタラベリングの夜間再学習（`service/metalabel/training`）のデータ側（#1163）。ラベル付きの `Row`・`WalkForwardConfig`・`Split`、行を fit < 較正 < OOS に purge・embargo つきで切る `SplitWalkForward`、履歴が足りないときの `ErrInsufficientData`（と、その詳細を持つ `InsufficientDataError`）、判断日（JST）を返す `DayOf` を公開する。`walkforward.go`（分割）と `insufficient.go`（`InsufficientDataError`）に分け、`training` のディレクトリ行数上限のために別パッケージにしてある。`training.DefaultWalkForwardConfig`（既定の分割）はこの `WalkForwardConfig` を返し、`training`・`paperresultsmcp/metalabeldiag`・`metaablation/independence/fromsplit` が import する。この分割のテスト（`walkforward_test.go`・`walkforward_reach_test.go`）も同じディレクトリにある |
+
+### 4.2 テスト専用（`_test.go` のみ）
+
+どれも `package <名前>_test` の外部テストだけを持ち（本番コードは無い）、対象パッケージの公開 API を外から駆動する。ディレクトリ行数上限のため、対象パッケージの `_test.go` を移したもの（振る舞いは変えていない）。
+
+| パッケージ | 責務 |
+|-----------|------|
+| `repository/jobqueue/failedflow` | `JobRepository.ListFailedAfter`（失敗ジョブの窓・並び順・ページングと、上限が正でないときの扱い）のテスト（#1178） |
+| `repository/judgement/proposalflow` | `ProposalRepository`（Policy 提案）の挿入・取得・バックテスト結果とレビューの更新・適用済み／ロールバックの印・状態別の一覧・最後の変更時刻のテスト（#1178） |
+| `repository/market/instrumentflow` | `InstrumentRepository`（作成・取得・更新・有効な銘柄の一覧・同じ銘柄の重複の拒否・直近の 5 分リターン・種別と資産クラス）のテスト（#1178） |
+| `repository/metalabel/skippedflow` | メタラベルの学習行（`ListTrainingRows`）に、ラベル未確定の見送り候補（LONG／SHORT のみ）を足す `ListTrainingRowsWithSkipped` と、`calibration_outcomes` の出所の印（入った・見送り・方向なし）のテスト（#1178） |
+| `repository/sqlitedb/migrationflow` | マイグレーション 000021（保存時刻を固定幅へそろえる）・000029（クローズ済みポジションの含み損益を 0 に戻す）の適用結果のテスト（#1178） |
+| `repository/trading/orderflow` | `OrderRepository`（成行・指値の挿入と取得・約定・状態更新・銘柄別と状態別の一覧・エントリーの約定とポジション開設を 1 つにまとめる `FillEntry`・ポジションに結びつかない約定の検出）のテスト（#1178） |
+| `domain/domainflow` | `internal/domain` の純粋ロジックのテスト。Policy 提案の検証・符号化（`ValidatePolicyChanges` ほか）と、スキャンの見送り理由（`ScreenReasons`）・スキャンサイクルの問い合わせ（`ScanCycle.Query`・`Summary`）（#1179） |
+| `logging/maskflow` | `internal/logging` の秘密のマスク（`MaskJSON`・`MaskString`・`MaskJSONText`・`IsSensitiveKey`。立花の認証情報のキーを含む）のテスト（#1179） |
+| `service/updater/checkflow` | `updater` のダウンロードの堅牢化（`hardening_test.go`）・`Status` の分類（`status_kind_test.go`）・ダウンロード後に安全ゲートを評価し直す再確認（`recheck_test.go`）のテスト（#398・#1179） |
+| `service/opsettings/brokerflow` | `opsettings.Service` が保存するブローカー設定（`broker.*` の値の正規化・不正値の拒否・秘密鍵ファイルのパスの検証・`LoadBroker` の既定値と読み込み失敗時の扱い）のテスト（#1180） |
+| `service/scheduler/periodicflow` | Scheduler の定期確認（操作者ハートビート・Kill Switch のリスク監視と自動再開・イベント再評価の投入）のテスト（#1173） |
+| `service/policy/handlerflow` | `policy.Handler` の `HandleJob`（薄い板の流動性・古いスナップショットの見送り・Jev 回答の失敗・シグナルの保存・メタルール）のテスト（#1173） |
+| `service/jev/shadowflow` | Jev の shadow 比較（#872）のテスト。shadow の実行（ライブと同じ入力・トークンと費用の記録）・スロットル・日次コスト・昇格の監査・ライブ版の読み出し・Paper のみで既定オフ・取引／RAG／Calibration／学習から切り離されていること（#1173） |
+| `service/metalabel/metalabelflow` | メタラベルの学習器（`Train`・`FitCalibrator`・`ParseModel`）と報告役（`Reporter`。最新モデル・OOS 指標・採用の記録・再学習の見送りの集計）のテスト（#1161・#1163） |
+| `service/calibration/labelertests` | Calibration の `Labeler`（triple-barrier とホライズンのラベル付け）と、ラベルから読む指標（Brier・信頼度帯・ホライズン別）のテスト（#1162） |
+| `service/featureengine/featuretests` | Feature Engine の特徴量計算（`Compute`・窓リターン・OFI・スクリーン信号・足の古さ・全件スキャンの間隔）のテスト（#1162） |
