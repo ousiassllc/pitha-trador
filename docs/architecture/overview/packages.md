@@ -1,6 +1,6 @@
 # アーキテクチャ設計: パッケージ一覧（service・repository・domain）
 
-`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。§4 は、ディレクトリ・ファイルの行数上限（linterly）のために `service`・`repository`・`domain`・`logging` の下へ切り出したサブパッケージ（本番コード 1 つとテスト専用）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
+`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` の**1 階層目**のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていない 1 階層目のものはここで補う）。2 階層目以降（`service/jev/trial`・`service/risk/bucket`・`service/paperresultsmcp/*`・`service/metaablation/*` など）は一覧の対象外で、各パッケージの `doc.go` を一次情報とする（`paperresultsmcp` は `docs/components/paper-results-mcp.md` §2、`metaablation` は `docs/research/metaablation.md` を参照）。§4 は、ディレクトリ・ファイルの行数上限（linterly）のために切り出したサブパッケージの**代表例**（全体の一覧ではない）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
 
 共通の性質: 研究用（research-only）と書いたものは、Policy・Risk・発注・Paper ガード・Live・Jev のプロンプト・RAG・Calibration・メタモデルの入力に一切ならない（記録と読み出しだけ）。層のimport方向と兄弟サブパッケージ間の規約は `overview.md` §3 に従う。
 
@@ -69,7 +69,9 @@
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084。`research_index_minutes`・`research_index_days`）の値型。取引の入力にならない |
 | `researchlabel` | 研究用の固定ホライズンのラベル（#1074。`research_horizon_labels`）の値型。市場スナップショットのバーからホライズンの出口バーまで持った場合の、コスト前後のリターン |
 
-## 4. 行数上限のために切り出したサブパッケージ
+## 4. 行数上限のために切り出したサブパッケージ（代表例）
+
+ここに載せているのは代表例で、全体の一覧ではない。同じ理由で切り出されたテスト専用ディレクトリ（`.go` が `_test.go` のみ）は、ここに載せたものの他にも多数ある。載せていないものは、対象パッケージの `doc.go` やテストの先頭コメントを見る。
 
 ### 4.1 本番コード
 

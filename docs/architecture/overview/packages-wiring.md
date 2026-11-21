@@ -1,6 +1,6 @@
 # アーキテクチャ設計: パッケージ一覧（bootstrap・router・config・web）
 
-`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/bootstrap`・`internal/router`・`internal/config`・`internal/web` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`service`・`repository`・`domain` 側は `overview/packages.md`。
+`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/bootstrap`・`internal/router`・`internal/config`・`internal/web` の**1 階層目**のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていない 1 階層目のものはここで補う）。2 階層目以降（`web/handler/orderproposals`・`bootstrap/proposalexec/proposalexectests`・`web/organisms/mcp` など）は一覧の対象外で、各パッケージの `doc.go` を一次情報とする（`web/middleware/apierrorpage` のような行数上限のための本番の切り出しは `overview/packages.md` §4）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`service`・`repository`・`domain` 側は `overview/packages.md`。
 
 共通の性質: 研究用（research-only）と書いたものは、Policy・Risk・発注・Paper ガード・Live・Jev の入力に一切ならない。`bootstrap` 配下の `*wire`・`*job` は、親（`bootstrap`）の行数上限のために切り出した組み立て役で、親が子を import し、子は依存を引数で受け取る（`overview.md` §3「サブパッケージ共通の規約」）。
 
