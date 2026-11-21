@@ -65,7 +65,9 @@ beforeEach(() => {
   globalThis.fetch = ((path: string, init: RequestInit) => {
     calls.push({ method: init.method ?? 'GET', path, body: init.body });
     const r = responses[`${init.method} ${path}`] ?? { status: 200, body: {} };
-    return Promise.resolve(new Response(JSON.stringify(r.body), { status: r.status }));
+    // 204 carries no body, like the real server's answer to a Body-less handler.
+    const body = r.status === 204 ? null : JSON.stringify(r.body);
+    return Promise.resolve(new Response(body, { status: r.status }));
   }) as unknown as typeof fetch;
 });
 afterEach(() => {
@@ -175,6 +177,16 @@ describe('urls from the panel attributes', () => {
     btn.id = 'cancel-pending';
     await press('cancel-pending');
     expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /x/cancel', 'GET /x/status']);
+  });
+
+  test('cancel answered with 204 and no body shows the success message and no warning', async () => {
+    responses['POST /x/cancel'] = { status: 204, body: undefined };
+    const btn = document.querySelector('[data-migration-cancel-pending]') as HTMLButtonElement;
+    btn.id = 'cancel-pending';
+    await press('cancel-pending');
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /x/cancel', 'GET /x/status']);
+    expect(text('[data-migration-message]')).toContain('取り込みをやめました');
+    expect(document.querySelector('[data-inline-alert]')).toBeNull();
   });
 
   test('a missing URL attribute sends nothing', async () => {
