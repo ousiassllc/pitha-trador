@@ -83,8 +83,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the twenty-six read tools, the six settings, six order-proposal, four experiment and three Jev prompt tools, the research status tool,
-// the five replay tools, the export tool, the six research tools and the five research-note / FX tools (63 in all); only the seventeen writing tools are not read-only.
+// tools/list returns exactly the read tools (allTools) and the fixed tool sets (settings, order-proposal, experiment, Jev prompt, research status, replay, export,
+// research and research-note / FX tools); writingTools is the list of writing tools, and every other tool is read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -122,7 +122,7 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	}
 }
 
-// No write-style tool can exist beyond the settings and order-proposal tools: the dispatch table
+// No write-style tool exists outside the fixed tool sets that writingTools is drawn from: the dispatch table
 // (not just tools/list) is scanned for write/order/kill-switch-operation names
 // outside those fixed tool sets, and calling such names - or any unknown
 // name - gives the spec'd invalid_argument.

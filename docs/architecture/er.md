@@ -201,3 +201,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.103 | 2026-11-22 | MCP の書き込みの説明の「書くのは…だけ」を、ツールごとに個別に定めた狭い経路（書き込みツール 18 本。`paper-results-mcp.md` §7.3）の言い方に直し、リプレイ（`jev_replay_runs`）・バックテスト（`backtest_runs`）・仮想 Paper（`virtual_paper_profiles` ほか）の書き込みと、`training_dataset_export` が DB に書かずファイルを書くことを追記（実装の変更は無い） | issue #1187 |
 | 1.104 | 2026-11-22 | `er/research-tools/tables-research-fx.md`の冒頭の参照パスを、実在する`architecture/research-tools/paper-results-mcp-research-fx.md`と`api/endpoints/research-tools/paper-results-mcp-research-fx.md`に直した（`research-tools/`への移動時の参照漏れ。表定義は変えない） | issue #1188 |
 | 1.105 | 2026-11-22 | `er/tables-jev-replay.md` の `cost_source` を、リプレイに Codex アームが無く CHECK が 3 値（`subscription` を許可しない）ことに合わせて訂正（表定義は変えない）。#1160 の修正時に履歴へ追記が漏れていた分 | issue #1160 |
+| 1.106 | 2026-11-22 | `er/tables-system.md`の`runtime_settings`の説明の「`opsettings.Keys()`は計33件」（#733 当時の値）を、件数を外して「許可キーの一次情報は`opsettings.Keys()`」に改めた（実装は149件。表定義は変えない） | issue #1205 |
