@@ -6,7 +6,7 @@
 
 ## 1. 目的
 
-実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りと、ホワイトリストに載った基本設定の読み書き（§7。issue #806・#807）と、Paper の注文案の受け付け（§8。issue #827）だけをプライベートな経路で届ける。
+実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りと、書き込みのツール（ホワイトリストに載った基本設定の読み書き（§7。issue #806・#807）、Paper の注文案の受け付け（§8。issue #827）、ほか各分割章・FR で個別に定めた狭い書き込み。一覧は §7.3）だけをプライベートな経路で届ける。
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
     end
     MCP["Paper 実績 MCP\nAPI キー必須"]
     DB[("SQLite\nmode=ro")]
-    DBW[("SQLite\n設定と注文案の書き込みだけ（§7・§8）")]
+    DBW[("SQLite\n個別に定めた狭い書き込みだけ（§7・§8）")]
     Grok -->|"Authorization: Bearer"| TS
     Grok --> CF
     Grok --> OT
@@ -26,7 +26,7 @@ flowchart LR
     CF --> MCP
     OT --> MCP
     MCP -->|"キー一致のあとだけ"| DB
-    MCP -->|"settings_set・order_proposal_submit など。ホワイトリスト／受け付けスイッチを通ったときだけ"| DBW
+    MCP -->|"settings_set・order_proposal_submit など（書き込み 18 ツール。§7.3）。ホワイトリスト／受け付けスイッチ／書き込み許可を通ったときだけ"| DBW
 ```
 
 MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同じ Windows ユーザーのセッションで動く（アプリが子プロセスとして起動し、アプリの終了で止まる。`paper-results-mcp-lifecycle.md`）。話しかたは HTTP である（stdio ではない）。インターネットへ直接は公開しない。外へ届ける経路は実装に依存せず、§3.2 のどれを選んでも同じ MCP・同じ API キーで動く（悠太さん、2026-10-17。Cloudflare を必須にしない。Tailscale も検討する）。
@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 26 つ（`health_today`・`ai_roles`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics`・`entry_quality_whatif`・`disclosure_skip_summary`・`jev_trial_compare`・`jev_trial_cost`・`jev_evaluation`・`research_horizon_summary`・`research_quote_source_compare`・`disclosure_sources_status`（分割章 `paper-results-mcp-disclosure-sources.md`。#1096）・`jquants_status`（分割章 `paper-results-mcp-jquants.md`。#1093）・`jev_evaluation_slices`・`jev_evaluation_trend`・`candidate_ledger`・`promotion_checklist` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）と、`docs/architecture/paper-results-mcp-experiments.md` の調整の実験ツール 4 つ（`experiment_create` / `experiment_close` と、読み取り専用の `experiments_list` / `experiment_compare`。issue #871）と、Jev のプロンプトのツール 3 つ（読み取り専用の `jev_shadow_compare` / `jev_shadow_cost` と、書き込みの `jev_prompt_promote`。issue #872。§5.1・§7.3 ⑥。分割章 `paper-results-mcp-jev-prompt.md`）だけであると、期間を取らない研究用の状況ツール 1 つ（`research_daily_bars_status`。分割章 `paper-results-mcp-research-bars.md`。#1082）と、リプレイ評価のツール 5 つ（`replay_estimate` / `replay_start` / `replay_stop` / `replay_progress` / `replay_results`。分割章 `paper-results-mcp-jev-replay.md`。#1085）と、学習用データセットの書き出しツール 1 つ（`training_dataset_export`。ローカルのフォルダへファイルを書くだけで DB には書かない。issue #1094。分割章 `paper-results-mcp-dataset-export.md`）（合計 52）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 26 つ（`health_today`・`ai_roles`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics`・`entry_quality_whatif`・`disclosure_skip_summary`・`jev_trial_compare`・`jev_trial_cost`・`jev_evaluation`・`research_horizon_summary`・`research_quote_source_compare`・`disclosure_sources_status`（分割章 `paper-results-mcp-disclosure-sources.md`。#1096）・`jquants_status`（分割章 `paper-results-mcp-jquants.md`。#1093）・`jev_evaluation_slices`・`jev_evaluation_trend`・`candidate_ledger`・`promotion_checklist` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）と、`docs/architecture/paper-results-mcp-experiments.md` の調整の実験ツール 4 つ（`experiment_create` / `experiment_close` と、読み取り専用の `experiments_list` / `experiment_compare`。issue #871）と、Jev のプロンプトのツール 3 つ（読み取り専用の `jev_shadow_compare` / `jev_shadow_cost` と、書き込みの `jev_prompt_promote`。issue #872。§5.1・§7.3 ⑥。分割章 `paper-results-mcp-jev-prompt.md`）だけであると、期間を取らない研究用の状況ツール 1 つ（`research_daily_bars_status`。分割章 `paper-results-mcp-research-bars.md`。#1082）と、リプレイ評価のツール 5 つ（`replay_estimate` / `replay_start` / `replay_stop` / `replay_progress` / `replay_results`。分割章 `paper-results-mcp-jev-replay.md`。#1085）と、学習用データセットの書き出しツール 1 つ（`training_dataset_export`。ローカルのフォルダへファイルを書くだけで DB には書かない。issue #1094。分割章 `paper-results-mcp-dataset-export.md`）と、バックテストのツール 3 つ（`backtest_start` / `backtest_get` / `backtest_list`。分割章 `paper-results-mcp-backtest.md`。#1086）と、仮想 Paper のツール 4 つ（`virtual_paper_profile_create` / `virtual_paper_profile_stop` / `virtual_paper_rerun_failed` / `virtual_paper_compare`。分割章 `paper-results-mcp-virtual-paper.md`。#1087）と、研究ノートと FX・指数の系列のツール 6 つ（`research_note_create` / `research_note_update` / `research_notes_list` / `research_note_get` / `fx_series_summary` / `index_series_summary`。分割章 `research-tools/paper-results-mcp-research-notes.md`・`research-tools/paper-results-mcp-research-fx.md`・`research-tools/paper-results-mcp-research-index.md`）（合計 65）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -206,7 +206,7 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 7. 設定の読み書き（issue #806・#807）
 
-Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 10 ツール、読み取り接続）は従来どおり書けない。
+Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのは、ホワイトリストの設定ツール、§8 の注文案の受け付け、ほか各分割章・FR で個別に定めた狭い書き込み（書き込みツールは `mcptests/tools_test.go` の `writingTools` の 18 ツール。§7.3）だけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（書き込みツール以外の読み取りの 26 ツール、読み取り接続）は従来どおり書けない。
 
 ### 7.1 ホワイトリスト
 
@@ -249,13 +249,13 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 - 保存先は `runtime_settings` のキー `mcp.settings_write_enabled`（JSON の整数 `1` / `0`）。**行が無いときは許可（既定オン）**。MCP は API キーがあるときだけ待受するので、キーがあれば書き込みも既定で使える（悠太さんの決定。issue #806 のコメント）。値が `0` / `1` 以外に壊れているときは禁止として扱う（安全側）
 - 保存先を `runtime_settings` にした理由: アプリ（Settings 画面）と MCP は別プロセスで、同じ DB を見る。`paper-results-mcp.json` はアプリが書き、MCP が起動時に一度読むだけなので、実行中の切り替えが MCP に届かない（再起動が要る）。`runtime_settings` なら両方が毎回同じ値を読む。待受のオン/オフ・API キー（`paper-results-mcp.json`、§3.4）とは別物で、そちらは引き続き DB に置かない
 - 切り替えは両方からできる。**Settings 画面**: 「外部連携」→ MCP カードの「MCP からの設定変更を許可する」チェック（`POST /settings/mcp/write`、セッション Cookie と CSRF が必要）。**MCP**: `settings_write_enable` / `settings_write_disable`（Bearer 認証が必要。書き込みが禁止のあいだも呼べる。禁止のままでは戻せなくなるため）
-- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 10 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
+- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 26 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
 - スイッチは設定キーではなく、`settings_set` で書けない（`key_not_allowed`）
 
 ### 7.3 書き込み経路（狭い書き手）
 
-- 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
-- 書き手が実行する変更は 10 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）、⑥ライブの Jev のプロンプトの版の昇格（`runtime_settings` の `jev.trader_prompt_version` の upsert と `jev_prompt_promotions` への監査 1 行。`jev_prompt_promote`。分割章 §7.3 ⑥）、⑦調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑧実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）、⑨研究ノート 1 行と版 1 の `INSERT`（`research_note_create`。`research_notes` / `research_note_versions`。書き込み許可に従う。分割章 `research-tools/paper-results-mcp-research-notes.md`）、⑩研究ノートの更新（新しい版の `INSERT` 1 つと `research_notes` の現在の版の写しの `UPDATE` 1 つ。`research_note_update`。版の行の `UPDATE` / `DELETE` は無い）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する。研究ノートの 2 文は `notetests.TestNoteWritePathIsNarrow` が固定する）
+- 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。DB ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
+- 書き込みを行うツールは 18 本（一覧は `internal/service/paperresultsmcp/mcptests/tools_test.go` の `writingTools`）で、書き手が実行する変更はツールごとに定めた狭い 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）、⑥ライブの Jev のプロンプトの版の昇格（`runtime_settings` の `jev.trader_prompt_version` の upsert と `jev_prompt_promotions` への監査 1 行。`jev_prompt_promote`。分割章 §7.3 ⑥）、⑦調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑧実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）、⑨研究ノート 1 行と版 1 の `INSERT`（`research_note_create`。`research_notes` / `research_note_versions`。書き込み許可に従う。分割章 `research-tools/paper-results-mcp-research-notes.md`）、⑩研究ノートの更新（新しい版の `INSERT` 1 つと `research_notes` の現在の版の写しの `UPDATE` 1 つ。`research_note_update`。版の行の `UPDATE` / `DELETE` は無い）、⑪リプレイの開始（`jev_replay_runs` への run 1 行の `INSERT`。`replay_start`。書き込み許可に従う）と停止（停止フラグの `UPDATE` 1 つ。`replay_stop`。費用を止めるだけなので書き込み許可は見ない。`mcpset/replay.go`。`overview/integrations-jev-replay.md`）、⑫バックテスト（`backtest_runs` への 1 行の `INSERT`。`backtest_start`。書き込み許可に従う。受け付けた実行の状態の `UPDATE`（開始・終了・再起動で残った行の掃除）は書き込み許可を見ない。`mcpset/researchwrite/backtest.go`。分割章 `paper-results-mcp-backtest.md`）、⑬仮想 Paper（`virtual_paper_profiles` への `INSERT` 1 つ（`virtual_paper_profile_create`）と `UPDATE` 1 つ（`virtual_paper_profile_stop`）、`failed` の `virtual_paper_days` 1 行の `DELETE`（`virtual_paper_rerun_failed`）。書き込み許可に従う。`mcpset/researchwrite/virtualpaper.go`。分割章 `paper-results-mcp-virtual-paper.md`）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する。研究ノートの 2 文は `notetests.TestNoteWritePathIsNarrow` が固定する）。例外は `training_dataset_export` で、DB には書かず書き手の接続も使わない（ローカルの `exports` フォルダへファイルを書く。FR-MCP-45。分割章 `research-tools/paper-results-mcp-dataset-export.md`）
 - 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する。シャドーの 2 キーは `jevprompt.Service`）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 

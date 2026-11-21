@@ -195,3 +195,4 @@
 | 1.190 | 2026-11-22 | FR-BT-4 の「コストモデル」行の指標の算出基準を、「集計」行と実装（`metrics.go` の `Aggregate`）に合わせて訂正: Profit Factor・Expectancy・平均利益・平均損失・勝率・Max Drawdown はコスト控除後の `NetReturnPct`、`GrossPnLPct`・`SlippagePnLPct`・`FeePnLPct`・`NetPnLPct` は合計として別に出す（「コスト控除前の価格リターン」とした誤記を解消。実装・承認ゲートは変更しない） | issue #1150 |
 | 1.191 | 2026-11-22 | FR-META-6 の仮置き（`placeholder`）の項の、実日付を保存したときの OOS 窓の記述を、FR-META-4・`training/walkforward.go` の `oosStart` に合わせて訂正: 7日固定の旧記述を「OOS 窓の下限は `max(now−OOSMaxWindow, cutoff)`（`OOSMaxWindow` は既定21日）」に改めた（実装・採用基準・既定値は変更しない） | issue #1151 |
 | 1.192 | 2026-11-22 | FR-SETUP-4 の Setup 完了条件を、固定の個数ではなく FR-SETUP-1 の選択中のブローカーの必須項目（`config.RequiredSetup`。kabu は 2 つのシークレット、立花は 2 つのシークレットと選択環境の秘密鍵ファイルのパス）に改めた（`setupComplete` の挙動に合わせた訂正で、実装は変更しない。UC-15 は個数に触れないため変更なし） | issue #1152 |
+| 1.193 | 2026-11-22 | FR-MCP-49 の表の参照パスを、実在する `architecture/er/research-tools/tables-research-notes.md` に直した（研究系の章を `research-tools/` へ移したときの参照漏れ。要件・挙動は変えない） | issue #1188 |
