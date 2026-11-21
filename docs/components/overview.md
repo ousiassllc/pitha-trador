@@ -57,7 +57,7 @@ static/
     │   ├── settings-hub/          pitha-settings-hub.ts（Litではない。`/settings`のページ一覧と各Settingsページが埋め込む`data-hash-routes`を読み、旧`/settings#modal-<id>`・`#update-panel`や、別ページへ移ったダイアログの旧`/settings/<old page>#modal-<id>`の直リンクを該当ページ`/settings/<page id>#<id>`へ`location.replace`で転送する。現在のページ自身のダイアログのハッシュは転送しない。issue #805・#895）
     │   ├── help-mark/             pitha-help-mark.ts（Litではない。`atoms.HelpMark`と`lib/help-mark.ts`の「?」ヘルプ本文の開閉と配置。ホバー・フォーカス・タップで開き、Escで閉じる。`layout.document`が全ページで読む。issue #902）
     │   ├── performance-tabs/      pitha-performance-tabs.ts（Litではない。成績の実績タブで、旧`/performance#backtest`の直リンクを`?tab=backtest`へ転送する。issue #895）
-    │   ├── migration/             pitha-migration.ts（Litではない。Settings「PC 移行」の取り込み: 「内容を確認」で`POST /api/v1/migration/preview`、「取り込みを予約する」で`POST /api/v1/migration/confirm`。issue #1075）
+    │   ├── migration/             pitha-migration.ts（Litではない。Settings「PC 移行」の取り込み: 「内容を確認」で`POST /api/v1/migration/preview`、「取り込みを予約する」で`POST /api/v1/migration/confirm`。呼ぶ URL（preview / confirm / cancel / status）は`organisms.MigrationPanel`が`<section data-migration-panel>`の`data-preview-url`・`data-confirm-url`・`data-cancel-url`・`data-status-url`で渡し、TS は URL を持たない。「予約した取り込みをやめる」の出し分けは`status.pending`の有無。issue #1075 / #1177）
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示

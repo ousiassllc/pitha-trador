@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { onClick } from './pitha-migration';
+import { loadStatus, onClick } from './pitha-migration';
 
 // A trimmed copy of organisms.MigrationPanel's markup: the hooks the module reads.
 const PANEL = `
@@ -8,7 +8,7 @@ const PANEL = `
   <button type="button" data-confirm-cancel>キャンセル</button>
   <button type="button" data-confirm-accept>実行する</button>
 </dialog>
-<section data-migration-panel>
+<section data-migration-panel data-preview-url="/x/preview" data-confirm-url="/x/confirm" data-cancel-url="/x/cancel" data-status-url="/x/status">
   <input type="file" data-migration-file>
   <button type="button" id="preview" data-migration-preview>内容を確認</button>
   <p data-migration-message></p>
@@ -92,9 +92,9 @@ describe('preview', () => {
 
   test('uploads the file raw, then shows bundle info and both row counts without changing anything', async () => {
     chooseFile();
-    responses['POST /api/v1/migration/preview'] = { status: 200, body: preview(true) };
+    responses['POST /x/preview'] = { status: 200, body: preview(true) };
     await press('preview');
-    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /api/v1/migration/preview']);
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /x/preview']);
     expect(calls[0]?.body).toBeInstanceOf(Blob);
     expect(text('[data-field="app_version"]')).toBe('v1.2.3');
     expect(text('[data-field="schema"]')).toContain('55');
@@ -108,7 +108,7 @@ describe('preview', () => {
 
   test('a refused file shows the server detail in an alert', async () => {
     chooseFile();
-    responses['POST /api/v1/migration/preview'] = {
+    responses['POST /x/preview'] = {
       status: 422,
       body: { detail: 'ファイルが壊れています' },
     };
@@ -120,7 +120,7 @@ describe('preview', () => {
 describe('confirm', () => {
   async function previewed(hasData: boolean): Promise<void> {
     chooseFile();
-    responses['POST /api/v1/migration/preview'] = { status: 200, body: preview(hasData) };
+    responses['POST /x/preview'] = { status: 200, body: preview(hasData) };
     await press('preview');
     calls.length = 0;
   }
@@ -147,7 +147,7 @@ describe('confirm', () => {
     (document.querySelector('[data-migration-replace]') as HTMLInputElement).checked = true;
     accept();
     await press('confirm');
-    const post = calls.find((c) => c.path === '/api/v1/migration/confirm');
+    const post = calls.find((c) => c.path === '/x/confirm');
     expect(JSON.parse(String(post?.body))).toEqual({
       token: 'a'.repeat(32),
       replace_existing: true,
@@ -159,10 +159,56 @@ describe('confirm', () => {
     await previewed(false);
     accept();
     await press('confirm');
-    const post = calls.find((c) => c.path === '/api/v1/migration/confirm');
+    const post = calls.find((c) => c.path === '/x/confirm');
     expect(JSON.parse(String(post?.body))).toEqual({
       token: 'a'.repeat(32),
       replace_existing: false,
     });
+  });
+});
+
+describe('urls from the panel attributes', () => {
+  const panel = () => document.querySelector('[data-migration-panel]') as HTMLElement;
+
+  test('cancel posts to data-cancel-url and reloads data-status-url', async () => {
+    const btn = document.querySelector('[data-migration-cancel-pending]') as HTMLButtonElement;
+    btn.id = 'cancel-pending';
+    await press('cancel-pending');
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual(['POST /x/cancel', 'GET /x/status']);
+  });
+
+  test('a missing URL attribute sends nothing', async () => {
+    panel().removeAttribute('data-preview-url');
+    chooseFile();
+    await press('preview');
+    expect(calls).toHaveLength(0);
+    panel().removeAttribute('data-status-url');
+    await loadStatus(panel());
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('cancel-pending button', () => {
+  const button = () => document.querySelector('[data-migration-cancel-pending]');
+  const pending = { manifest: { created_at: '2026-11-14T01:02:03Z' }, confirmed_at: 'x' };
+
+  test('is shown only while status.pending is present', async () => {
+    responses['GET /x/status'] = { status: 200, body: { pending } };
+    await loadStatus(document.querySelector('[data-migration-panel]') as HTMLElement);
+    expect(button()?.hasAttribute('hidden')).toBe(false);
+    expect(text('[data-migration-status]')).toContain('予約済み');
+
+    responses['GET /x/status'] = { status: 200, body: {} };
+    await loadStatus(document.querySelector('[data-migration-panel]') as HTMLElement);
+    expect(button()?.hasAttribute('hidden')).toBe(true);
+  });
+
+  test('stays hidden when the status request fails', async () => {
+    responses['GET /x/status'] = { status: 200, body: { pending } };
+    const root = document.querySelector('[data-migration-panel]') as HTMLElement;
+    await loadStatus(root);
+    responses['GET /x/status'] = { status: 500, body: {} };
+    await loadStatus(root);
+    expect(button()?.hasAttribute('hidden')).toBe(true);
   });
 });
