@@ -5,10 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest/sensitivity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 )
 
 // Register mounts the Performance routes on engine: the page and the cost
@@ -42,16 +44,23 @@ type costSensitivityRow struct {
 // bps of extra round-trip
 // cost are added. `format=csv` (the default) downloads a CSV, `format=json`
 // returns the rows as JSON. 400 on invalid input, 500 on a run failure, 503 on
-// a timeout, as the page does.
+// a timeout, as the page does. A failure answers the CSV download (a plain
+// browser navigation from the Performance form) with shared.RespondPageError's
+// HTML error page (issue #1176); `format=json` keeps the JSON / plain-text
+// bodies of an API-style call.
 func (h *PerformanceHandler) CostSensitivity(c *gin.Context) {
 	format := c.DefaultQuery("format", "csv")
 	if format != "csv" && format != "json" {
-		c.String(http.StatusBadRequest, "format は csv か json で指定してください。")
+		shared.RespondPageError(c, http.StatusBadRequest, "format は csv か json で指定してください。")
 		return
 	}
 	_, wf, errs := parseBacktestForm(c)
 	if len(errs) > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"errors": errs})
+		if format == "json" {
+			c.JSON(http.StatusBadRequest, gin.H{"errors": errs})
+			return
+		}
+		shared.RespondPageError(c, http.StatusBadRequest, strings.Join(errs, " "))
 		return
 	}
 	ctx, cancel := context.WithTimeout(c.Request.Context(), backtestTimeout)
@@ -59,11 +68,11 @@ func (h *PerformanceHandler) CostSensitivity(c *gin.Context) {
 	result, err := h.runner.RunWalkForward(ctx, wf)
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		c.String(http.StatusServiceUnavailable, "バックテストがタイムアウトしました。期間を短くしてください。")
+		respondCostSensitivityFailure(c, format, http.StatusServiceUnavailable, "バックテストがタイムアウトしました。期間を短くしてください。")
 		return
 	case err != nil:
 		slog.ErrorContext(ctx, "handler: cost sensitivity backtest", "error", err)
-		c.String(http.StatusInternalServerError, "バックテストの実行に失敗しました。")
+		respondCostSensitivityFailure(c, format, http.StatusInternalServerError, "バックテストの実行に失敗しました。")
 		return
 	}
 
@@ -82,4 +91,14 @@ func (h *PerformanceHandler) CostSensitivity(c *gin.Context) {
 	if err := sensitivity.WriteCSV(c.Writer, rows); err != nil {
 		slog.ErrorContext(ctx, "handler: cost sensitivity csv", "error", err)
 	}
+}
+
+// respondCostSensitivityFailure answers a failed run: plain text for
+// `format=json` callers, the HTML error page for the CSV download.
+func respondCostSensitivityFailure(c *gin.Context, format string, status int, message string) {
+	if format == "json" {
+		c.String(status, message)
+		return
+	}
+	shared.RespondPageError(c, status, message)
 }
