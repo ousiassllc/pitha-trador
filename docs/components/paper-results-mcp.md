@@ -96,7 +96,7 @@ MCP は別プロセスのまま、アプリが子プロセスとして起動す�
 
 **子プロセスに渡すもの**: 引数は `-config <設定ファイルのパス>` だけ。API キーは起動引数にも環境変数にも載せず、子が `0600` の設定ファイルから読む。環境変数は許可リスト（`PATH`・`SYSTEMROOT`・`WINDIR`・`APPDATA`・`LOCALAPPDATA`・`USERPROFILE`・`HOME`・`XDG_CONFIG_HOME`・`TMP`・`TEMP`・`TMPDIR`・`TZ`・`PITHA_DB_PATH`・`PITHA_RISK_PATH`）だけで、アプリのそれ以外の環境変数は渡さない。標準入力・標準出力は null、標準エラーは終了理由の分類にだけ使い（ログにも画面にも出さない）、アプリの DB 接続・開いているファイルは渡さない。DB は子が自分で `mode=ro` + `query_only` で開く。実行ファイルはアプリ本体と同じフォルダの `paper-results-mcp(.exe)`。無いときは「エラー」（実行ファイルが見つからない）。
 
-DB は `PITHA_DB_PATH`、無ければ `%AppData%\pitha-trador\pitha.db` を、読み取りは読み取り専用で開く（設定ツールの書き込みだけは別の狭い接続。ファイルが無ければ作らない）。資金の分母は Settings の保存値、なければ `PITHA_RISK_PATH` / `config/risk.yaml` の `paper.initial_capital`。子プロセスの環境変数の許可リストは増やさない（設定の書き込みに追加の環境変数は要らない）。手で止めるときは Ctrl+C（SIGINT/SIGTERM）で、処理中の呼び出しを終えてから閉じる。
+DB は `PITHA_DB_PATH`、無ければ `%AppData%\pitha-trador\pitha.db` を、読み取りは読み取り専用で開く（書き込みツールの書き込みは、ツールごとに個別に定めた別の狭い接続だけで行う。一覧は `architecture/paper-results-mcp.md` §7.3。DB ファイルが無ければ作らない）。資金の分母は Settings の保存値、なければ `PITHA_RISK_PATH` / `config/risk.yaml` の `paper.initial_capital`。子プロセスの環境変数の許可リストは増やさない（設定の書き込みに追加の環境変数は要らない）。手で止めるときは Ctrl+C（SIGINT/SIGTERM）で、処理中の呼び出しを終えてから閉じる。
 
 Grok Bot には、選んだ経路の URL（Tailscale のホスト名、またはトンネルの HTTPS 名。画面の URL は待受アドレスそのもの）と `Authorization: Bearer <api_key>` を登録する（アプリの外の手作業）。実機での経路確認（tailnet の外から届かないことを含む）は自動テストの対象外で、キーを伏せた記録を残す（API 仕様 §5）。
 
@@ -139,3 +139,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.32 | 2026-11-20 | §2 のホワイトリストを 28 → 29 キーにした（`research.index.enabled`）。研究用の指数の 1 分値のツール（`index_series_summary`、`indexdiag`・`indextests`（登録は `jev_models_tool.go`））と、`jev_evaluation` の `index_symbol`（`evaldiag/indexcontext.go`）を足し、§1 のツールの表の内訳を「研究ノートと FX・指数の系列 6 つ」、合計を 64 にした | issue #1084 |
 | 1.33 | 2026-11-20 | 仮想 Paper に `virtual_paper_rerun_failed`（`virtualpapertool`・`virtualpaper.RerunFailedDay`・`mcpset/researchwrite`。`failed` の日の印を削除して次の日次の記録に再生させる。書き込みは `virtual_paper_days` の 1 行の削除だけ）を追加し、ツールの表を「バックテストと仮想 Paper 7 つ」にした | issue #1131 |
 | 1.34 | 2026-11-20 | 設定ツール（`settingstool`）・注文案のツール（`proposaltool`）・調整の実験のツール（`experimenttool`）の定義を、`tooldef` を使うサブパッケージへ移した（ルートの `settings_tools.go`・`order_proposal_tools.go`・`order_proposal_read_tools.go`・`experiment_tools.go` を削除。登録は `ext_tools.go`）。ツール名・引数スキーマ・説明・出力・エラーコード・書き込み許可の検査・ホワイトリストは変えない（`moved_tools_test.go` と `testdata/moved_tools.golden.json` が移動前の `tools/list` の項目と引数の検査結果を固定）。`tools/list` の並びだけが変わり、注文案（6）・設定（6）が `ext_tools.go` の登録の並びで研究ノートのツールの後に来る（クライアントは名前で呼ぶため影響しない） | issue #1130 |
+| 1.35 | 2026-11-22 | §4.2 の「設定ツールの書き込みだけは別の狭い接続」を、書き込みツールごとに個別に定めた別の狭い接続（一覧は `architecture/paper-results-mcp.md` §7.3。18 本）の言い方に直した（実装の変更は無い） | issue #1187 |
