@@ -1,4 +1,4 @@
-package market_test
+package instrumentflow_test
 
 import (
 	"context"
@@ -9,11 +9,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
-
-func openTestDB(t *testing.T) *market.InstrumentRepository {
-	t.Helper()
-	return market.NewInstrumentRepository(newTestDB(t))
-}
 
 func TestInstrumentRepository_CreateAndGet(t *testing.T) {
 	repo := openTestDB(t)

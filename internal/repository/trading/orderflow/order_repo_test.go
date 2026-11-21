@@ -1,4 +1,4 @@
-package trading_test
+package orderflow_test
 
 import (
 	"context"

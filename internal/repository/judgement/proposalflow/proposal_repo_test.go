@@ -1,4 +1,4 @@
-package judgement_test
+package proposalflow_test
 
 import (
 	"context"

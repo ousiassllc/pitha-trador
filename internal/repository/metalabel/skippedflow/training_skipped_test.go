@@ -1,4 +1,4 @@
-package metalabel_test
+package skippedflow_test
 
 import (
 	"context"

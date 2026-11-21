@@ -1,4 +1,4 @@
-package sqlitedb_test
+package migrationflow_test
 
 import (
 	"database/sql"
@@ -8,6 +8,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	_ "modernc.org/sqlite/vec" // vec0 module for the migrations (sqlitedb/db.go registers it for the other tests)
 
 	"github.com/ousiassllc/pitha-trador/db"
 )
