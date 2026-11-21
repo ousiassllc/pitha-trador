@@ -98,3 +98,49 @@ func TestCostSensitivity_Errors(t *testing.T) {
 		t.Errorf("timeout status = %d, want 503", rec.Code)
 	}
 }
+
+// Issue #1176: the CSV export is a plain browser navigation (form submit), so
+// its failures are the HTML error page, not raw JSON or text; format=json
+// keeps the JSON body for API-style callers.
+func TestCostSensitivity_CSVFailuresRenderErrorPage(t *testing.T) {
+	cases := []struct {
+		name   string
+		runner *recordingBacktestRunner
+		target string
+		status int
+	}{
+		{"validation", &recordingBacktestRunner{}, "/performance/cost-sensitivity?from=2026-09-20&to=2026-09-01", http.StatusBadRequest},
+		{"run failure", &recordingBacktestRunner{err: errors.New("boom")}, sensitivityQuery, http.StatusInternalServerError},
+		{"timeout", &recordingBacktestRunner{err: context.DeadlineExceeded}, sensitivityQuery, http.StatusServiceUnavailable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serveSensitivity(t, tc.runner, tc.target)
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tc.status, rec.Body)
+			}
+			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+				t.Errorf("Content-Type = %q, want text/html", ct)
+			}
+			if !strings.Contains(rec.Body.String(), `data-testid="error-page"`) {
+				t.Errorf("body = %s, want the pages.ErrorPage", rec.Body)
+			}
+			if strings.Contains(rec.Body.String(), "boom") {
+				t.Errorf("body leaks the underlying error: %s", rec.Body)
+			}
+		})
+	}
+}
+
+func TestCostSensitivity_JSONValidationErrorStaysJSON(t *testing.T) {
+	rec := serveSensitivity(t, &recordingBacktestRunner{}, "/performance/cost-sensitivity?from=2026-09-20&to=2026-09-01&format=json")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (body=%s)", rec.Code, rec.Body)
+	}
+	var body struct {
+		Errors []string `json:"errors"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Errors) == 0 {
+		t.Fatalf("body = %s (err %v), want a JSON errors list", rec.Body, err)
+	}
+}
