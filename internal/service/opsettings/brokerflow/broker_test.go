@@ -1,4 +1,4 @@
-package opsettings_test
+package brokerflow_test
 
 import (
 	"context"
