@@ -1,6 +1,6 @@
 # アーキテクチャ設計: パッケージ一覧（service・repository・domain）
 
-`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。§4 は、ディレクトリ・ファイルの行数上限（linterly）のために `service`・`repository`・`domain`・`logging` の下へ切り出したサブパッケージ（本番コード 1 つとテスト専用）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
+`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/service`・`internal/repository`・`internal/domain` の**1 階層目**のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていない 1 階層目のものはここで補う）。2 階層目以降（`service/jev/trial`・`service/risk/bucket`・`service/paperresultsmcp/*`・`service/metaablation/*` など）は一覧の対象外で、各パッケージの `doc.go` を一次情報とする（`paperresultsmcp` は `docs/components/paper-results-mcp.md` §2、`metaablation` は `docs/research/metaablation.md` を参照）。§4 は、ディレクトリ・ファイルの行数上限（linterly）のために切り出したサブパッケージの**代表例**（全体の一覧ではない）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`bootstrap`・`router`・`config`・`web` 側は `overview/packages-wiring.md`。
 
 共通の性質: 研究用（research-only）と書いたものは、Policy・Risk・発注・Paper ガード・Live・Jev のプロンプト・RAG・Calibration・メタモデルの入力に一切ならない（記録と読み出しだけ）。層のimport方向と兄弟サブパッケージ間の規約は `overview.md` §3 に従う。
 
@@ -22,7 +22,7 @@
 | `metaablation` | メタモデル（M 軸）× entry_quality 足切り（Q 軸）の 2×2 比較（#1046）。DB の**コピー**の上で、却下されたモデルを保存済みパラメータから再採点する研究用ツール。取引せず、元 DB へ書かず、モデルを昇格せず、LLM を呼ばない |
 | `opsettings` | Settings 画面が持つ、秘密でない運用設定の保存先（#708）。バックアップ・ログの保存先フォルダと Policy Engine／Fast Screener のしきい値などを `runtime_settings` に置く。設定ごとの検証・既定値は `config` 側 |
 | `orderflow` | 銘柄ごとの Order Flow Imbalance（OFI）を最良気配の更新の流れから積算し、Feature Engine が窓（短・中・長）で読めるようにする（`functional.md` §4.1）。特徴量・フィルタの入力のみ |
-| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）も担う。詳細は `docs/architecture/paper-results-mcp.md` |
+| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）のほか、調整の実験・Jev プロンプトの昇格・リプレイ・研究ノート・バックテスト・仮想 Paper・学習用データセットの書き出しなど、ツールごとに定めた狭い書き込みも担う（書き込みツール 18 本の一覧は `docs/architecture/paper-results-mcp.md` §7.3）。詳細は `docs/architecture/paper-results-mcp.md` |
 | `regime` | Jev trader 判断をどの戦略の下で行うかを決める（#755）。市場指数の 1 分リターン（ボラティリティ・lag-1 自己相関）で市場レジームを分類し、Paper 比較の A/B アームへ割り当て、平均回帰レジームでは VWAP 乖離の z スコアを測る |
 | `researchfx` | 研究用の FX 1 分足の記録（#1084）。設定された通貨ペアと完了した GMO 取引日ごとに、読み取り専用アダプタ（`fx/gmo`）で BID・ASK の 1 分足を取り、分で結合して日のマーカーとともに保存する |
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084）。指数コード（既定: 日経平均 101・TOPIX 151）ごとに、立花の時価の記録（#1083）に残った 1 分値を `research_index_minutes` へ写し、日のマーカーを書く |
@@ -69,13 +69,16 @@
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084。`research_index_minutes`・`research_index_days`）の値型。取引の入力にならない |
 | `researchlabel` | 研究用の固定ホライズンのラベル（#1074。`research_horizon_labels`）の値型。市場スナップショットのバーからホライズンの出口バーまで持った場合の、コスト前後のリターン |
 
-## 4. 行数上限のために切り出したサブパッケージ
+## 4. 行数上限のために切り出したサブパッケージ（代表例）
+
+ここに載せているのは代表例で、全体の一覧ではない。同じ理由で切り出されたテスト専用ディレクトリ（`.go` が `_test.go` のみ）は、ここに載せたものの他にも多数ある。載せていないものは、対象パッケージの `doc.go` やテストの先頭コメントを見る。
 
 ### 4.1 本番コード
 
 | パッケージ | 責務 |
 |-----------|------|
 | `service/metalabel/training/walkforward` | メタラベリングの夜間再学習（`service/metalabel/training`）のデータ側（#1163）。ラベル付きの `Row`・`WalkForwardConfig`・`Split`、行を fit < 較正 < OOS に purge・embargo つきで切る `SplitWalkForward`、履歴が足りないときの `ErrInsufficientData`（と、その詳細を持つ `InsufficientDataError`）、判断日（JST）を返す `DayOf` を公開する。`walkforward.go`（分割）と `insufficient.go`（`InsufficientDataError`）に分け、`training` のディレクトリ行数上限のために別パッケージにしてある。`training.DefaultWalkForwardConfig`（既定の分割）はこの `WalkForwardConfig` を返し、`training`・`paperresultsmcp/metalabeldiag`・`metaablation/independence/fromsplit` が import する。この分割のテスト（`walkforward_test.go`・`walkforward_reach_test.go`）も同じディレクトリにある |
+| `web/middleware/apierrorpage` | ブラウザのページ遷移（`Accept: text/html`かつ非HTMX・非WebSocket）で失敗した `/api/v1` の応答（4xx/5xx）を、problem+json ではなく固定メッセージの `pages.ErrorPage` へ差し替えるミドルウェア（`Handler`。#1196）。`router.useMiddleware` が `Recovery` の直後・`WebSocketBase`/`Session`/Setup Guard の外側に置く。`internal/web/middleware` のディレクトリ行数上限のために別パッケージにしてある。JSON・HTMX・成功応答は変えない |
 
 ### 4.2 テスト専用（`_test.go` のみ）
 

@@ -1,6 +1,6 @@
 # アーキテクチャ設計: パッケージ一覧（bootstrap・router・config・web）
 
-`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/bootstrap`・`internal/router`・`internal/config`・`internal/web` のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていないものはここで補う）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`service`・`repository`・`domain` 側は `overview/packages.md`。
+`docs/architecture/overview.md` §3 のディレクトリツリーに載せていない `internal/bootstrap`・`internal/router`・`internal/config`・`internal/web` の**1 階層目**のサブパッケージを、1 行ずつの責務でまとめる（ツリーは主要パッケージのみ。載せていない 1 階層目のものはここで補う）。2 階層目以降（`web/handler/orderproposals`・`bootstrap/proposalexec/proposalexectests`・`web/organisms/mcp` など）は一覧の対象外で、各パッケージの `doc.go` を一次情報とする（`web/middleware/apierrorpage` のような行数上限のための本番の切り出しは `overview/packages.md` §4）。責務の根拠は各パッケージの `doc.go` または先頭の `// Package` コメント。`service`・`repository`・`domain` 側は `overview/packages.md`。
 
 共通の性質: 研究用（research-only）と書いたものは、Policy・Risk・発注・Paper ガード・Live・Jev の入力に一切ならない。`bootstrap` 配下の `*wire`・`*job` は、親（`bootstrap`）の行数上限のために切り出した組み立て役で、親が子を import し、子は依存を引数で受け取る（`overview.md` §3「サブパッケージ共通の規約」）。
 
@@ -18,7 +18,7 @@
 | `healthalertwire` | 取引時間帯の見張りの組み立て。市場データのアラート検出（#802）・スリープガード（#863。どちらも 08:45 の確認窓に従う）・日次のセッション記録（#1054）を一緒に動かす |
 | `homeview` | Home 画面の DB を使うデータ源（#896）。`web/handler/home.Source` を、Paper 結果 MCP のツールと同じ読み取りモデル（`paperresultsmcp/query`・`proposal`）で実装し、画面と MCP が同じ値を出す |
 | `jquantswire` | J-Quants 読み取りアダプタ（#1093）の組み立て。足りない日足・分足を埋める日次メンテナンスタスク`jquants`、完了した日の研究用ラベルの付け直し、Settings 画面の求めによる J-Quants 由来データの全削除（解約後の片付け） |
-| `mcpwire` | Settings 画面の MCP サービスの組み立て（#792・#795）。読み取り専用の Paper 結果 MCP 自身の設定ファイルを編集し、同じサービスがアプリと一緒に MCP のプロセスを起動し、アプリの終了時に止める |
+| `mcpwire` | Settings 画面の MCP サービスの組み立て（#792・#795）。Paper 結果 MCP 自身の設定ファイルを編集し、同じサービスがアプリと一緒に MCP のプロセスを起動し、アプリの終了時に止める |
 | `metalabeljob` | メタラベル（#764・#765）の組み立て。`Job` は夜間の再学習（保存済みの triple-barrier ラベルから学習してモデルを保存。Settings の再学習時刻以降）、`PolicyOption` は同じ設定から本番のエントリー規則を配線する |
 | `migrationwire` | PC 移行の移行ファイル（#1075・FR-MIGRATE-*）をルーターへ配線する。生きている DB 上の書き出し役と、次の起動で適用する取り込みの段取り。起動側（DB を開く前に取り込みを適用）は `startup.OpenDatabase` |
 | `newswire` | News Ingest の feed を選び、動いているかをログに出す。`bootstrap` の行数上限のための切り出し |

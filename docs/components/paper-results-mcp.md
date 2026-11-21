@@ -5,7 +5,7 @@
 ## 1. プロセス
 
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
-- アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、設定ツールが呼ばれたときだけ、`runtime_settings` と監査表だけを書く狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
+- アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、書き込みツール（18 本。`architecture/paper-results-mcp.md` §7.3）が呼ばれたときだけ、ツールごとに定めた狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
 - トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 26 つ、設定 6 つ、注文案 6 つ、調整の実験 4 つ、Jev のプロンプト 3 つ、研究用の状況 1 つ、リプレイ 5 つ、データセットの書き出し 1 つ、バックテストと仮想 Paper 7 つ、研究ノートと FX・指数の系列 6 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
@@ -140,3 +140,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.33 | 2026-11-20 | 仮想 Paper に `virtual_paper_rerun_failed`（`virtualpapertool`・`virtualpaper.RerunFailedDay`・`mcpset/researchwrite`。`failed` の日の印を削除して次の日次の記録に再生させる。書き込みは `virtual_paper_days` の 1 行の削除だけ）を追加し、ツールの表を「バックテストと仮想 Paper 7 つ」にした | issue #1131 |
 | 1.34 | 2026-11-20 | 設定ツール（`settingstool`）・注文案のツール（`proposaltool`）・調整の実験のツール（`experimenttool`）の定義を、`tooldef` を使うサブパッケージへ移した（ルートの `settings_tools.go`・`order_proposal_tools.go`・`order_proposal_read_tools.go`・`experiment_tools.go` を削除。登録は `ext_tools.go`）。ツール名・引数スキーマ・説明・出力・エラーコード・書き込み許可の検査・ホワイトリストは変えない（`moved_tools_test.go` と `testdata/moved_tools.golden.json` が移動前の `tools/list` の項目と引数の検査結果を固定）。`tools/list` の並びだけが変わり、注文案（6）・設定（6）が `ext_tools.go` の登録の並びで研究ノートのツールの後に来る（クライアントは名前で呼ぶため影響しない） | issue #1130 |
 | 1.35 | 2026-11-22 | §4.2 の「設定ツールの書き込みだけは別の狭い接続」を、書き込みツールごとに個別に定めた別の狭い接続（一覧は `architecture/paper-results-mcp.md` §7.3。18 本）の言い方に直した（実装の変更は無い） | issue #1187 |
+| 1.36 | 2026-11-22 | §1 プロセスの、書き込みを設定ツールの呼び出し時と`runtime_settings`・監査表に限る言い方を、書き込みツール（18 本。`architecture/paper-results-mcp.md` §7.3）が呼ばれたときだけ、ツールごとに定めた狭い書き込み接続を開く、の言い方に直した（実装の変更は無い） | issue #1201 |

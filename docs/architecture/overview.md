@@ -208,7 +208,7 @@ pitha-trador/
 │       │   └── activity/          # System Activity Log（`GET /api/v1/activity`・`/ws/activity`）
 │       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
 │       ├── labels/                # 画面に出す内部コード（決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの種別/キュー/詳細など）の日本語名の表。描画の最後の層だけが引く（標準ライブラリのみに依存。issue #904）
-│       ├── middleware/            # SecurityHeaders（`security_headers.go`: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`。最外周。issue #378）, HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState, `ws_base.go`のWebSocketBase（`<meta name="ws-base">`用のコンテキスト値）, `error_page.go`のErrorPageRenderer（Recovery/Sessionが返すエラーページの描画注入）
+│       ├── middleware/            # SecurityHeaders（`security_headers.go`: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`。最外周。issue #378）, HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState, `ws_base.go`のWebSocketBase（`<meta name="ws-base">`用のコンテキスト値）, `error_page.go`のErrorPageRenderer（Recovery/Sessionが返すエラーページの描画注入）, `apierrorpage/`（ページ遷移で失敗した`/api/v1`を`pages.ErrorPage`へ差し替える。Recoveryの直後に置く。行数上限のため別パッケージ。issue #1196）
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
@@ -239,7 +239,7 @@ pitha-trador/
 
 レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。ツリーで「テスト専用」と注記した`*_test.go`のみのディレクトリ（`organisms/organismstest`を含む）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
-`repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済み。上のツリーは主要なサブパッケージだけを載せており、全パッケージの一覧ではない。ツリーに載せていない`service`・`repository`・`domain`のサブパッケージは`overview/packages.md`に、`bootstrap`・`router`・`config`・`web`のサブパッケージは`overview/packages-wiring.md`に、1行ずつの責務を一覧する。新しいサブパッケージを足すときは、ツリーかこれらの一覧のどれかに必ず載せる。**サブパッケージ共通の規約**:
+`repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済み。上のツリーは主要なサブパッケージだけを載せており、全パッケージの一覧ではない。ツリーに載せていない`service`・`repository`・`domain`の**1階層目**のサブパッケージ（`internal/service/<名前>`など）は`overview/packages.md`に、`bootstrap`・`router`・`config`・`web`の1階層目のサブパッケージは`overview/packages-wiring.md`に、1行ずつの責務を一覧する。2階層目以降（`service/jev/trial`・`service/risk/bucket`・`web/handler/orderproposals`など）と、行数上限のために切り出したテスト専用パッケージは一覧の対象外で（`overview/packages.md` §4 に載せているものは代表例）、各パッケージの`doc.go`または先頭の`// Package`コメントを一次情報とする。`service/paperresultsmcp`配下は`components/paper-results-mcp.md` §2、`service/metaablation`配下は`research/metaablation.md`を参照する。新しい1階層目のサブパッケージを足すときは、ツリーかこれらの一覧のどれかに必ず載せる。**サブパッケージ共通の規約**:
 
 - 兄弟サブパッケージ同士は本番コードでimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）へ置く。**本番コードの例外は`market` → `snapshotcols`のみ**（`market_snapshots`のFeature列対応表を共有する`domain`のみに依存するリーフ。逆向きは禁止）
 - **テスト専用のクロスリソース読み取り例外**: `decisiontrade`・`decisionsnapshot`・`snapshotcols`の外部テスト（`_test.go`）は、データ準備と列対応の整合検証のため兄弟群（`judgement`/`market`/`trading`。`snapshotcols`のテストは`market`）の公開APIと`sqlitedb.Open`をimportしてよい。この例外は`_test.go`に閉じ、本番コードへ広げない。それ以外の群のテストは他リソース群のデータをSQLで直接用意する
