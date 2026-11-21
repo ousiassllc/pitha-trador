@@ -76,6 +76,7 @@
 | パッケージ | 責務 |
 |-----------|------|
 | `service/metalabel/training/walkforward` | メタラベリングの夜間再学習（`service/metalabel/training`）のデータ側（#1163）。ラベル付きの `Row`・`WalkForwardConfig`・`Split`、行を fit < 較正 < OOS に purge・embargo つきで切る `SplitWalkForward`、履歴が足りないときの `ErrInsufficientData`（と、その詳細を持つ `InsufficientDataError`）、判断日（JST）を返す `DayOf` を公開する。`walkforward.go`（分割）と `insufficient.go`（`InsufficientDataError`）に分け、`training` のディレクトリ行数上限のために別パッケージにしてある。`training.DefaultWalkForwardConfig`（既定の分割）はこの `WalkForwardConfig` を返し、`training`・`paperresultsmcp/metalabeldiag`・`metaablation/independence/fromsplit` が import する。この分割のテスト（`walkforward_test.go`・`walkforward_reach_test.go`）も同じディレクトリにある |
+| `web/middleware/apierrorpage` | ブラウザのページ遷移（`Accept: text/html`かつ非HTMX・非WebSocket）で失敗した `/api/v1` の応答（4xx/5xx）を、problem+json ではなく固定メッセージの `pages.ErrorPage` へ差し替えるミドルウェア（`Handler`。#1196）。`router.useMiddleware` が `Recovery` の直後・`WebSocketBase`/`Session`/Setup Guard の外側に置く。`internal/web/middleware` のディレクトリ行数上限のために別パッケージにしてある。JSON・HTMX・成功応答は変えない |
 
 ### 4.2 テスト専用（`_test.go` のみ）
 

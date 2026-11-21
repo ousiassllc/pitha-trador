@@ -208,7 +208,7 @@ pitha-trador/
 │       │   └── activity/          # System Activity Log（`GET /api/v1/activity`・`/ws/activity`）
 │       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
 │       ├── labels/                # 画面に出す内部コード（決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの種別/キュー/詳細など）の日本語名の表。描画の最後の層だけが引く（標準ライブラリのみに依存。issue #904）
-│       ├── middleware/            # SecurityHeaders（`security_headers.go`: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`。最外周。issue #378）, HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState, `ws_base.go`のWebSocketBase（`<meta name="ws-base">`用のコンテキスト値）, `error_page.go`のErrorPageRenderer（Recovery/Sessionが返すエラーページの描画注入）
+│       ├── middleware/            # SecurityHeaders（`security_headers.go`: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`。最外周。issue #378）, HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState, `ws_base.go`のWebSocketBase（`<meta name="ws-base">`用のコンテキスト値）, `error_page.go`のErrorPageRenderer（Recovery/Sessionが返すエラーページの描画注入）, `apierrorpage/`（ページ遷移で失敗した`/api/v1`を`pages.ErrorPage`へ差し替える。Recoveryの直後に置く。行数上限のため別パッケージ。issue #1196）
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
