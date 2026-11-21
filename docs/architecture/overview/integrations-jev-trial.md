@@ -84,7 +84,7 @@
 
 ## 設定
 
-すべて `runtime_settings` のキーで、**既定はオフ・空**。**書けるのはアプリの Settings 画面だけ**で、MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）には入れず、自己改善ループ（Sol/Opus）の `policy.*` にも入らない（`evalflow/shadow_isolation_test.go`・`isolationflow` のテストで固定）。トライアルは費用がかかるため、MCP 経由で有効化できない。
+すべて `runtime_settings` のキーで、**既定はオフ・空**。**書けるのはアプリの Settings 画面だけ**で、MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）には入れず、自己改善ループ（Sol/Opus）の `policy.*` にも入らない（`shadowflow/shadow_isolation_test.go`・`isolationflow` のテストで固定）。トライアルは費用がかかるため、MCP 経由で有効化できない。
 
 | キー | 既定 | 意味 |
 |------|------|------|
@@ -156,7 +156,7 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | `OPENROUTER_*` は必須キーでなく、Setup Guard も求めない | 同 `TestOpenRouterSecretsAreNotRequired`、`internal/config/secretsflow` |
 | 設定が既定のとき、トライアルは動かず、追加の外部呼び出しもない／Paper 以外では動かない／アームは互いの答えを見ない／成功も失敗も行に残る／費用の出所と上限／402・403・429・529 の停止 | `internal/service/jev/trialflow`（ランナーの振る舞いのテスト） |
 
-シャドーの同種のテスト（`internal/service/jev/evalflow/shadow_isolation_test.go`）は変更していない（`evalflow` ディレクトリが行数の上限に達していたため、トライアル分は同じ形で新ディレクトリ `isolationflow` に置いた）。
+シャドーの同種のテスト（`internal/service/jev/shadowflow/shadow_isolation_test.go`）は変更していない（トライアル分は同じ形で別ディレクトリ `isolationflow` に置いた）。
 
 ## 改訂履歴
 
@@ -167,3 +167,4 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | 1.2 | 2026-11-15 | アームの`provider`に`custom`（独自 API）を追加。ライブ側からの import の許可リストに`internal/bootstrap/airolewire`（アームの接続の組み立て）を追加 | issue #1080 |
 | 1.3 | 2026-11-15 | アームの`provider`に`codex_chatgpt`（ChatGPT のサブスク。USD では数えず、呼び出し回数・トークン数の上限、プロバイダー単位の停止）、`cost_source=subscription`、見送りの理由 7 件、`jev.trial.codex.*`のキーを追加。詳細は`integrations-codex-chatgpt.md`。ライブ側からの import を禁じる対象に`codexwire`を追加 | issue #1081 |
 | 1.4 | 2026-11-15 | Settings のアーム入力を、JSON のテキストエリアから 1 アーム 1 カードのフォーム（追加・編集・削除）に変更。検証は保存済み JSON と同じ`jevtrialsettings.ValidateArms`に一本化し、1 つでも不正なら何も保存しない。提供元は openrouter・custom・codex_chatgpt から選べる（main の #1080・#1081 と合流） | issue #1066 |
+| 1.5 | 2026-11-22 | シャドーのテストの参照を、#1173 で `evalflow/` から移された実在のパス `shadowflow/shadow_isolation_test.go` に直し、「`evalflow` ディレクトリが行数の上限に達していたため」の理由の記述を外した（実装の変更は無い） | issue #1207 |
