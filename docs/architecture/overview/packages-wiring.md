@@ -18,7 +18,7 @@
 | `healthalertwire` | 取引時間帯の見張りの組み立て。市場データのアラート検出（#802）・スリープガード（#863。どちらも 08:45 の確認窓に従う）・日次のセッション記録（#1054）を一緒に動かす |
 | `homeview` | Home 画面の DB を使うデータ源（#896）。`web/handler/home.Source` を、Paper 結果 MCP のツールと同じ読み取りモデル（`paperresultsmcp/query`・`proposal`）で実装し、画面と MCP が同じ値を出す |
 | `jquantswire` | J-Quants 読み取りアダプタ（#1093）の組み立て。足りない日足・分足を埋める日次メンテナンスタスク`jquants`、完了した日の研究用ラベルの付け直し、Settings 画面の求めによる J-Quants 由来データの全削除（解約後の片付け） |
-| `mcpwire` | Settings 画面の MCP サービスの組み立て（#792・#795）。読み取り専用の Paper 結果 MCP 自身の設定ファイルを編集し、同じサービスがアプリと一緒に MCP のプロセスを起動し、アプリの終了時に止める |
+| `mcpwire` | Settings 画面の MCP サービスの組み立て（#792・#795）。Paper 結果 MCP 自身の設定ファイルを編集し、同じサービスがアプリと一緒に MCP のプロセスを起動し、アプリの終了時に止める |
 | `metalabeljob` | メタラベル（#764・#765）の組み立て。`Job` は夜間の再学習（保存済みの triple-barrier ラベルから学習してモデルを保存。Settings の再学習時刻以降）、`PolicyOption` は同じ設定から本番のエントリー規則を配線する |
 | `migrationwire` | PC 移行の移行ファイル（#1075・FR-MIGRATE-*）をルーターへ配線する。生きている DB 上の書き出し役と、次の起動で適用する取り込みの段取り。起動側（DB を開く前に取り込みを適用）は `startup.OpenDatabase` |
 | `newswire` | News Ingest の feed を選び、動いているかをログに出す。`bootstrap` の行数上限のための切り出し |

@@ -22,7 +22,7 @@
 | `metaablation` | メタモデル（M 軸）× entry_quality 足切り（Q 軸）の 2×2 比較（#1046）。DB の**コピー**の上で、却下されたモデルを保存済みパラメータから再採点する研究用ツール。取引せず、元 DB へ書かず、モデルを昇格せず、LLM を呼ばない |
 | `opsettings` | Settings 画面が持つ、秘密でない運用設定の保存先（#708）。バックアップ・ログの保存先フォルダと Policy Engine／Fast Screener のしきい値などを `runtime_settings` に置く。設定ごとの検証・既定値は `config` 側 |
 | `orderflow` | 銘柄ごとの Order Flow Imbalance（OFI）を最良気配の更新の流れから積算し、Feature Engine が窓（短・中・長）で読めるようにする（`functional.md` §4.1）。特徴量・フィルタの入力のみ |
-| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）も担う。詳細は `docs/architecture/paper-results-mcp.md` |
+| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）のほか、調整の実験・Jev プロンプトの昇格・リプレイ・研究ノート・バックテスト・仮想 Paper・学習用データセットの書き出しなど、ツールごとに定めた狭い書き込みも担う（書き込みツール 18 本の一覧は `docs/architecture/paper-results-mcp.md` §7.3）。詳細は `docs/architecture/paper-results-mcp.md` |
 | `regime` | Jev trader 判断をどの戦略の下で行うかを決める（#755）。市場指数の 1 分リターン（ボラティリティ・lag-1 自己相関）で市場レジームを分類し、Paper 比較の A/B アームへ割り当て、平均回帰レジームでは VWAP 乖離の z スコアを測る |
 | `researchfx` | 研究用の FX 1 分足の記録（#1084）。設定された通貨ペアと完了した GMO 取引日ごとに、読み取り専用アダプタ（`fx/gmo`）で BID・ASK の 1 分足を取り、分で結合して日のマーカーとともに保存する |
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084）。指数コード（既定: 日経平均 101・TOPIX 151）ごとに、立花の時価の記録（#1083）に残った 1 分値を `research_index_minutes` へ写し、日のマーカーを書く |
