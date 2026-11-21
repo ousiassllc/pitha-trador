@@ -1,4 +1,4 @@
-package updater_test
+package checkflow_test
 
 import (
 	"context"
@@ -8,6 +8,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
+
+type fakeQuitter struct {
+	called        bool
+	installerPath string
+}
+
+func (f *fakeQuitter) QuitForUpdate(installerPath string) {
+	f.called = true
+	f.installerPath = installerPath
+}
 
 // sequencedPositionCounter returns counts[i] on the i-th call (the last
 // value repeats), modelling a position opening between the pre-download

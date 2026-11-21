@@ -1,8 +1,10 @@
-package logging
+package maskflow_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/ousiassllc/pitha-trador/internal/logging"
 )
 
 // FR-ERRLOG-3 (b): string values are masked by pattern, case-insensitively
@@ -29,9 +31,9 @@ func TestMaskString_PatternsCaseInsensitive(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := maskString(tt.in)
+			got := logging.MaskString(tt.in)
 			if got != tt.want {
-				t.Errorf("maskString(%q)\n got %q\nwant %q", tt.in, got, tt.want)
+				t.Errorf("logging.MaskString(%q)\n got %q\nwant %q", tt.in, got, tt.want)
 			}
 			if strings.Contains(got, "dXNlcjpwYXNz") || strings.Contains(got, "xyz") {
 				t.Errorf("secret survived: %q", got)
@@ -43,7 +45,7 @@ func TestMaskString_PatternsCaseInsensitive(t *testing.T) {
 // The data export (internal/service/dataexport) reuses the masking rules
 // through the exported wrappers.
 func TestMaskJSONText(t *testing.T) {
-	got := MaskJSONText(`{"api_key":"k","nested":{"sSecondPassword":"s","note":"Bearer abc.def"},"n":1.50}`)
+	got := logging.MaskJSONText(`{"api_key":"k","nested":{"sSecondPassword":"s","note":"Bearer abc.def"},"n":1.50}`)
 	for _, leaked := range []string{`"k"`, `"s"`, "abc.def"} {
 		if strings.Contains(got, leaked) {
 			t.Errorf("%q survived: %s", leaked, got)
@@ -55,14 +57,14 @@ func TestMaskJSONText(t *testing.T) {
 }
 
 func TestMaskJSONText_InvalidJSONIsMaskedAsText(t *testing.T) {
-	got := MaskJSONText(`oops: password=hunter2 {`)
+	got := logging.MaskJSONText(`oops: password=hunter2 {`)
 	if strings.Contains(got, "hunter2") {
 		t.Errorf("secret survived in non-JSON text: %s", got)
 	}
 }
 
 func TestIsSensitiveKey_Exported(t *testing.T) {
-	if !IsSensitiveKey("API_KEY") || !IsSensitiveKey("sSecondPassword") || IsSensitiveKey("symbol") {
+	if !logging.IsSensitiveKey("API_KEY") || !logging.IsSensitiveKey("sSecondPassword") || logging.IsSensitiveKey("symbol") {
 		t.Error("IsSensitiveKey does not follow the log export's key rules")
 	}
 }

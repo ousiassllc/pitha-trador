@@ -1,4 +1,4 @@
-package domain_test
+package domainflow_test
 
 import (
 	"fmt"
