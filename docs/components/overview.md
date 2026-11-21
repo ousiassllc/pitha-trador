@@ -30,13 +30,13 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go, scanner_export.go）, watchlist/（watchlist.go。issue #730）, orderproposals/（注文案の一覧と詳細。issue #829）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go, settings_hints.go）, activity/, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
+├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go, scanner_export.go）, watchlist/（watchlist.go。issue #730）, orderproposals/（注文案の一覧と詳細。issue #829）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go, settings_hints.go）, activity/, home/（Home画面`GET /`と`/home/<section>`のカード。読み取り専用。issue #896）, trialresults/（成績＞お試し`GET /performance/trial`。モデル比較のお試しの読み取り専用の集計。issue #1067）, jevprompt/（Settings の Jev プロンプトの版とシャドー比較`/settings/jev-prompt-panel`と昇格。issue #872）, jevtrial/（Settings のモデル比較トライアル`/settings/jev-trial-panel`・`POST /settings/jev-trial`と腕の行のフラグメント。トライアルを有効にできる唯一の経路）, airoles/（Settings の役割ごとのモデル`/settings/ai-roles-panel`・`/settings/ai-roles/:role`。issue #1080）, mcpsettings/（Settings の MCP パネル`/settings/mcp-panel`・`POST /settings/mcp`・API キー生成・実験・研究ノート。issue #792）, export/（`GET /api/v1/export`。データエクスポート。issue #773）, migration/（PC 移行`/api/v1/migration/*`: 書き出し・内容確認・取り込み予約・取り消し・状態。issue #1075）, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── labels/             # 画面に出す内部コード（決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの種別/キュー/詳細・再学習の見送り・A/Bアーム・接続先の項目名）の日本語名の表。表示の最後の層だけが使い、元の値はdata属性・API・MCP・DBのまま（issue #904）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, InlineAlert, Button（+ ButtonLink）, Input, Textarea, Select, Checkbox, Switch, HelpMark, Icon*（icon.templ）, timefmt.go（`atoms.FormatJST`/`JST`/`TimeLayoutJST`: SSR時刻表示の唯一の書式。`2026-10-05 09:30:00 JST`）
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, ConfirmDialog, SettingsCard（ConnectionStatus）, SettingsLinkCard, SetupStatus, ThemeToggle
-├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）。mcp/（Settings画面の MCP パネル`Panel`。issue #792）
+├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）。サブパッケージ（`organisms`の行数上限のため分離。いずれも整形済みのplain propsだけを受ける）: mcp/（Settings画面の MCP パネル`Panel`。issue #792）, airoles/（Settings の役割ごとのモデル`Panel`。issue #1080）, jevprompt/（Jev プロンプトの版とシャドー比較`Panel`。issue #872）, jevtrial/（モデル比較トライアル`Panel`）, homepanels/（Homeの各カード）, trialresults/（成績＞お試しの`Panel`）, evaluation/（成績の実績評価`EvaluationPanel`）, performancepanels/（成績画面のパネル群）, organismstest/（`organisms`の外側からのコントラクトテスト専用で、描画する部品は持たない）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
 └── layout/             # Shell, SetupShell
 
@@ -55,12 +55,17 @@ static/
     │   ├── copy-button/           pitha-copy-button.ts（Litではない。`[data-copy-from]`のコピーボタンと、閉じたダイアログの`[data-clear-on-close]`表示（API キーの一度きりの表示）の削除。issue #792）
     │   ├── theme-toggle/          pitha-theme-toggle.ts（Litではない。`[data-theme-choice]`のライト/ダーク切替ボタン。`<html data-theme>`を設定し、選択をlocalStorageへ保存する。issue #978）
     │   ├── settings-hub/          pitha-settings-hub.ts（Litではない。`/settings`のページ一覧と各Settingsページが埋め込む`data-hash-routes`を読み、旧`/settings#modal-<id>`・`#update-panel`や、別ページへ移ったダイアログの旧`/settings/<old page>#modal-<id>`の直リンクを該当ページ`/settings/<page id>#<id>`へ`location.replace`で転送する。現在のページ自身のダイアログのハッシュは転送しない。issue #805・#895）
+    │   ├── help-mark/             pitha-help-mark.ts（Litではない。`atoms.HelpMark`と`lib/help-mark.ts`の「?」ヘルプ本文の開閉と配置。ホバー・フォーカス・タップで開き、Escで閉じる。`layout.document`が全ページで読む。issue #902）
+    │   ├── performance-tabs/      pitha-performance-tabs.ts（Litではない。成績の実績タブで、旧`/performance#backtest`の直リンクを`?tab=backtest`へ転送する。issue #895）
+    │   ├── migration/             pitha-migration.ts（Litではない。Settings「PC 移行」の取り込み: 「内容を確認」で`POST /api/v1/migration/preview`、「取り込みを予約する」で`POST /api/v1/migration/confirm`。issue #1075）
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示
     │       ├── jst-datetime.ts         # SSRフォールバックの`atoms.FormatJST`と同形式のJST日時ラベル（Lit描画とSSRの表示を一致させる）
     │       ├── chart-theme.ts / theme.ts / motion.ts / icons.ts   # チャートの色（デザイントークンを読む）/ ライト・ダーク選択（localStorageの`pitha-theme`）/ モーションのトークンと`prefersReducedMotion()` / Iconoirのアイコン
-    │       └── logger.ts / styles.ts
+    │       ├── logger.ts / styles.ts
+    │       ├── help-mark.ts            # `atoms.HelpMark`と同じマークアップの「?」ヘルプ`renderHelpMark`（Lit用。開閉の動作は`help-mark/`が担う。issue #902）
+    │       └── labels.ts               # 内部コードの日本語名の表（Go側`internal/web/labels`と同じ表。`TestTypeScriptLabelsMatchGo`が一致を検査。issue #904）
     ├── css/
     │   ├── app.css / table.css    # `table.css`は`<th>`の太さ（見出し行も行見出しもRegular 400。UAの既定boldを戻す）。`app.css`がimport。アプリUIのトーンのトークン（`--surface-sel`ほか）・`text-title|item|note`・`banner-*`もここ
     │   └── dark.css               # Darkトークン（OS追従と`data-theme="dark"`。`--surface-sel`のDark値を含む。`app.css`がimport。issue #978）
