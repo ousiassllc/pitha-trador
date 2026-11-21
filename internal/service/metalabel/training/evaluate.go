@@ -5,6 +5,7 @@ import (
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // calibrationBinCount is the number of equal-width bins of the OOS reliability
@@ -35,7 +36,7 @@ type Evaluation struct {
 // signals Decide would take under cfg (exactly the rule used live, so the
 // number is the EV a deployed model would have earned) and the reliability
 // curve. A row m cannot score is left out of Samples.
-func Evaluate(m metalabel.Model, rows []Row, cfg metalabel.DecideConfig) Evaluation {
+func Evaluate(m metalabel.Model, rows []walkforward.Row, cfg metalabel.DecideConfig) Evaluation {
 	var (
 		e          Evaluation
 		raws       []float64
@@ -52,7 +53,7 @@ func Evaluate(m metalabel.Model, rows []Row, cfg metalabel.DecideConfig) Evaluat
 		}
 		raws = append(raws, p.Raw)
 		wins = append(wins, r.NetReturnBps > 0)
-		sr := scoredRow{index: idx, day: dayOf(r), symbol: r.Symbol, win: r.NetReturnBps > 0, raw: p.Raw, ret: r.NetReturnBps}
+		sr := scoredRow{index: idx, day: walkforward.DayOf(r), symbol: r.Symbol, win: r.NetReturnBps > 0, raw: p.Raw, ret: r.NetReturnBps}
 		i := min(int(p.Calibrated*calibrationBinCount), calibrationBinCount-1)
 		binSum[i] += p.Calibrated
 		binCount[i]++

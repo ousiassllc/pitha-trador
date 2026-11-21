@@ -1,4 +1,8 @@
-package calibration_test
+// Package labelertests_test holds the black-box tests of the calibration
+// Labeler and of the metrics read from its outcomes (internal/service/calibration).
+// They only use its exported API and live in their own directory to keep that
+// package within the linterly directory budget.
+package labelertests_test
 
 import (
 	"context"

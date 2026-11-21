@@ -11,6 +11,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // rowsPerDay is the usable labeled decisions a trading day produced on
@@ -26,7 +27,7 @@ func legacyBar() training.AcceptanceConfig {
 	return c
 }
 
-func legacyWalk() training.WalkForwardConfig {
+func legacyWalk() walkforward.WalkForwardConfig {
 	c := training.DefaultWalkForwardConfig()
 	c.OOSMinRows, c.OOSMinDays, c.OOSMaxWindow = math.MaxInt32, math.MaxInt32, 7*24*time.Hour
 	return c
@@ -53,7 +54,7 @@ func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
 	for days := 1; days <= 20 && first == 0; days++ {
 		m, err := defaultBarTrainer(history(days), &memStore{}).Train(ctx)
 		switch {
-		case errors.Is(err, training.ErrInsufficientData):
+		case errors.Is(err, walkforward.ErrInsufficientData):
 			continue
 		case err != nil:
 			t.Fatalf("%d days: Train: %v", days, err)
@@ -77,7 +78,7 @@ func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
 
 	// The same history, one day short, is skipped with the shortfall.
 	_, err := defaultBarTrainer(history(first-1), &memStore{}).Train(ctx)
-	var skip *training.InsufficientDataError
+	var skip *walkforward.InsufficientDataError
 	if !errors.As(err, &skip) || skip.Code != repo.SkipTooFewRowsBeforeOOS || skip.Usable != rowsPerDay || skip.Required != 130 {
 		t.Errorf("%d days: error = %v, want too_few_rows_before_oos, %d of 130", first-1, err, rowsPerDay)
 	}
@@ -106,7 +107,7 @@ func TestAcceptance_DaysToTheFirstDecisionAcrossTheObservedRowsPerDay(t *testing
 		got := 0
 		for days := 1; days <= 20 && got == 0; days++ {
 			m, err := defaultBarTrainer(&fakeSource{rows: noiseRows(days, tc.perDay, 0.02, 0.25, edgeSeed)}, &memStore{}).Train(ctx)
-			if err != nil && !errors.Is(err, training.ErrInsufficientData) {
+			if err != nil && !errors.Is(err, walkforward.ErrInsufficientData) {
 				t.Fatalf("%d rows a day, %d days: %v", tc.perDay, days, err)
 			}
 			if err == nil && judged(m) {

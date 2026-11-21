@@ -8,53 +8,8 @@ import (
 	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
-
-// InsufficientDataError is the error behind ErrInsufficientData: it carries the
-// fixed reason code and the counts the nightly job records when it skips a
-// retraining (issue #799), so no reader has to parse the message.
-// errors.Is(err, ErrInsufficientData) holds for it.
-type InsufficientDataError struct {
-	// Code is one of the repo.Skip* codes.
-	Code string
-	// Usable of Required: the usable labeled decisions before the OOS window
-	// (SkipTooFewRowsBeforeOOS), those counted toward the fit and calibration
-	// minimums after purging (SkipTooFewRowsAfterPurge) or the rows that could
-	// not be learned from (SkipTrainingDataUnusable), against what fit and
-	// calibration need together ("必要130件中 x件").
-	Usable, Required int
-	// OOSRows of RequiredOOSRows: the rows in the OOS window against the rows
-	// the window reaches back to hold (the bar's MinOOSSamples), so a skip shows
-	// both sides of the split (issue #862). Set where the split fails.
-	OOSRows, RequiredOOSRows *int
-	// DroppedIncomplete, LabelV1, LabelV2 are filled by the Trainer: the stored
-	// rows BuildRows dropped for a missing feature, and the labeled decisions of
-	// the lookback per label version (v1 close-only, v2 triple-barrier). They tell
-	// a thin history from rows that exist but cannot be used. All the counts are
-	// nil while not measured (a failed count stays nil) and 0 only when measured
-	// as 0; they are logged as "unknown" and stored as NULL when nil.
-	DroppedIncomplete, LabelV1, LabelV2 *int
-	// Detail is the human-readable message (logs only; never persisted).
-	Detail string
-	// Cause is the learner's error for SkipTrainingDataUnusable.
-	Cause error
-}
-
-func (e *InsufficientDataError) Error() string {
-	msg := ErrInsufficientData.Error() + ": " + e.Detail
-	if e.Cause != nil {
-		msg += ": " + e.Cause.Error()
-	}
-	return msg
-}
-
-// Unwrap lets errors.Is match ErrInsufficientData and the learner's error.
-func (e *InsufficientDataError) Unwrap() []error {
-	if e.Cause == nil {
-		return []error{ErrInsufficientData}
-	}
-	return []error{ErrInsufficientData, e.Cause}
-}
 
 // SkipRecorder persists a skipped retraining; *metalabel.Store implements it.
 type SkipRecorder interface {
@@ -68,7 +23,7 @@ func WithSkipRecorder(r SkipRecorder) TrainerOption { return func(t *Trainer) { 
 // recordSkip logs the skip and, with a recorder, stores it. A failure to store
 // is returned: the maintenance task then fails visibly instead of the skip
 // vanishing.
-func (t *Trainer) recordSkip(ctx context.Context, e *InsufficientDataError) error {
+func (t *Trainer) recordSkip(ctx context.Context, e *walkforward.InsufficientDataError) error {
 	slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force",
 		"reason", e, "code", e.Code,
 		"dropped_incomplete", countText(e.DroppedIncomplete), "label_v1", countText(e.LabelV1), "label_v2", countText(e.LabelV2),
@@ -120,7 +75,7 @@ func countText(n *int) any {
 }
 
 // asInsufficient returns err's InsufficientDataError, if it is one.
-func asInsufficient(err error) (*InsufficientDataError, bool) {
-	var e *InsufficientDataError
+func asInsufficient(err error) (*walkforward.InsufficientDataError, bool) {
+	var e *walkforward.InsufficientDataError
 	return e, errors.As(err, &e)
 }

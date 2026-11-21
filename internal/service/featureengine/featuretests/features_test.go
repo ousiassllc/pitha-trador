@@ -1,4 +1,8 @@
-package featureengine_test
+// Package featuretests_test holds the black-box tests of the feature engine's
+// computations (internal/service/featureengine). They only use its exported API
+// and live in their own directory to keep that package within the linterly
+// directory budget.
+package featuretests_test
 
 import (
 	"testing"

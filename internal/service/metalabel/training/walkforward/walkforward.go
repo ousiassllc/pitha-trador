@@ -1,4 +1,9 @@
-package training
+// Package walkforward is the data side of the meta-labeling retraining
+// (internal/service/metalabel/training): the labeled Row, the WalkForwardConfig
+// and SplitWalkForward that cut rows into fit < calibration < out-of-sample
+// with purge and embargo, and the InsufficientDataError a short history ends in.
+// It is its own package to keep training within the linterly directory budget.
+package walkforward
 
 import (
 	"errors"
@@ -7,6 +12,7 @@ import (
 	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 )
 
@@ -42,6 +48,10 @@ func (r Row) Sample() metalabel.Sample {
 	return metalabel.Sample{Vector: r.Vector, NetReturnBps: r.NetReturnBps}
 }
 
+// DayOf is the JST trading day of the row's decision, the cluster unit of the
+// adoption bar's bootstrap.
+func DayOf(r Row) string { return r.DecidedAt.In(marketcalendar.JST).Format("2006-01-02") }
+
 // WalkForwardConfig configures SplitWalkForward.
 //
 // The OOS window is sized by what the adoption bar needs, not by a fixed
@@ -72,21 +82,6 @@ type WalkForwardConfig struct {
 	// is learned from, > 0. A smaller OOS set is not an error here: the model
 	// is learned and then rejected by its (undefined or noisy) metrics.
 	MinFit, MinCalibration int
-}
-
-// DefaultWalkForwardConfig is the split decided in issue #862 (see FR-META-7): an
-// OOS window that holds at least the default bar's samples and days (DefaultAcceptanceConfig) within DefaultOOSMaxWindow, the
-// newest quarter of the rest for calibration, a 30-minute embargo (half the
-// longest triple-barrier timeout, 60 minutes) and at least 100 fit and 30
-// calibration rows (the logistic regression has 8 features and a bias: 9
-// parameters, so 100 rows is above the rule of thumb of 10 rows per parameter).
-func DefaultWalkForwardConfig() WalkForwardConfig {
-	bar := DefaultAcceptanceConfig()
-	return WalkForwardConfig{
-		OOSMinRows: bar.MinOOSSamples, OOSMinDays: bar.MinOOSDays, OOSMaxWindow: DefaultOOSMaxWindow,
-		CalibrationFraction: 0.25, Embargo: 30 * time.Minute,
-		MinFit: 100, MinCalibration: 30,
-	}
 }
 
 // Validate reports a configuration SplitWalkForward would not accept.
@@ -132,7 +127,7 @@ func (c WalkForwardConfig) oosStart(sorted []Row, now, llmCutoff time.Time) time
 func firstRowOfNewestDays(rows []Row, days int) int {
 	seen, prev := 0, ""
 	for j := len(rows) - 1; j >= 0; j-- {
-		if d := dayOf(rows[j]); d != prev {
+		if d := DayOf(rows[j]); d != prev {
 			seen, prev = seen+1, d
 			if seen > days {
 				return j + 1

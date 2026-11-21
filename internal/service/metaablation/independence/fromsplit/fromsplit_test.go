@@ -6,7 +6,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/independence"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/independence/fromsplit"
-	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // TestIndependenceUsesTheRealWalkForwardWindows splits synthetic rows with the
@@ -15,17 +15,17 @@ import (
 func TestIndependenceUsesTheRealWalkForwardWindows(t *testing.T) {
 	jst := time.FixedZone("JST", 9*3600)
 	start := time.Date(2026, 10, 19, 9, 0, 0, 0, jst)
-	var rows []training.Row
+	var rows []walkforward.Row
 	for i := range 80 {
 		d := start.Add(time.Duration(i) * 30 * time.Minute)
-		rows = append(rows, training.Row{JevDecisionID: int64(i + 1), DecidedAt: d, LabelEnd: d.Add(10 * time.Minute)})
+		rows = append(rows, walkforward.Row{JevDecisionID: int64(i + 1), DecidedAt: d, LabelEnd: d.Add(10 * time.Minute)})
 	}
-	cfg := training.WalkForwardConfig{
+	cfg := walkforward.WalkForwardConfig{
 		OOSMinRows: 10, OOSMinDays: 1, OOSMaxWindow: 21 * 24 * time.Hour, CalibrationFraction: 0.25,
 		Embargo: 30 * time.Minute, MinFit: 10, MinCalibration: 5,
 	}
 	now := start.Add(80 * 30 * time.Minute)
-	split, err := training.SplitWalkForward(rows, now, start.Add(-time.Hour), cfg)
+	split, err := walkforward.SplitWalkForward(rows, now, start.Add(-time.Hour), cfg)
 	if err != nil {
 		t.Fatalf("SplitWalkForward: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestIndependenceUsesTheRealWalkForwardWindows(t *testing.T) {
 	ic := independence.Config{Windows: w, OOSUsed: fromsplit.OOSUsed(split)}
 
 	used := 0
-	for _, set := range [][]training.Row{split.Fit, split.Calibrate} {
+	for _, set := range [][]walkforward.Row{split.Fit, split.Calibrate} {
 		for _, r := range set {
 			used++
 			if got := ic.Classify(independence.Row{ID: r.JevDecisionID, DecidedAt: r.DecidedAt}); got.Class != independence.Excluded {
@@ -71,14 +71,14 @@ func TestIndependenceUsesTheRealWalkForwardWindows(t *testing.T) {
 func TestRowDroppedFromTheOOSIsNotReference(t *testing.T) {
 	jst := time.FixedZone("JST", 9*3600)
 	start := time.Date(2026, 10, 19, 9, 0, 0, 0, jst)
-	var rows []training.Row
+	var rows []walkforward.Row
 	for i := range 80 {
 		d := start.Add(time.Duration(i) * 30 * time.Minute)
-		rows = append(rows, training.Row{JevDecisionID: int64(i + 1), DecidedAt: d, LabelEnd: d.Add(10 * time.Minute)})
+		rows = append(rows, walkforward.Row{JevDecisionID: int64(i + 1), DecidedAt: d, LabelEnd: d.Add(10 * time.Minute)})
 	}
-	cfg := training.WalkForwardConfig{OOSMinRows: 10, OOSMinDays: 1, OOSMaxWindow: 21 * 24 * time.Hour, CalibrationFraction: 0.25, Embargo: 30 * time.Minute, MinFit: 10, MinCalibration: 5}
+	cfg := walkforward.WalkForwardConfig{OOSMinRows: 10, OOSMinDays: 1, OOSMaxWindow: 21 * 24 * time.Hour, CalibrationFraction: 0.25, Embargo: 30 * time.Minute, MinFit: 10, MinCalibration: 5}
 	now := start.Add(79*30*time.Minute + 5*time.Minute) // the last row's label ends after now
-	split, err := training.SplitWalkForward(rows, now, start.Add(-time.Hour), cfg)
+	split, err := walkforward.SplitWalkForward(rows, now, start.Add(-time.Hour), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
