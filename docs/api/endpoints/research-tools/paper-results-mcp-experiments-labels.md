@@ -74,3 +74,4 @@
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規 | issue #1088 |
 | 1.1 | 2026-11-20 | `label_based` に `interval_method` / `interval_lag_days` を追加。`min_days` を 8、`min_days_source` を `measured_v1` に変更。区間と `days_needed` を Newey-West（ラグ 1 日）で補正 | issue #1129 |
+| 1.2 | 2026-11-22 | 変更前が未設定のキー（既定が空で、まだ保存されていないもの）への仮説つきの設定変更では、実験の `before` を `（未設定）`（`experiment.UnsetValue`）と記録する旨を追記。#1191 の修正時に履歴へ追記が漏れていた分 | issue #1191 |
