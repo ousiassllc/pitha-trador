@@ -11,7 +11,7 @@ import {
   type SeriesMarker,
   type Time,
 } from 'lightweight-charts';
-import { css, html, LitElement, type PropertyValues } from 'lit';
+import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
@@ -29,8 +29,10 @@ import { type Bar, foldTick, toBarTime, toUTCTimestamp } from './bars';
 import { candleColors, markerColor, volumeColor, vwapColor } from './chart-colors';
 import {
   type ChartSummary,
+  candleBars,
   describeChart,
   EMPTY_SUMMARY,
+  jevMarker,
   MAIN_SCALE_MARGINS,
   VOLUME_SCALE_MARGINS,
   vwapSeriesData,
@@ -43,33 +45,12 @@ import type {
   TickMessage,
 } from './chart-types';
 import { formatCrosshairTime, formatTickMark } from './jst-time';
+import { priceChartStyles } from './price-chart-styles';
 
-const CHART_HEIGHT = 400;
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
-  static override styles = [
-    noticeStyles,
-    css`
-      :host {
-        display: block;
-      }
-      .pitha-price-chart-container {
-        width: 100%;
-        height: ${CHART_HEIGHT}px;
-      }
-      .pitha-price-chart-empty {
-        margin: 0;
-        border-radius: var(--r-card);
-        background: var(--surface-sel);
-        padding: 3rem 1.5rem;
-        text-align: center;
-        color: var(--mute-on-soft);
-        font-size: 0.9375rem;
-        line-height: 1.6;
-      }
-    `,
-  ];
+  static override styles = [noticeStyles, priceChartStyles];
 
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
@@ -204,13 +185,7 @@ export class PithaPriceChart extends LitElement {
 
   private applyCandles(symbol: string, candles: Candle[]): void {
     if (!this.candleSeries || !this.vwapSeries || !this.volumeSeries) return;
-    const bars: Bar[] = candles.map((c) => ({
-      time: toUTCTimestamp(c.time),
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
+    const bars = candleBars(candles);
     this.candleSeries.setData(bars);
     this.lastBar = bars.at(-1) ?? null;
     this.empty = this.lastBar === null;
@@ -270,16 +245,7 @@ export class PithaPriceChart extends LitElement {
     if (previous === null || previous === message.direction) return;
     const time = toBarTime(message.time);
     if (time === null) return;
-
-    const isLong = message.direction === 'LONG';
-    const marker: SeriesMarker<Time> = {
-      time,
-      position: isLong ? 'belowBar' : 'aboveBar',
-      color: markerColor(message.direction),
-      shape: isLong ? 'arrowUp' : 'arrowDown',
-      text: message.direction,
-    };
-    this.markers = [...this.markers, marker];
+    this.markers = [...this.markers, jevMarker(time, message.direction)];
     this.candleSeries.setMarkers(this.markers);
   }
 

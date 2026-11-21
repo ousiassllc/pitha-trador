@@ -291,11 +291,3 @@ templ SettingsPage(props SettingsProps) {
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 	}
 }
-
-// settingsHelp is a card's status slot holding only a help mark with the
-// card's description (issue #902).
-templ settingsHelp(id, label, text string) {
-	@atoms.HelpMark(atoms.HelpMarkProps{ID: id, Label: label}) {
-		{ text }
-	}
-}
