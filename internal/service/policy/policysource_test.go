@@ -31,7 +31,7 @@ func (s *mutablePolicySource) AppliedPolicyVersion(context.Context) (string, err
 }
 
 func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
-	db := newHandlerTestDB(t)
+	db := newTestDB(t)
 	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
@@ -75,7 +75,7 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 }
 
 func TestEngine_Evaluate_RecordsAppliedPolicyVersionAndRevertsAfterRollback(t *testing.T) {
-	db := newHandlerTestDB(t)
+	db := newTestDB(t)
 	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
@@ -118,7 +118,7 @@ func TestEngine_Evaluate_RecordsAppliedPolicyVersionAndRevertsAfterRollback(t *t
 }
 
 func TestEngine_Evaluate_PolicySourceErrorFailsWithoutPersisting(t *testing.T) {
-	db := newHandlerTestDB(t)
+	db := newTestDB(t)
 	signals := trading.NewSignalRepository(db)
 	readErr := errors.New("runtime_settings unavailable")
 	engine := policy.NewEngine(testThresholds(), nil, signals, policy.WithPolicySource(&mutablePolicySource{err: readErr}))
