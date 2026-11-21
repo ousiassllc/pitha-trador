@@ -197,3 +197,4 @@
 | 1.192 | 2026-11-22 | FR-SETUP-4 の Setup 完了条件を、固定の個数ではなく FR-SETUP-1 の選択中のブローカーの必須項目（`config.RequiredSetup`。kabu は 2 つのシークレット、立花は 2 つのシークレットと選択環境の秘密鍵ファイルのパス）に改めた（`setupComplete` の挙動に合わせた訂正で、実装は変更しない。UC-15 は個数に触れないため変更なし） | issue #1152 |
 | 1.193 | 2026-11-22 | FR-MCP-49 の表の参照パスを、実在する `architecture/er/research-tools/tables-research-notes.md` に直した（研究系の章を `research-tools/` へ移したときの参照漏れ。要件・挙動は変えない） | issue #1188 |
 | 1.194 | 2026-11-22 | FR-SCHED-4・FR-SCHED-10 の PUSH 板の鮮度上限を、古い「直近30秒（`pushfeed.BoardMaxAge`）」から、FR-FE-7 と同じ「`Feed.BoardMaxAge`＝Settings の `scan.snapshot_max_age_seconds`。未設定は `pushfeed.DefaultBoardMaxAge`＝20秒」に訂正（issue #754 で 30 秒 → 20 秒に変えたときの取り残し。立花の `event.MaxEventAge` の30秒は別の値で変更なし。要件・実装は変更なし） | issue #1190 |
+| 1.195 | 2026-11-22 | FR-SCHED-2・FR-SCHED-7 の「窓の基準バーの許容」の参照先を、OFI の FR-FE-6 から定義のある FR-FE-5 に訂正（issue #750 で FR-FE-6 を挿入したときの参照の取り残し。FR-ID の番号・内容は変更なし） | issue #1193 |
