@@ -4,7 +4,7 @@
 
 ## 5. Lit Web Components 仕様
 
-命名規則: `pitha-{feature-name}`。以下5種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
+命名規則: `pitha-{feature-name}`。以下6種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
 
 | コンポーネント | 用途 | 埋め込みページ | データソース |
 |---------------|------|---------------|------------|
