@@ -1,4 +1,4 @@
-package scheduler_test
+package periodicflow_test
 
 import (
 	"context"
