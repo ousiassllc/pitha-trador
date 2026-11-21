@@ -50,6 +50,12 @@ type Files struct {
 	JSON, Markdown, Manifest string
 }
 
+// output is one file WriteFiles creates.
+type output struct {
+	path string
+	data []byte
+}
+
 // WriteFiles writes the JSON report, the Markdown report and the manifest into
 // dir, which is created when missing. The names carry the run count and an
 // existing file is never overwritten: an earlier run's output stays. dir must
@@ -89,22 +95,34 @@ func WriteFiles(dir string, d Document, forbiddenDirs ...string) (Files, error) 
 	}
 	stem := fmt.Sprintf("metaablation-run%d", d.RunCount)
 	files := Files{JSON: filepath.Join(abs, stem+".json"), Markdown: filepath.Join(abs, stem+".md"), Manifest: filepath.Join(abs, stem+".manifest.json")}
-	outputs := []struct {
-		path string
-		data []byte
-	}{{files.JSON, js}, {files.Markdown, []byte(md)}, {files.Manifest, mf}}
+	outputs := []output{{files.JSON, js}, {files.Markdown, []byte(md)}, {files.Manifest, mf}}
 	// All three must be free before any is written: no partial set.
 	for _, w := range outputs {
 		if _, err := os.Lstat(w.path); err == nil {
 			return Files{}, fmt.Errorf("report: %s already exists; an earlier run's output is never overwritten", w.path)
 		}
 	}
-	for _, w := range outputs {
-		if err := writeNew(w.path, w.data); err != nil {
-			return Files{}, err
-		}
+	if err := writeAll(outputs, writeData); err != nil {
+		return Files{}, err
 	}
 	return files, nil
+}
+
+// writeAll creates every output. When one fails, the files this call created
+// (the failed one included) are removed, so a retry is not refused by a
+// half-written set. A file that already existed is never touched.
+func writeAll(outputs []output, write func(*os.File, []byte) error) error {
+	created := make([]string, 0, len(outputs))
+	for _, w := range outputs {
+		if err := writeNew(w.path, w.data, write); err != nil {
+			for _, p := range created {
+				_ = os.Remove(p)
+			}
+			return err
+		}
+		created = append(created, w.path)
+	}
+	return nil
 }
 
 // ResolveExisting is the absolute path of p with symlinks resolved in its deepest
@@ -129,14 +147,27 @@ func ResolveExisting(p string) (string, error) {
 	}
 }
 
-func writeNew(path string, data []byte) error {
+func writeData(f *os.File, data []byte) error {
+	_, err := f.Write(data)
+	return err
+}
+
+// writeNew creates path (it must not exist) and writes data. A failure after
+// the file was created removes it again; a failure to create it (including
+// "already exists") leaves whatever is there alone.
+func writeNew(path string, data []byte, write func(*os.File, []byte) error) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("report: create %s: %w", path, err)
 	}
-	if _, err := f.Write(data); err != nil {
+	if err := write(f, data); err != nil {
 		_ = f.Close()
+		_ = os.Remove(path)
 		return fmt.Errorf("report: write %s: %w", path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("report: close %s: %w", path, err)
+	}
+	return nil
 }
