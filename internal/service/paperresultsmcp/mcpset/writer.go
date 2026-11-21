@@ -36,8 +36,8 @@ const WriterBusyTimeout = 2 * time.Second
 // mid-transaction. journal_mode is not touched (the application owns WAL).
 const writerDSNQuery = "mode=rw&_busy_timeout=2000&_txlock=immediate"
 
-// Writer is the MCP's only write path: one connection that runs exactly the
-// two transactions of Set and SetEnabled.
+// Writer is the MCP's only write path: one connection whose every method runs
+// one narrow transaction (the package comment in audit.go lists them).
 type Writer struct {
 	db   *sql.DB
 	base *config.RiskLimits

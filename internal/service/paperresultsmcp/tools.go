@@ -83,9 +83,8 @@ func resolveLimit(requested *int, maxLimit int) (int, *toolError) {
 	return n, toolErrorOf(f)
 }
 
-// tools is the dispatch table: the nine read tools of the API spec §3, then
-// the settings tools (settingstool) and the order-proposal tools
-// (proposaltool), which join through ext_tools.go.
+// tools is the dispatch table: the read tools defined here (API spec §3), then
+// the tool definitions that join through ext_tools.go.
 var tools = []tool{
 	diagTool("paper_performance_summary", "期間内にクローズした Paper 取引の件数・勝率・期待値・ドローダウン（読み取り専用）", nil,
 		func(ctx context.Context, e toolEnv, _ periodArgs) (any, int, error) {

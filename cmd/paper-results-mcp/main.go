@@ -37,13 +37,26 @@ func main() {
 	}
 }
 
-func run() error {
-	configPath := flag.String("config", "", "settings file (default: <user config dir>/pitha-trador/"+settings.FileName+")")
-	flag.Parse()
+// parseConfigPath parses the command line and returns the -config value. A
+// stray non-flag word is an error: flag stops at it, so it would silently drop
+// a following -config.
+func parseConfigPath(fs *flag.FlagSet, args []string) (string, error) {
+	configPath := fs.String("config", "", "settings file (default: <user config dir>/pitha-trador/"+settings.FileName+")")
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	if fs.NArg() > 0 {
+		return "", fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	return *configPath, nil
+}
 
-	path := *configPath
+func run() error {
+	path, err := parseConfigPath(flag.CommandLine, os.Args[1:])
+	if err != nil {
+		return err
+	}
 	if path == "" {
-		var err error
 		if path, err = settings.DefaultPath(); err != nil {
 			return err
 		}

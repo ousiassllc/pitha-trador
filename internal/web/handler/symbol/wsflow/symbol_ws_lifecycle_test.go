@@ -48,10 +48,12 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 	}
 	defer func() { _ = conn.CloseNow() }()
 
-	// Complete the handshake with the handler idling in its interval wait
-	// before closing (CloseRead is what lets the server see the Close frame
-	// at all).
-	time.Sleep(50 * time.Millisecond)
+	// The first message is pushed by the handler's first poll step, so once it
+	// arrived the handler is idling in its interval wait; only then close
+	// (CloseRead is what lets the server see the Close frame at all).
+	if _, _, err := conn.Read(ctx); err != nil {
+		t.Fatalf("conn.Read() first message error = %v", err)
+	}
 	go func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 	// Drain so the client side can finish the close handshake.
 	go func() {

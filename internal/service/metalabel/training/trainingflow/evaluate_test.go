@@ -8,6 +8,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 func TestAcceptanceConfig_Judge(t *testing.T) {
@@ -53,13 +54,13 @@ func TestEvaluate_ReportsAUCEVAndReliabilityOnTheOOSRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var rows []training.Row
+	var rows []walkforward.Row
 	for _, s := range syntheticSamples(rng, 1000) {
 		f := make([]*float64, len(s.Vector))
 		for i := range s.Vector {
 			f[i] = &s.Vector[i]
 		}
-		rows = append(rows, training.Row{
+		rows = append(rows, walkforward.Row{
 			Direction: "LONG", Vector: s.Vector, NetReturnBps: s.NetReturnBps,
 			Features: metalabel.Features{OFIShort: f[0], OFIMid: f[1], OFILong: f[2], MicropriceDevBps: f[3], SpreadBps: f[4], Return1m: f[5], JevScore: f[6], TDnetScore: f[7]},
 		})

@@ -102,13 +102,13 @@ func setupGuardExempt(method, path string) bool {
 	return false
 }
 
-// isSecretKeyPath reports whether path is `/settings/:key` for a secrets key.
-// `/settings/mcp` and `/settings/mcp/key` (the MCP settings of issue #792) are
-// siblings of `:key` in the router but are not part of setup, so the guard
-// keeps them closed until setup is complete.
+// isSecretKeyPath reports whether path is `/settings/:key` for an allowed
+// secrets key (config.IsAllowedSecretKey). The other `/settings/...` routes
+// (`/settings/mcp`, `/settings/jev-trial` and so on) are siblings of `:key` in
+// the router but are not part of setup, so the guard keeps them closed until
+// setup is complete.
 func isSecretKeyPath(path string) bool {
-	key := strings.TrimPrefix(path, "/settings/")
-	return key != "mcp" && !strings.Contains(key, "/")
+	return config.IsAllowedSecretKey(strings.TrimPrefix(path, "/settings/"))
 }
 
 func setupSatisfied(ctx context.Context, store SecretsReader, required config.SetupRequirements) bool {

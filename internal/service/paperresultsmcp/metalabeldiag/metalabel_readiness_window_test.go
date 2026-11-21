@@ -7,26 +7,27 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // shapes are time-ordered rows decided at random gaps (some on weekends and
 // across several days), every label complete 15 minutes later: the kinds of
 // history the OOS window is cut from (few rows, exactly the bar, many more,
 // dense days, all before the floor, none).
-func shapes(asOf time.Time) map[string][]training.Row {
+func shapes(asOf time.Time) map[string][]walkforward.Row {
 	bar := training.DefaultAcceptanceConfig().MinOOSSamples
 	rng := rand.New(rand.NewPCG(3, 5))
-	build := func(n int, spread, newest time.Duration) []training.Row {
-		rows := make([]training.Row, n)
+	build := func(n int, spread, newest time.Duration) []walkforward.Row {
+		rows := make([]walkforward.Row, n)
 		for i := range rows {
 			at := asOf.Add(-newest - time.Duration(float64(spread)*float64(n-1-i)/float64(max(n-1, 1))))
 			at = at.Add(-time.Duration(rng.IntN(int(time.Minute))))
-			rows[i] = training.Row{DecidedAt: at, LabelEnd: at.Add(15 * time.Minute)}
+			rows[i] = walkforward.Row{DecidedAt: at, LabelEnd: at.Add(15 * time.Minute)}
 		}
 		return rows
 	}
 	day := 24 * time.Hour
-	return map[string][]training.Row{
+	return map[string][]walkforward.Row{
 		"none":                     nil,
 		"a few rows":               build(40, 2*day, time.Hour),
 		"fewer than the bar":       build(bar-1, 30*day, time.Hour),
@@ -35,7 +36,7 @@ func shapes(asOf time.Time) map[string][]training.Row {
 		"dense recent days":        build(3*bar, 5*day, time.Hour),
 		"all older than the floor": build(300, 40*day, 30*day),
 		"one trading day":          build(bar+50, 3*time.Hour, 30*time.Minute),
-		"newest row not yet done":  append(build(bar+50, 14*day, time.Hour), training.Row{DecidedAt: asOf.Add(-5 * time.Minute), LabelEnd: asOf.Add(10 * time.Minute)}),
+		"newest row not yet done":  append(build(bar+50, 14*day, time.Hour), walkforward.Row{DecidedAt: asOf.Add(-5 * time.Minute), LabelEnd: asOf.Add(10 * time.Minute)}),
 	}
 }
 
@@ -91,7 +92,7 @@ func TestReachOOSOpensTheWindowWhereTheSplitDoes(t *testing.T) {
 }
 
 // sortedBefore is how many of the time-ordered rows were decided before t.
-func sortedBefore(rows []training.Row, t time.Time) int {
+func sortedBefore(rows []walkforward.Row, t time.Time) int {
 	n := 0
 	for _, r := range rows {
 		if r.DecidedAt.Before(t) {
@@ -115,12 +116,12 @@ func TestReadinessSplitKeepsTheSplitsOwnResult(t *testing.T) {
 			if err != nil {
 				t.Fatalf("readinessSplit: %v", err)
 			}
-			want, werr := training.SplitWalkForward(rows, asOf, cutoff, walk)
+			want, werr := walkforward.SplitWalkForward(rows, asOf, cutoff, walk)
 			if (werr == nil) != got.TrainReady {
 				t.Fatalf("train ready = %v, the split said %v", got.TrainReady, werr)
 			}
 			if werr != nil {
-				var short *training.InsufficientDataError
+				var short *walkforward.InsufficientDataError
 				if !errors.As(werr, &short) || got.TrainSkipCode == nil || *got.TrainSkipCode != short.Code || got.Train.Rows != short.Usable {
 					t.Fatalf("skip = %v / %d rows, the split said %v", got.TrainSkipCode, got.Train.Rows, werr)
 				}

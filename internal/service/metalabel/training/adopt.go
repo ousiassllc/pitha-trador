@@ -10,6 +10,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // verdict is the adoption decision of one training with the numbers behind it.
@@ -24,7 +25,7 @@ type verdict struct {
 // rejects: the OOS bar on confidence intervals, the LLM cutoff gate (#776),
 // the comparison with the model in force on the same OOS rows, and the change
 // rate limit / freeze. The reason of a rejection is recorded with the model.
-func (t *Trainer) judge(ctx context.Context, now time.Time, s metalabelsettings.Settings, split Split, eval Evaluation) (verdict, error) {
+func (t *Trainer) judge(ctx context.Context, now time.Time, s metalabelsettings.Settings, split walkforward.Split, eval Evaluation) (verdict, error) {
 	seed := uint64(now.UnixNano())
 	v := verdict{intervals: eval.Intervals(t.acceptance, seed), adoption: repo.Adoption{Criteria: t.acceptance.criteria(seed)}}
 	v.status, v.reason = t.acceptance.Judge(eval, v.intervals)
@@ -54,7 +55,7 @@ func (t *Trainer) judge(ctx context.Context, now time.Time, s metalabelsettings.
 // and rejects the candidate unless it may replace it. A stored model this
 // build cannot use is not compared with (it cannot serve decisions anyway), so
 // it never blocks its own replacement.
-func (t *Trainer) compareWithActive(ctx context.Context, v *verdict, active repo.Model, seed uint64, split Split, cand Evaluation, decide metalabel.DecideConfig) {
+func (t *Trainer) compareWithActive(ctx context.Context, v *verdict, active repo.Model, seed uint64, split walkforward.Split, cand Evaluation, decide metalabel.DecideConfig) {
 	parsed, err := metalabel.ParseModel(active)
 	if err != nil {
 		slog.WarnContext(ctx, "metalabel: the active model is unusable, so the candidate is not compared with it", "version", active.Version, "error", err)

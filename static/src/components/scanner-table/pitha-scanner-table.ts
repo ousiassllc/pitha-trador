@@ -88,6 +88,9 @@ export class PithaScannerTable extends LitElement {
   @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ScannerUpdateMessage> | null = null;
+  // Bumped by every loadInitial and by every scanner_update push: a GET that
+  // was started before either is older than what is on screen and is dropped.
+  private loadSeq = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -106,13 +109,16 @@ export class PithaScannerTable extends LitElement {
       logger.error('pitha-scanner-table: api-url is not set');
       return;
     }
+    const seq = ++this.loadSeq;
     try {
       const response = await get<ScannerAPIResponse>(this.apiUrl);
+      if (seq !== this.loadSeq) return;
       this.items = response.items;
       this.asOf = response.as_of;
       this.loaded = true;
       this.error = null;
     } catch (err) {
+      if (seq !== this.loadSeq) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-scanner-table: failed to load initial candidates', { error: err });
     }
@@ -129,6 +135,7 @@ export class PithaScannerTable extends LitElement {
       },
       onMessage: (message) => {
         if (message.type === 'scanner_update') {
+          this.loadSeq++;
           this.items = message.items;
           this.asOf = message.as_of;
           this.loaded = true;

@@ -28,21 +28,36 @@ func Unmarshal(b []byte) (Manifest, error) {
 }
 
 // WriteNew writes m to path and fails when the file exists: a frozen manifest
-// is never overwritten.
+// is never overwritten. When writing fails after the file was created, the
+// half-written file is removed so a rerun is not refused by it.
 func WriteNew(path string, m Manifest) error {
 	b, err := Marshal(m)
 	if err != nil {
 		return err
 	}
+	return writeNew(path, b, writeData)
+}
+
+func writeData(f *os.File, b []byte) error {
+	_, err := f.Write(b)
+	return err
+}
+
+func writeNew(path string, b []byte, write func(*os.File, []byte) error) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("manifest: create %s: %w", path, err)
 	}
-	if _, err := f.Write(b); err != nil {
+	if err := write(f, b); err != nil {
 		_ = f.Close()
+		_ = os.Remove(path)
 		return fmt.Errorf("manifest: write %s: %w", path, err)
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("manifest: close %s: %w", path, err)
+	}
+	return nil
 }
 
 // ReadFrozen reads path and verifies that it is a valid frozen manifest.

@@ -160,7 +160,7 @@ templ Panel(props PanelProps) {
 		if props.WriteGate {
 			@writeSection(props)
 			if props.ResearchNotes {
-				<div id="mcp-research-notes" hx-get="/settings/mcp/research-notes" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-research-notes-slot"></div>
+				<div id="mcp-research-notes" hx-get="/settings/mcp/research-notes" hx-trigger="load" hx-target="this" hx-swap="innerHTML" data-testid="mcp-research-notes-slot"></div>
 			}
 		}
 		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
@@ -233,70 +233,4 @@ templ processControls(props PanelProps) {
 			MCP は本体とは別のプロセスで、この画面の「起動」で本体の子プロセスとして起動されます（本体の DB 接続・書き込み権限は渡されず、API キーは起動引数・環境変数に載りません）。本体を終了すると MCP も止まります。有効・API キーあり・許可された待受アドレスのときは、本体の起動と同時に MCP も自動で起動します。設定を保存した後、反映するには「再起動」を押してください。
 		}
 	</div>
-}
-
-// pollAttrs makes a "starting" panel reload itself until the state settles
-// (the swap replaces this element, so the polling ends with it). Other
-// states never poll.
-//
-// A panel that shows the one-time API key never polls: the swap would erase
-// the only display of the key.
-func pollAttrs(props PanelProps) templ.Attributes {
-	if props.State != "starting" || props.RevealedKey != "" {
-		return nil
-	}
-	return templ.Attributes{"hx-get": "/settings/mcp-panel", "hx-trigger": "every 2s", "hx-target": "#mcp-panel", "hx-swap": "innerHTML"}
-}
-
-func processAttrs(action, testID string, disabled bool) templ.Attributes {
-	attrs := templ.Attributes{
-		"hx-post":         "/settings/mcp/" + action,
-		"hx-target":       "#mcp-panel",
-		"hx-swap":         "innerHTML",
-		"hx-disabled-elt": "this",
-		"data-testid":     testID,
-	}
-	if disabled {
-		attrs["disabled"] = true
-	}
-	return attrs
-}
-
-func boolAttr(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
-func enabledAttrs(enabled bool) templ.Attributes {
-	attrs := templ.Attributes{"data-testid": "mcp-enabled"}
-	if enabled {
-		attrs["checked"] = true
-	}
-	return attrs
-}
-
-func keyButtonVariant(configured bool) atoms.ButtonVariant {
-	if configured {
-		return atoms.ButtonDanger
-	}
-	return atoms.ButtonPrimary
-}
-
-// keyButtonAttrs: regenerating asks for confirmation, since it
-// invalidates the key the Grok Bot already holds; the first generation has
-// nothing to lose.
-func keyButtonAttrs(configured bool) templ.Attributes {
-	attrs := templ.Attributes{
-		"hx-post":         "/settings/mcp/key",
-		"hx-target":       "#mcp-panel",
-		"hx-swap":         "innerHTML",
-		"hx-disabled-elt": "this",
-		"data-testid":     "mcp-generate-key",
-	}
-	if configured {
-		attrs["hx-confirm"] = "API キーを再生成します。古いキーは使えなくなります（MCP の再起動後）。よろしいですか？"
-	}
-	return attrs
 }

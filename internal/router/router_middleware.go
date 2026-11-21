@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware/apierrorpage"
 )
 
 // useMiddleware installs the global middleware chain on engine, in the
@@ -19,6 +20,9 @@ func useMiddleware(engine *gin.Engine, o options) settings.SecretsStore {
 	// Then, so Recovery's logged 500 is what RequestLog records and even
 	// Session's rejections are logged (issues #109/#122).
 	engine.Use(middleware.RequestLog(), middleware.Recovery(shared.RenderErrorPage))
+	// Before Session/SetupGuard: a page navigation to a failing `/api/v1` route
+	// (the download forms) gets an error page, not problem+json (issue #1196).
+	engine.Use(apierrorpage.Handler(shared.RenderErrorPage))
 	if o.wsBase != "" {
 		engine.Use(middleware.WebSocketBase(o.wsBase))
 	}

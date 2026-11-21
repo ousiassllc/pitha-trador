@@ -164,8 +164,8 @@ func TestImportFlow_PreviewConfirmStatus(t *testing.T) {
 	if rec := e.session(http.MethodGet, "/api/v1/migration/status", nil, ""); !strings.Contains(rec.Body.String(), `"pending"`) {
 		t.Fatalf("status shows no pending import: %s", rec.Body)
 	}
-	if rec := e.session(http.MethodPost, "/api/v1/migration/cancel", nil, ""); rec.Code != http.StatusOK && rec.Code != http.StatusNoContent {
-		t.Fatalf("cancel = %d: %s", rec.Code, rec.Body)
+	if rec := e.session(http.MethodPost, "/api/v1/migration/cancel", nil, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("cancel = %d, want 204: %s", rec.Code, rec.Body)
 	}
 	if rec := e.session(http.MethodGet, "/api/v1/migration/status", nil, ""); strings.Contains(rec.Body.String(), `"pending"`) {
 		t.Fatalf("status still pending after cancel: %s", rec.Body)

@@ -25,6 +25,7 @@ import (
 type testEngine struct {
 	engine      *execution.Engine
 	positions   *trading.PositionRepository
+	orders      *trading.OrderRepository
 	instruments *market.InstrumentRepository
 	snapshots   *market.SnapshotRepository
 	db          *sql.DB
@@ -52,9 +53,10 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	}
 
 	positions := trading.NewPositionRepository(db)
+	orders := trading.NewOrderRepository(db)
 	snapshots := market.NewSnapshotRepository(db)
 	engine := execution.NewEngine(execution.Deps{
-		Orders:      trading.NewOrderRepository(db),
+		Orders:      orders,
 		Positions:   positions,
 		Snapshots:   snapshots,
 		Decisions:   judgement.NewDecisionRepository(db),
@@ -62,7 +64,7 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 		Instruments: instruments,
 	}, cfg)
 
-	return testEngine{engine: engine, positions: positions, instruments: instruments, snapshots: snapshots, db: db, instrument: inst}
+	return testEngine{engine: engine, positions: positions, orders: orders, instruments: instruments, snapshots: snapshots, db: db, instrument: inst}
 }
 
 func longSignal(instrumentID int64) domain.TradeSignal {

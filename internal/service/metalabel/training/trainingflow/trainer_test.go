@@ -12,6 +12,7 @@ import (
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 func TestTrainer_TrainsEvaluatesOutOfSampleAndStoresTheModelVersionAndMetrics(t *testing.T) {
@@ -171,7 +172,7 @@ func TestTrainer_TooLittleOrOneSidedHistoryIsNotAFailureAndStoresNothing(t *test
 		"all dropped": {{DecidedAt: trainNow.Add(-48 * time.Hour), Direction: "LONG", StateJSON: `not json`, ResponseJSON: `{}`, HorizonMinutes: 15}},
 	} {
 		tr := newTrainer(&fakeSource{rows: rows}, store, settingsOf(nil))
-		if _, err := tr.Train(ctx); !errors.Is(err, training.ErrInsufficientData) {
+		if _, err := tr.Train(ctx); !errors.Is(err, walkforward.ErrInsufficientData) {
 			t.Errorf("%s: Train error = %v, want ErrInsufficientData", name, err)
 		}
 		if err := tr.Retrain(ctx); err != nil {

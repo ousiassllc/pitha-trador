@@ -2,11 +2,13 @@ package closeflow_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
 // TestEngine_CloseAll_ForceClosesEveryOpenPositionAtItsCurrentPrice
@@ -110,5 +112,82 @@ func TestEngine_CloseAll_NoOpenPositionsIsANoOp(t *testing.T) {
 
 	if err := te.engine.CloseAll(context.Background(), domain.KillReasonBrokerAPIError); err != nil {
 		t.Fatalf("CloseAll with no open positions: %v", err)
+	}
+}
+
+// Kill Switch fired outside the 立会時間 (FR-ENTRY / FR-RISK-3,
+// components-pipeline.md): CloseAll fills nothing and keeps the position
+// open, returns an error wrapping execution.ErrOutsideTradingSession, and
+// the same CloseAll at the next session (risk.Engine.RetryForceClose's
+// 1-minute retry) force-closes it.
+func TestEngine_CloseAll_OutsideTradingSessionKeepsPositionUntilNextSession(t *testing.T) {
+	jstAt := func(d, hh, mm int) time.Time {
+		return time.Date(2026, time.September, d, hh, mm, 0, 0, marketcalendar.JST)
+	}
+	for name, at := range map[string]time.Time{
+		"lunch break":     jstAt(29, 11, 45),
+		"after the close": jstAt(29, 15, 30),
+		"night":           jstAt(29, 20, 0),
+		"saturday":        jstAt(26, 10, 0),
+		"holiday":         jstAt(22, 10, 0),
+	} {
+		t.Run(name, func(t *testing.T) {
+			now := jstAt(29, 10, 0)
+			cfg := execution.DefaultConfig()
+			cfg.Calendar = marketcalendar.TSE
+			cfg.Now = func() time.Time { return now }
+			te := newTestEngine(t, cfg)
+			ctx := context.Background()
+
+			entry, err := te.engine.Enter(ctx, execution.EntryRequest{
+				Signal: longSignal(te.instrument.ID), Quantity: 100,
+				OrderType: domain.OrderTypeMarket, Price: 2000.0, Now: now,
+			})
+			if err != nil {
+				t.Fatalf("Enter: %v", err)
+			}
+			if _, err := te.positions.Mark(ctx, entry.Position.ID, 2050.0, 5000.0, now); err != nil {
+				t.Fatalf("Mark: %v", err)
+			}
+			ordersBefore, err := te.orders.List(ctx, "", 100)
+			if err != nil {
+				t.Fatalf("List orders: %v", err)
+			}
+
+			now = at
+			err = te.engine.CloseAll(ctx, domain.KillReasonDailyLossLimit)
+			if !errors.Is(err, execution.ErrOutsideTradingSession) {
+				t.Fatalf("CloseAll at %s err = %v, want ErrOutsideTradingSession", at.Format("2006-01-02 15:04"), err)
+			}
+			held, err := te.positions.Get(ctx, entry.Position.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if !held.IsOpen() {
+				t.Fatalf("position closed outside the session: %+v", held)
+			}
+			ordersAfter, err := te.orders.List(ctx, "", 100)
+			if err != nil {
+				t.Fatalf("List orders: %v", err)
+			}
+			if len(ordersBefore) != 1 || len(ordersAfter) != len(ordersBefore) {
+				t.Fatalf("orders after refused CloseAll = %d, want 1 (the entry order only, no exit order)", len(ordersAfter))
+			}
+
+			now = jstAt(30, 9, 30) // the next session
+			if err := te.engine.CloseAll(ctx, domain.KillReasonDailyLossLimit); err != nil {
+				t.Fatalf("CloseAll at the next session: %v", err)
+			}
+			closed, err := te.positions.Get(ctx, entry.Position.ID)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if closed.IsOpen() {
+				t.Fatalf("position still open after CloseAll at the next session: %+v", closed)
+			}
+			if closed.ExitReason == nil || *closed.ExitReason != domain.ExitReasonForceClose {
+				t.Fatalf("ExitReason = %v, want %q", closed.ExitReason, domain.ExitReasonForceClose)
+			}
+		})
 	}
 }

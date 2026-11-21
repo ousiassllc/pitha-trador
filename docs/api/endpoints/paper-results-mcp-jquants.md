@@ -46,4 +46,4 @@ API キー（`JQUANTS_API_KEY`）・URL・エラーの本文・価格・出来�
 
 ### テスト
 
-`internal/service/paperresultsmcp/jquantstests`（件数・要求数・最終成功・失敗の固定コード・既定オフ・秘密と市場データを返さないこと・引数の厳格さ・書き込めないこと。`jquants.*`が`settings_set`の許可リストに無いことは`internal/config/jquantssettings`のテストで固定）。ツールの登録は `internal/service/paperresultsmcp/jquants_tool.go`、SQL は `internal/service/paperresultsmcp/jquantsdiag`。
+`internal/service/paperresultsmcp/jquantstests`（件数・要求数・最終成功・失敗の固定コード・既定オフ・秘密と市場データを返さないこと・引数の厳格さ・書き込めないこと。`jquants.*`が`settings_set`の許可リストに無いことは`internal/config/jquantssettings`のテストで固定）。ツールの登録は `internal/service/paperresultsmcp/jev_models_tool.go`（`jquantsStatusTool`）、SQL は `internal/service/paperresultsmcp/jquantsdiag`。
