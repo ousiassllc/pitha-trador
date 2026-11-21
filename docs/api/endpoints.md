@@ -279,3 +279,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.126 | 2026-11-20 | §3の`POST /ops-settings/:key`の対象に`research.index.enabled`・`research.index.symbols`を追記 | issue #1084 |
 | 1.127 | 2026-11-22 | §4に`GET /settings/mcp/research-notes`（MCP カードの研究ノート一覧。読み取り専用。クエリ`q`・`tag`・`conclusion`、新しい順20件、範囲外は422＋`atoms.InlineAlert`、`Cache-Control: no-store`）を追記。実装済みのルートの記載漏れを直しただけで、ルート・応答は変更なし | issue #1169 |
 | 1.128 | 2026-11-22 | §3の`POST`/`DELETE /ops-settings/:key`の監査の説明と、`endpoints/paper-results-mcp-proposals.md` §5の受け入れ条件の、MCP のホワイトリストのキー数を実装（`mcpwritesettings.Keys()`＝29キー・うち`opsettings`で保存する27キー。`jev.shadow.*`の2キーは対象外）に合わせて訂正（POST は28・26、DELETE は25、proposals は27のままで互いに食い違っていた）。ルート・応答は変更なし | issue #1192 |
+| 1.129 | 2026-11-22 | §5（`endpoints/huma-api-export.md`）の`POST /api/v1/migration/cancel`の成功応答を、実装（本文なしの出力型。huma の既定で204 No Content）に合わせて「200」から「204 No Content。本文なし」に訂正。ルート・応答は変更なし | issue #1195 |
