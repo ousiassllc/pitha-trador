@@ -20,7 +20,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 | APIフレームワーク | Huma | `/api/v1/...` のJSON API・OpenAPI 3.1自動生成 |
 | テンプレートエンジン | Templ | 型安全なGo HTMLテンプレート |
 | インタラクション | HTMX | サーバー駆動のDOM更新 |
-| リッチUI | Lit (Web Components) | `pitha-price-chart` 等5種（§5、`lit.md`） |
+| リッチUI | Lit (Web Components) | `pitha-price-chart` 等6種（§5、`lit.md`） |
 | チャート描画 | lightweight-charts (TradingView製) | ローソク足・VWAP・出来高・信頼性曲線 |
 | スタイリング | Tailwind CSS | ユーティリティファーストCSS。色は Ousiass デザインガイドのトークンだけ（`design-tokens.md`） |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
