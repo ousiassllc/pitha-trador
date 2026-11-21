@@ -160,7 +160,7 @@ templ Panel(props PanelProps) {
 		if props.WriteGate {
 			@writeSection(props)
 			if props.ResearchNotes {
-				<div id="mcp-research-notes" hx-get="/settings/mcp/research-notes" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-research-notes-slot"></div>
+				<div id="mcp-research-notes" hx-get="/settings/mcp/research-notes" hx-trigger="load" hx-target="this" hx-swap="innerHTML" data-testid="mcp-research-notes-slot"></div>
 			}
 		}
 		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
