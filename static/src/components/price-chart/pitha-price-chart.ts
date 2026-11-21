@@ -74,6 +74,9 @@ export class PithaPriceChart extends LitElement {
   // The newest 1-minute bar on the chart (loaded or tick-built): ticks fold
   // into it instead of stacking new bars.
   private lastBar: Bar | null = null;
+  // Bumped by every loadInitial (and on detach): a response of an older load,
+  // e.g. the previous symbol's after a candles-url change, is dropped.
+  private loadSeq = 0;
   // The canvas keeps the colors it was given, so re-apply the tokens on an OS Light/Dark switch.
   readonly colorScheme = new ColorSchemeController(this, () => this.applyTheme());
 
@@ -97,6 +100,7 @@ export class PithaPriceChart extends LitElement {
     this.lastDirection = null;
     this.summary = EMPTY_SUMMARY;
     this.empty = false;
+    this.loadSeq++;
     this.stopWs();
   }
 
@@ -173,11 +177,14 @@ export class PithaPriceChart extends LitElement {
       logger.error('pitha-price-chart: candles-url is not set');
       return;
     }
+    const seq = ++this.loadSeq;
     try {
       const response = await get<CandlesAPIResponse>(this.candlesUrl, { background });
+      if (seq !== this.loadSeq) return;
       this.applyCandles(response.symbol, response.candles);
       this.error = null;
     } catch (err) {
+      if (seq !== this.loadSeq) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-price-chart: failed to load initial candles', { error: err });
     }
