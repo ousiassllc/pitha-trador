@@ -41,6 +41,7 @@
 
 - 応答: 従来のメンバー（`key` / `unit` / `value` / `before` / `audit_id` / `at`。LLM cutoff のキーは `llm_cutoff_status`）に、**仮説を渡したときだけ** `experiment`（`experiment_create` の応答と同じ形）を足す。仮説なしの応答は従来とバイト同一。
 - 検査の順（どれも何も保存する前）: ホワイトリスト（`key_not_allowed` 403）→ 書き込み許可（`write_disabled` 403）→ 仮説（空・空白だけ・500 文字超・制御文字は `invalid_argument` 422。`error.data.detail` に理由）→ 値の検証（`invalid_value` 422）。保存後に前後の値が同じ（変えていない）なら `invalid_argument`（実験は作れない）で、**設定・監査行・実験のどれも残らない**。実験の保存に失敗したときも同じ（全部ロールバック）。
+- 変更前が未設定（既定が空で、まだ保存されていないキー。`jev.shadow.candidate_version`・`metalabel.llm_cutoff_*` など）のときは、実験の `before` を `（未設定）`（`experiment.UnsetValue`）と記録する。設定の値・監査行（`before_value` は NULL）は変えない（`TestSetWithHypothesisOnAnUnsetKeyRecordsTheUnsetMark`）。
 - 書き込みの範囲は増えない: `runtime_settings`（そのキー 1 行）・`mcp_settings_audit`（1 行）・`tuning_experiments`（1 行）。ホワイトリスト・書き込み許可の意味は変えない。実験の判定が設定を変えたり戻したりすることは無い。
 
 ### 3.27 への追加: `experiments_list` の `unrecorded_changes`

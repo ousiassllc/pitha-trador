@@ -33,6 +33,10 @@ const RoleSwitchName = "AI_ROLE_JEV"
 // Values of a recorded switch.
 const UnsetModel = "未設定（既定のモデル）"
 
+// UnsetValue stands for a setting that has no value (an unset key whose default
+// is empty) as the Before of a setting experiment, which cannot be empty.
+const UnsetValue = "（未設定）"
+
 // modelSwitches lists the switches of the configured Jev model saved in
 // [from, to) (SQL text bounds), oldest first, as confounders of the given
 // period (PeriodBefore or PeriodAfter; a switch is timestamped, so it is never

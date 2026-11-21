@@ -152,6 +152,37 @@ func TestSetWithAnInvalidHypothesisWritesNothing(t *testing.T) {
 	}
 }
 
+// A key that was never saved has an empty effective value; the experiment's
+// before then reads experiment.UnsetValue (an experiment value cannot be empty),
+// while the audit row keeps its NULL before and the setting its value (#1191).
+func TestSetWithHypothesisOnAnUnsetKeyRecordsTheUnsetMark(t *testing.T) {
+	const unsetKey, source = "metalabel.llm_cutoff_source", "https://example.com/model-card"
+	srv, w := newServer(t)
+	var d setData
+	srv.call(t, "settings_set", map[string]any{"key": unsetKey, "value": source, "hypothesis": hypothesis}).data(t, "settings_set", &d)
+
+	if d.Experiment == nil {
+		t.Fatal("the response has no experiment")
+	}
+	v := d.Experiment.Variable
+	if v.Kind != experiment.KindSetting || v.Name != unsetKey || v.Before != experiment.UnsetValue || v.After != source || v.AuditID == nil || *v.AuditID != d.AuditID {
+		t.Errorf("variable = %+v, audit id of the change = %d", v, d.AuditID)
+	}
+	if _, ok := stored(t, w, unsetKey); !ok {
+		t.Error("the setting was not stored")
+	}
+	var before sql.NullString
+	if err := w.QueryRowContext(t.Context(), `SELECT before_value FROM mcp_settings_audit WHERE id = ?`, d.AuditID).Scan(&before); err != nil || before.Valid {
+		t.Errorf("audit before = %+v, err %v; want NULL", before, err)
+	}
+	if n := count(t, w, `SELECT COUNT(*) FROM mcp_settings_audit WHERE setting_key = ?`, unsetKey); n != 1 {
+		t.Errorf("audit rows = %d, want 1", n)
+	}
+	if n := count(t, w, `SELECT COUNT(*) FROM tuning_experiments`); n != 1 {
+		t.Errorf("tuning_experiments rows = %d, want 1", n)
+	}
+}
+
 // The write switch and the whitelist are checked as before, with a hypothesis too.
 func TestSetWithHypothesisKeepsTheWriteSwitchAndTheWhitelist(t *testing.T) {
 	srv, w := newServer(t)
