@@ -1,4 +1,4 @@
-package jobqueue_test
+package failedflow_test
 
 import (
 	"context"

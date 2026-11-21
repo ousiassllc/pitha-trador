@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
@@ -22,6 +23,11 @@ func newTestDB(t *testing.T) *sql.DB {
 		}
 	})
 	return conn
+}
+
+func openTestDB(t *testing.T) *market.InstrumentRepository {
+	t.Helper()
+	return market.NewInstrumentRepository(newTestDB(t))
 }
 
 func sectorPtr(s string) *string { return &s }
