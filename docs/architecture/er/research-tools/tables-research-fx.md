@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（研究用の為替 1 分足）
 
-`docs/architecture/er.md` から分割した章（研究用の記録の表は `docs/architecture/er/tables-research.md` の続き）。対象: `research_fx_candles` / `research_fx_days`（マイグレーション `000068`。issue #1084 の USD/JPY の部分）。設計は `docs/architecture/paper-results-mcp-research-fx.md`、読み取りツールは `docs/api/endpoints/paper-results-mcp-research-fx.md`（`fx_series_summary`）と `jev_evaluation` の `fx_symbol`。実装は `internal/repository/researchfx`（表）・`internal/service/researchfx`（記録部品）・`internal/bootstrap/researchfxjob`（日次タスク）・`internal/service/fx/gmo`（既存の読み取り専用アダプタ）。日経平均・TOPIX など指数の表は別の章（`er/research-tools/tables-research-index.md`）。
+`docs/architecture/er.md` から分割した章（研究用の記録の表は `docs/architecture/er/tables-research.md` の続き）。対象: `research_fx_candles` / `research_fx_days`（マイグレーション `000068`。issue #1084 の USD/JPY の部分）。設計は `docs/architecture/research-tools/paper-results-mcp-research-fx.md`、読み取りツールは `docs/api/endpoints/research-tools/paper-results-mcp-research-fx.md`（`fx_series_summary`）と `jev_evaluation` の `fx_symbol`。実装は `internal/repository/researchfx`（表）・`internal/service/researchfx`（記録部品）・`internal/bootstrap/researchfxjob`（日次タスク）・`internal/service/fx/gmo`（既存の読み取り専用アダプタ）。日経平均・TOPIX など指数の表は別の章（`er/research-tools/tables-research-index.md`）。
 
 ## 位置づけ（為替）
 
