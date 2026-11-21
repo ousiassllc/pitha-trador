@@ -2,6 +2,7 @@
 // the server-side state rules, a mount helper and the per-test global
 // setup/teardown.
 import { afterEach, beforeEach, mock } from 'bun:test';
+import { restoreReconnectCapture } from '../lib/testing/reconnect-capture';
 import { installFakeWebSocket } from '../lib/ws-test-support';
 import './pitha-kill-switch-panel';
 
@@ -47,6 +48,7 @@ export function installFakes(): void {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    restoreReconnectCapture();
     restoreWebSocket();
     document.body.innerHTML = '';
   });

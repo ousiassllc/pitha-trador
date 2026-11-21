@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { captureReconnect, restoreReconnectCapture } from '../lib/testing/reconnect-capture';
 import { FakeWebSocket, installFakeWebSocket } from '../lib/ws-test-support';
 import './pitha-activity-feed';
 
@@ -15,6 +16,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  restoreReconnectCapture();
   restoreWebSocket();
   document.body.innerHTML = '';
 });
@@ -59,12 +61,13 @@ async function mount() {
   return { el, fetchMock };
 }
 
-// Drops the socket and reopens it (the client backs off ~500ms first).
+// Drops the socket and reopens it (the client's ~500ms backoff is fired by hand).
 async function reconnect(el: FeedElement): Promise<void> {
+  const fireReconnect = captureReconnect();
   FakeWebSocket.instances[0].emit('open'); // first connect: no re-fetch
   FakeWebSocket.instances[0].emit('close', { code: 1006 });
   await el.updateComplete;
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  fireReconnect();
   FakeWebSocket.instances[1].emit('open');
   await flush(el);
 }

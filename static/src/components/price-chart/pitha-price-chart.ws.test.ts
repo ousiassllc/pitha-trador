@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { captureReconnect, restoreReconnectCapture } from '../lib/testing/reconnect-capture';
 import { FakeWebSocket, installChartHarness } from './chart-test-support';
 
 const { PithaPriceChart } = await import('./pitha-price-chart');
@@ -30,20 +31,7 @@ describe('pitha-price-chart WebSocket disconnection', () => {
 
   const notice = (el: ChartElement) => el.shadowRoot?.querySelector('.pitha-ws-disconnected');
 
-  // WsClient schedules its backoff reconnect through window.setTimeout;
-  // capture it so the test fires the reconnect without a real delay.
-  function captureReconnect(): () => void {
-    let reconnect: (() => void) | null = null;
-    spyOn(window, 'setTimeout').mockImplementation(((fn: () => void) => {
-      reconnect = fn;
-      return 1;
-    }) as never);
-    return () => reconnect?.();
-  }
-
-  afterEach(() => {
-    (window.setTimeout as unknown as { mockRestore?: () => void }).mockRestore?.();
-  });
+  afterEach(restoreReconnectCapture);
 
   // Without a notice a dropped socket left the chart frozen on a stale price (#336).
   test('shows the disconnected notice only while the socket is down', async () => {

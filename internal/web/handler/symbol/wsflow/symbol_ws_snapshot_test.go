@@ -17,9 +17,16 @@ func timePtr(t time.Time) *time.Time { return &t }
 type mutableSymbolProvider struct {
 	*fakeSymbolProvider
 	mu sync.Mutex
+	// polled receives one signal per State call (dropped when full), so a test
+	// can wait for poll steps instead of sleeping.
+	polled chan struct{}
 }
 
 func (p *mutableSymbolProvider) State(ctx context.Context, symbol string) (execution.SymbolState, error) {
+	select {
+	case p.polled <- struct{}{}:
+	default:
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.fakeSymbolProvider.State(ctx, symbol)
@@ -38,7 +45,7 @@ func TestSymbolHandler_WebSocket_TickOnlyOnNewSnapshot(t *testing.T) {
 	first := time.Date(2026, 10, 5, 9, 30, 15, 0, time.UTC)
 	provider := &mutableSymbolProvider{fakeSymbolProvider: &fakeSymbolProvider{
 		state: execution.SymbolState{Symbol: "7203", LastPrice: 100, LastScanAt: &first},
-	}}
+	}, polled: make(chan struct{}, 1024)}
 	ctx, conn := dialSymbolWS(t, provider)
 
 	type tick struct {
@@ -60,9 +67,24 @@ func TestSymbolHandler_WebSocket_TickOnlyOnNewSnapshot(t *testing.T) {
 		t.Fatalf("first tick = %+v, err = %v, want price 100 at %v", got, err, first)
 	}
 
-	// Many poll intervals (10ms) pass with the same snapshot; any repeated
-	// tick would be queued ahead of the next one read below.
-	time.Sleep(150 * time.Millisecond)
+	// Several poll steps run with the same snapshot; any repeated tick they
+	// pushed would be queued ahead of the next one read below. Draining first
+	// leaves only steps that started after the first tick was read.
+	for drained := false; !drained; {
+		select {
+		case <-provider.polled:
+		default:
+			drained = true
+		}
+	}
+	const pollSteps = 6
+	for range pollSteps {
+		select {
+		case <-provider.polled:
+		case <-ctx.Done():
+			t.Fatalf("poll step did not run again before the deadline: %v", ctx.Err())
+		}
+	}
 
 	second := first.Add(time.Minute)
 	provider.publish(101, second)

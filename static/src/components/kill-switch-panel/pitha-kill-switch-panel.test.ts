@@ -1,4 +1,5 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
+import { captureReconnect } from '../lib/testing/reconnect-capture';
 import { FakeWebSocket } from '../lib/ws-test-support';
 import {
   buttonLabels,
@@ -188,6 +189,7 @@ describe('pitha-kill-switch-panel', () => {
     const { el, fetchMock } = await mount('running');
     expect(el.shadowRoot?.querySelector('[data-ws-status]')).toBeNull();
 
+    const fireReconnect = captureReconnect();
     FakeWebSocket.instances[0].emit('open');
     FakeWebSocket.instances[0].emit('close', { code: 1006 });
     await el.updateComplete;
@@ -196,7 +198,7 @@ describe('pitha-kill-switch-panel', () => {
     );
 
     const callsBefore = fetchMock.mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    fireReconnect();
     FakeWebSocket.instances[1].emit('open');
     await flush(el);
 
