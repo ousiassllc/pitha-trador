@@ -76,7 +76,7 @@ erDiagram
 | direction・regime・entry_quality・confidence・toxic_flow・liquidity_stressed・continuation_probability | | `jev_trial_decisions` と同じ | 拒否・欠落は NULL（補わない）。`status='ok'` のときは全問が非 NULL（CHECK） |
 | response_json | text | NULL可 | 応答の本文そのまま。MCP は返さない |
 | latency_ms・input_tokens・output_tokens | | `jev_trial_decisions` と同じ | |
-| cost_usd・cost_source・counted_cost_usd | | `jev_trial_decisions` と同じ | `cost_source` = `reported` / `list_price_estimate` / `unknown`（不明は NULL で 0 にしない）。`counted_cost_usd` は上限の判定に数えた額で、**1 日（JST）の上限の判定はお試しの行と合算する** |
+| cost_usd・cost_source・counted_cost_usd | | `jev_trial_decisions` と同じ。ただし `cost_source` に `subscription` は許可しない（リプレイに Codex アームは無い） | `cost_source` = `reported` / `list_price_estimate` / `unknown`（不明は NULL で 0 にしない。CHECK もこの 3 値のみ）。`counted_cost_usd` は上限の判定に数えた額で、**1 日（JST）の上限の判定はお試しの行と合算する** |
 | request_bytes | integer | NOT NULL, 既定 0 | 実際に送ったリクエスト本文の大きさ。送った `state` は `jev_decisions.state_json` そのままで、何も足さない |
 | state_bytes・truncation_suspected | | `jev_trial_decisions` と同じ | `state_bytes` は保存された入力の大きさ |
 | llm_cutoff_status | varchar(20) | NOT NULL, CHECK IN (`verified`, `unverified`) | `verified`＝アームに `llm_cutoff` があり、その日より後の判断だけを送った／`unverified`＝公表されていない（画面では「未確認」。日付を推測で入れない） |
