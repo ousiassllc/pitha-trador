@@ -22,21 +22,56 @@ func (f fakePositions) ListOpen(context.Context) ([]domain.Position, error) { re
 type fakeQuotes struct {
 	boards map[string]broker.Quote
 	calls  []string
+	// called, when set, receives one token per Latest call (dropped when full)
+	// so a test can wait for the Nth evaluation instead of sleeping.
+	called chan struct{}
 }
 
 func (f *fakeQuotes) Latest(_ context.Context, symbol string) (broker.Quote, error) {
 	f.calls = append(f.calls, symbol)
+	notify(f.called)
 	if b, ok := f.boards[symbol]; ok {
 		return b, nil
 	}
 	return broker.Quote{}, errors.New("board unavailable")
 }
 
-type fakeExits struct{ snaps []domain.Snapshot }
+type fakeExits struct {
+	snaps []domain.Snapshot
+	// recorded, when set, receives one token per recorded snapshot (dropped
+	// when full); see fakeQuotes.called.
+	recorded chan struct{}
+}
 
 func (f *fakeExits) OnSnapshot(_ context.Context, snap domain.Snapshot) (execution.SnapshotResult, error) {
 	f.snaps = append(f.snaps, snap)
+	notify(f.recorded)
 	return execution.SnapshotResult{}, nil
+}
+
+// notify sends a token without blocking; a nil channel is a no-op.
+func notify(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+// waitForTokens blocks until n tokens arrive on ch, failing the test after a
+// generous upper bound (a bound for a hung monitor, not a pacing delay).
+func waitForTokens(t *testing.T, ch <-chan struct{}, n int, what string) {
+	t.Helper()
+	timeout := time.After(5 * time.Second)
+	for i := 0; i < n; i++ {
+		select {
+		case <-ch:
+		case <-timeout:
+			t.Fatalf("timed out after %d of %d %s", i, n, what)
+		}
+	}
 }
 
 func monitor(open bool, positions fakePositions, boards *fakeQuotes, exits *fakeExits) heldposition.Monitor {
@@ -92,18 +127,18 @@ func TestMonitor_CycleReturnsListError(t *testing.T) {
 }
 
 func TestMonitor_RunCyclesOnTheConfiguredInterval(t *testing.T) {
-	boards := &fakeQuotes{boards: map[string]broker.Quote{"7203": {Price: 2500}}}
+	boards := &fakeQuotes{boards: map[string]broker.Quote{"7203": {Price: 2500}}, called: make(chan struct{}, 16)}
 	exits := &fakeExits{}
 	m := monitor(true, fakePositions{open: []domain.Position{held(1, "7203")}}, boards, exits)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { m.Run(ctx, 5*time.Millisecond, 10*time.Millisecond); close(done) }()
-	time.Sleep(200 * time.Millisecond)
+	waitForTokens(t, boards.called, 3, "evaluations at a 5-10ms interval")
 	cancel()
 	<-done
 	if len(boards.calls) < 3 {
-		t.Fatalf("Run evaluated %d times in 200ms at a 5-10ms interval, want >= 3", len(boards.calls))
+		t.Fatalf("Run evaluated %d times, want >= 3", len(boards.calls))
 	}
 }
 
@@ -134,14 +169,14 @@ func (f *panicOnceExits) OnSnapshot(ctx context.Context, snap domain.Snapshot) (
 // monitor keeps evaluating on the following cycles.
 func TestMonitor_RunSurvivesPanickingCycle(t *testing.T) {
 	boards := &fakeQuotes{boards: map[string]broker.Quote{"7203": {Price: 2500}}}
-	exits := &panicOnceExits{}
+	exits := &panicOnceExits{fakeExits: fakeExits{recorded: make(chan struct{}, 16)}}
 	m := monitor(true, fakePositions{open: []domain.Position{held(1, "7203")}}, boards, &fakeExits{})
 	m.Exits = exits
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { m.Run(ctx, 5*time.Millisecond, 10*time.Millisecond); close(done) }()
-	time.Sleep(200 * time.Millisecond)
+	waitForTokens(t, exits.recorded, 2, "evaluations after the panicking cycle")
 	cancel()
 	<-done
 	if len(exits.snaps) < 2 {

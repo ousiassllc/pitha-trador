@@ -4,12 +4,22 @@
 // settings_audit.
 //
 // The MCP's database connection stays mode=ro. The only write path is Writer,
-// a second connection that is used for exactly four operations, each one
-// transaction: upsert one whitelisted runtime_settings row plus one
-// mcp_settings_audit row (Writer.Set), flip the write switch plus its audit
-// row (Writer.SetEnabled), insert one order_proposals row plus its first
-// order_proposal_events row (Writer.SubmitProposal, issue #827), and switch
-// order-proposal intake off plus its audit row (Writer.DisableOrderProposals). The values are validated and stored by
+// a second connection whose every entry point runs one transaction:
+//   - settings: upsert one whitelisted runtime_settings row plus one
+//     mcp_settings_audit row (Writer.Set, and its variant that also records an
+//     experiment in setexperiment.go), flip the write switch plus its audit
+//     row (Writer.SetEnabled);
+//   - experiments and prompts: Writer.CreateExperiment, Writer.CloseExperiment,
+//     Writer.PromotePrompt;
+//   - order proposals (issue #827): insert one order_proposals row plus its
+//     first order_proposal_events row (Writer.SubmitProposal), record a cancel
+//     request (Writer.RequestCancel), and switch order-proposal intake off plus
+//     its audit row (Writer.DisableOrderProposals);
+//   - replay runs: Writer.StartReplay, Writer.StopReplay;
+//   - research data through Writer.InTx: backtest runs, virtual Paper profiles
+//     (researchwrite) and research notes (researchnote/notetool).
+//
+// The values are validated and stored by
 // internal/service/opsettings over the same runtime_settings repository the
 // Settings screen uses, so the application sees a saved value at once.
 package mcpset

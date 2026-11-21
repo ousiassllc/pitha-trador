@@ -74,6 +74,11 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	// flag stops at the first non-flag word, so a stray word would silently
+	// drop every flag after it (e.g. the thresholds).
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
 	if *dbPath == "" {
 		return errors.New("-db is required")
 	}

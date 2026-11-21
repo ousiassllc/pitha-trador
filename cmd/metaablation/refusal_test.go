@@ -146,6 +146,7 @@ func TestExitCodes(t *testing.T) {
 		"unknown subcommand":   {[]string{"nope"}, exitUsage},
 		"unknown flag":         {[]string{"run", "-nope"}, exitUsage},
 		"missing -db":          {[]string{"run", "-manifest", "x"}, exitUsage},
+		"stray word on run":    {append(runArgs(db.Path, prereg(out), filepath.Join(out, "r")), "junk"), exitUsage},
 		"bad time":             {[]string{"init", "-db", db.Path, "-out", out, "-asof", "yesterday", "-from", "2026-10-28", "-to", "2026-11-08"}, exitUsage},
 		"missing manifest":     {runArgs(db.Path, filepath.Join(out, "absent.json"), filepath.Join(out, "r")), exitFailure},
 		"out is the database":  {runArgs(db.Path, prereg(out), db.Path), exitRefused},
@@ -167,6 +168,20 @@ func TestExitCodes(t *testing.T) {
 	}
 	if exitCode(flag.ErrHelp) != 0 || exitCode(runner.ErrRefused) != exitRefused || exitCode(manifest.ErrModelMismatch) != exitRefused {
 		t.Error("exitCode mapping")
+	}
+}
+
+// TestStrayPositionalArgumentIsAUsageError: flag stops at the first non-flag
+// word, so a trailing word must not make init succeed (nothing is written).
+func TestStrayPositionalArgumentIsAUsageError(t *testing.T) {
+	db := runnertest.Build(t, runnertest.Options{})
+	out := filepath.Join(t.TempDir(), "out")
+	_, err := cli(t, append(initArgs(db.Path, out), "junk")...)
+	if exitCode(err) != exitUsage || !strings.Contains(err.Error(), "unexpected argument") {
+		t.Fatalf("init with a stray word: exit %d (%v), want usage", exitCode(err), err)
+	}
+	if _, statErr := os.Stat(prereg(out)); statErr == nil {
+		t.Error("init wrote a pre-registration despite the stray word")
 	}
 }
 
