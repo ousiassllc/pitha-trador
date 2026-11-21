@@ -32,7 +32,7 @@ func serve(t *testing.T, store middleware.SecretsReader, method, path string) *h
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.SetupGuard(store, middleware.StaticSetupRequirements("A", "B")))
+	engine.Use(middleware.SetupGuard(store, middleware.StaticSetupRequirements(config.KeyJevAPIKey, config.KeyKabuAPIPassword)))
 	engine.NoRoute(func(c *gin.Context) { c.String(http.StatusOK, "reached") })
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
@@ -40,16 +40,24 @@ func serve(t *testing.T, store middleware.SecretsReader, method, path string) *h
 }
 
 func TestSetupGuard_Exemptions(t *testing.T) {
-	unset := stubSecrets{values: map[string]string{"A": "x"}}
+	unset := stubSecrets{values: map[string]string{config.KeyJevAPIKey: "x"}}
 	for _, tc := range []struct {
 		method, path string
 		redirected   bool
 	}{
 		{http.MethodGet, "/setup", false},
 		{http.MethodGet, "/static/dist/css/app.css", false},
-		{http.MethodPost, "/settings/A", false},
-		{http.MethodDelete, "/settings/A", false},
-		{http.MethodGet, "/settings/A", true},
+		{http.MethodPost, "/settings/" + config.KeyJevAPIKey, false},
+		{http.MethodDelete, "/settings/" + config.KeyJevAPIKey, false},
+		{http.MethodGet, "/settings/" + config.KeyJevAPIKey, true},
+		// An optional allowed key is also saved from the Setup/Settings screens.
+		{http.MethodPost, "/settings/" + config.KeySlackWebhookURL, false},
+		// Only allowed secrets keys are exempt; other `/settings/*` siblings
+		// stay closed until setup is complete.
+		{http.MethodPost, "/settings/jev-trial", true},
+		{http.MethodPost, "/settings/jev-trial/arms/add", true},
+		{http.MethodPost, "/settings/anything", true},
+		{http.MethodDelete, "/settings/anything", true},
 		// The MCP settings (issue #792) are not part of setup.
 		{http.MethodPost, "/settings/mcp", true},
 		{http.MethodPost, "/settings/mcp/key", true},
@@ -75,10 +83,10 @@ func TestSetupGuard_Exemptions(t *testing.T) {
 // followed 302 (issue #140): HTMX gets HX-Redirect, /api/v1 gets JSON, a
 // WebSocket upgrade gets 403.
 func TestSetupGuard_NonNavigationRequestsGetProtocolAppropriateResponses(t *testing.T) {
-	unset := stubSecrets{values: map[string]string{"A": "x"}}
+	unset := stubSecrets{values: map[string]string{config.KeyJevAPIKey: "x"}}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.SetupGuard(unset, middleware.StaticSetupRequirements("A", "B")))
+	engine.Use(middleware.SetupGuard(unset, middleware.StaticSetupRequirements(config.KeyJevAPIKey, config.KeyKabuAPIPassword)))
 
 	do := func(method, path string, headers map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, nil)
@@ -118,7 +126,7 @@ func TestSetupGuard_NonNavigationRequestsGetProtocolAppropriateResponses(t *test
 }
 
 func TestSetupGuard_PassesThroughWhenAllRequiredKeysSet(t *testing.T) {
-	rec := serve(t, stubSecrets{values: map[string]string{"A": "x", "B": "y"}}, http.MethodGet, "/scanner")
+	rec := serve(t, stubSecrets{values: map[string]string{config.KeyJevAPIKey: "x", config.KeyKabuAPIPassword: "y"}}, http.MethodGet, "/scanner")
 	if rec.Code != http.StatusOK || rec.Body.String() != "reached" {
 		t.Fatalf("GET /scanner = %d %q, want handler reached", rec.Code, rec.Body.String())
 	}
