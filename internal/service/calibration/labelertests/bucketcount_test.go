@@ -1,4 +1,4 @@
-package calibration_test
+package labelertests_test
 
 import (
 	"context"

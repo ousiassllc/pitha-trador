@@ -1,4 +1,4 @@
-package featureengine_test
+package featuretests_test
 
 import (
 	"math"
