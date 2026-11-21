@@ -73,13 +73,13 @@ issue #881（元: #872 / PR #876 の独立レビューの指摘）。`jev_prompt
 
 ## 6. テスト
 
-- 版とコホート: `evalflow/cohort_test.go`（全登録版にコホートがある・ライブの版ごとの除外・昇格で除外が入れ替わる・読み取り失敗はエラー）
+- 版とコホート: `cohortflow/cohort_test.go`（全登録版にコホートがある・ライブの版ごとの除外・昇格で除外が入れ替わる・読み取り失敗はエラー）
 - RAG: `rag/version_scope_test.go`（`trader-v3` と `trader-v4` の実結果付き・無しの判断と Scout 判断を同じ距離に索引し、ライブの版ごとに返る事例を固定）
 - Calibration: `repository/calibration/calibration_samples_test.go`（4 つの `ListLabeledSamples*` と Policy の件数が除く・全版の件数は除かない・読み取り失敗はエラー）、`service/calibration/bucketscope/bucketscope_test.go`（`trader-v1`〜`v4` を仕込み、ライブの版ごとの標本数と全版の合計）
 - 学習: `repository/metalabel/training_repo_test.go`（`ListTrainingRows`・`CountLabeledDecisions`）
 - Policy の標本数（§4.1）: `policy/calibflow/calibflow_test.go`（Paper: v4 の標本が足りず合計が足りるとき合計で判断して記録に残す・v4 が足りるとき・どちらも足りないとき・ライブが `trader-v3` のとき今日と同じ）、`policy/calibflow/breakdown_test.go`（注記つきの理由が `risk_rejections` の実際の内訳クエリで元のバケットに入り `other` に落ちない）、`policy/calibrationgate/calibrationgate_test.go`（Live は全版の合計を読まず `not_calibrated`・Paper 以外のモードも同じ・版名が理由に入る）
 - メタモデル（§4.2）: `policy/metaflow/meta_cohort_test.go`（v3 で学習・ライブ v4: Paper は警告して使い Live は `not_calibrated`、記録のないモデルはライブ v3・v4 のどちらでも不一致（Paper は警告して注記つきで使い、Live は `not_calibrated`）、読めないとき、コホートの確認が未配線・読み取り元が nil のときは Paper 以外でモデルを使わない）、`policy/metacohort/metacohort_test.go`（モード・読み取り失敗・記録なしは Paper・Live とも不一致・一致・不一致の表）、`training/trainingflow/trained_cohort_test.go`（学習が記録する・読めない/途中で変わると失敗）、`repository/metalabel/repo_test.go`（`adoption_json` の往復）、`policy/decisionnote/decisionnote_test.go`（注記の連結と 255 バイト）
-- MCP: `mcptests/jev_versions_test.go`（`jev_calibration` の既定・`prompt_version`・昇格後）、`metalabeltests/readiness_cases_test.go`（`metalabel_training_readiness`）
+- MCP: `shadowtests/calibration_versions_test.go`（`jev_calibration` が版を混ぜない: `prompt_version` の指定・既定・昇格後）、`mcptests/jev_test.go`、`metalabeltests/readiness_cases_test.go`（`metalabel_training_readiness`）
 
 ## 改訂履歴
 
@@ -88,3 +88,5 @@ issue #881（元: #872 / PR #876 の独立レビューの指摘）。`jev_prompt
 | 1.0 | 2026-10-22 | 新規作成。版のコホート、読み手ごとの昇格後の扱い、昇格を本番で使ってよいかの範囲、棄却案 | issue #881 |
 | 1.1 | 2026-10-23 | §4 を「判断待ち」から決定済みに書き換え。Policy の標本数の確認をライブの版のコホートで数え（Paper だけ全版の合計に戻してよく、記録に残す。Live は戻さない）、メタモデルに学習コホートを持たせて比べる（Paper は警告して使い、Live は使わない）。記録のないモデルは昇格前のコホートとみなす | issue #881（ユーザーの決定） |
 | 1.2 | 2026-10-23 | §4.2 のコホートを記録していない既存のモデルの扱いを、ユーザーの決定で「昇格前のコホートとみなす」から「版が一致しない（記録なし＝不一致）」に改めた。Live は、ライブが `trader-v3` のままでも使わず `not_calibrated` で見送り、新しい学習が `trained_cohort` を記録して採用されるまで続く。Paper は警告して注記つきで使う。§1 の「何も変わらない」にその例外を追記。`jev.LegacyModelCohort` を削除 | issue #881（ユーザーの決定） |
+| 1.3 | 2026-11-22 | §6 のテストの参照を、実在するパス `cohortflow/cohort_test.go` に直した（`evalflow/cohort_test.go` は #1173 の分割前の置き場。実装の変更は無い） | issue #1207 |
+| 1.4 | 2026-11-22 | §6 の MCP のテストの参照を、存在しない `mcptests/jev_versions_test.go` から実在する `shadowtests/calibration_versions_test.go`・`mcptests/jev_test.go` に直した（実装の変更は無い） | issue #1208 |

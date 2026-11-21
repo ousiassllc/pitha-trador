@@ -52,7 +52,7 @@
 
 ## 3. テスト
 
-受け入れ条件は `docs/api/endpoints/paper-results-mcp.md` §5（設定ツールは `mcptests/settings_test.go` と `mcpset` のテスト、Settings のスイッチは `internal/router/mcproute/write_test.go`）。単体テストは一時ディレクトリの SQLite（マイグレーション適用済みのテスト DB）と、httptest の HTTP で行う。認証失敗が SQL 0 件・接続 0 本であることは、`database/sql` のドライバを包んで文を数えるテストで確認する。Tailscale も Cloudflare も、トンネルのアカウントは CI に置かない。
+受け入れ条件は `docs/api/endpoints/paper-results-mcp.md` §5（設定ツールは、定義が `internal/service/paperresultsmcp/settingstool/settingstool.go`、`settings_get` を呼ぶテストが `mcptests/helpers_test.go`・`mcptests/tools_test.go`・`moved_tools_test.go`（いずれも `internal/service/paperresultsmcp/` 以下）、ほかに `mcpset` のテスト。Settings のスイッチは `internal/router/mcproute/write_test.go`）。単体テストは一時ディレクトリの SQLite（マイグレーション適用済みのテスト DB）と、httptest の HTTP で行う。認証失敗が SQL 0 件・接続 0 本であることは、`database/sql` のドライバを包んで文を数えるテストで確認する。Tailscale も Cloudflare も、トンネルのアカウントは CI に置かない。
 
 ## 4. ビルド・設定・起動
 
@@ -141,3 +141,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.34 | 2026-11-20 | 設定ツール（`settingstool`）・注文案のツール（`proposaltool`）・調整の実験のツール（`experimenttool`）の定義を、`tooldef` を使うサブパッケージへ移した（ルートの `settings_tools.go`・`order_proposal_tools.go`・`order_proposal_read_tools.go`・`experiment_tools.go` を削除。登録は `ext_tools.go`）。ツール名・引数スキーマ・説明・出力・エラーコード・書き込み許可の検査・ホワイトリストは変えない（`moved_tools_test.go` と `testdata/moved_tools.golden.json` が移動前の `tools/list` の項目と引数の検査結果を固定）。`tools/list` の並びだけが変わり、注文案（6）・設定（6）が `ext_tools.go` の登録の並びで研究ノートのツールの後に来る（クライアントは名前で呼ぶため影響しない） | issue #1130 |
 | 1.35 | 2026-11-22 | §4.2 の「設定ツールの書き込みだけは別の狭い接続」を、書き込みツールごとに個別に定めた別の狭い接続（一覧は `architecture/paper-results-mcp.md` §7.3。18 本）の言い方に直した（実装の変更は無い） | issue #1187 |
 | 1.36 | 2026-11-22 | §1 プロセスの、書き込みを設定ツールの呼び出し時と`runtime_settings`・監査表に限る言い方を、書き込みツール（18 本。`architecture/paper-results-mcp.md` §7.3）が呼ばれたときだけ、ツールごとに定めた狭い書き込み接続を開く、の言い方に直した（実装の変更は無い） | issue #1201 |
+| 1.37 | 2026-11-22 | §3 の受け入れ条件の「設定ツールは `mcptests/settings_test.go` と `mcpset` のテスト」を、実在する設定ツールの定義（`settingstool/settingstool.go`）と `settings_get` を呼ぶテスト（`mcptests/helpers_test.go`・`mcptests/tools_test.go`・`moved_tools_test.go`）に直した（実装の変更は無い） | issue #1208 |
