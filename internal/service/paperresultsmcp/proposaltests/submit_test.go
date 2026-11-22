@@ -211,7 +211,7 @@ func TestReplayReturnsTheCurrentStatus(t *testing.T) {
 }
 
 // Shape errors win over the switch: a malformed proposal is invalid_argument
-// even while intake is off (the order is shape, switch, limit, idempotency).
+// even while intake is off (the order is shape, switch, idempotency, limit).
 func TestShapeIsCheckedBeforeTheSwitch(t *testing.T) {
 	srv, _ := proposalServer(t)
 	srv.call(t, "order_proposal_submit", without(validProposal("proposal-0001"), "rationale")).
@@ -231,6 +231,32 @@ func TestTwentyFirstProposalOfTheDayIsLimitExceeded(t *testing.T) {
 	if !strings.Contains(detail, "20") {
 		t.Errorf("limit detail = %q", detail)
 	}
+	wantSameCounts(t, w, before)
+}
+
+// On a day that already holds the 20 accepted proposals (issue #1213), a
+// re-sent proposal that was accepted is replayed - the first proposal comes
+// back, nothing is stored - not limit_exceeded; the same key with different
+// content is idempotency_conflict; a new proposal is still limit_exceeded.
+func TestAcceptedProposalIsReplayedOnTheDayTheLimitIsReached(t *testing.T) {
+	srv, w := proposalServer(t)
+	switchOn(t, w)
+	accepted := make([]submitted, 20)
+	for i := range accepted {
+		accepted[i] = submit(t, srv, validProposal("proposal-"+pad(i)))
+	}
+	before := rowCounts(t, w)
+
+	for _, i := range []int{0, 19} {
+		again := submit(t, srv, validProposal("proposal-"+pad(i)))
+		if !again.Replayed || again.ProposalID != accepted[i].ProposalID || again.Status != "received" {
+			t.Errorf("re-send of accepted proposal %d = %+v, want replay of %+v", i, again, accepted[i])
+		}
+	}
+	srv.call(t, "order_proposal_submit", with(validProposal("proposal-"+pad(19)), "quantity", 200)).
+		wantError(t, http.StatusConflict, paperresultsmcp.CodeIdempotencyConflict)
+	srv.call(t, "order_proposal_submit", validProposal("proposal-new-0001")).
+		wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeLimitExceeded)
 	wantSameCounts(t, w, before)
 }
 

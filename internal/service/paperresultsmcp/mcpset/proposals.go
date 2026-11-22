@@ -61,11 +61,11 @@ type Submitted struct {
 }
 
 // SubmitProposal accepts req and records it, in one transaction: the order
-// is the switch (ErrProposalsDisabled), the JST-day limit (ErrProposalLimit),
-// the idempotency check (a same-content re-send returns the first proposal,
-// different content is ErrIdempotencyConflict), then the proposal row and its
-// first event (received). Each check runs before anything is stored. client
-// is the caller's host.
+// is the switch (ErrProposalsDisabled), the idempotency check (a same-content
+// re-send returns the first proposal whatever the day's count, different
+// content is ErrIdempotencyConflict), the JST-day limit for a new proposal
+// (ErrProposalLimit), then the proposal row and its first event (received).
+// Each check runs before anything is stored. client is the caller's host.
 func (w *Writer) SubmitProposal(ctx context.Context, client string, req proposal.Request) (Submitted, error) {
 	var out Submitted
 	err := runInTx(ctx, w.db, "proposal transaction", func(tx *sql.Tx) error {
@@ -77,13 +77,6 @@ func (w *Writer) SubmitProposal(ctx context.Context, client string, req proposal
 			return ErrProposalsDisabled
 		}
 		now := w.now()
-		n, err := countReceivedOn(ctx, tx, now)
-		if err != nil {
-			return err
-		}
-		if n >= proposal.MaxPerDay {
-			return ErrProposalLimit
-		}
 		if prev, found, err := findByKey(ctx, tx, req.IdempotencyKey); err != nil {
 			return err
 		} else if found {
@@ -92,6 +85,13 @@ func (w *Writer) SubmitProposal(ctx context.Context, client string, req proposal
 			}
 			out = Submitted{ProposalID: prev.id, Status: prev.status, ReceivedAt: prev.receivedAt, ExpiresAt: prev.expiresAt, Replayed: true}
 			return nil
+		}
+		n, err := countReceivedOn(ctx, tx, now)
+		if err != nil {
+			return err
+		}
+		if n >= proposal.MaxPerDay {
+			return ErrProposalLimit
 		}
 		out, err = insertProposal(ctx, tx, now, client, req)
 		return err

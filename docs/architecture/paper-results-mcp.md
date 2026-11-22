@@ -306,10 +306,10 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 ### 8.3 処理の順番（`order_proposal_submit`）
 
-認証（Bearer。失敗なら SQL 0 件）→ 引数の形（`invalid_argument`）→ 期限の範囲（`invalid_argument`）→ 受け付けスイッチ（`proposals_disabled`）→ 1 日の上限（`limit_exceeded`）→ 冪等の確認（`idempotency_conflict`／再送）→ `INSERT`。スイッチ以降は書き込み接続の 1 トランザクション（`BEGIN IMMEDIATE`）の中で順に確認するので、確認と `INSERT` の間に別の受け付けは割り込まない。
+認証（Bearer。失敗なら SQL 0 件）→ 引数の形（`invalid_argument`）→ 期限の範囲（`invalid_argument`）→ 受け付けスイッチ（`proposals_disabled`）→ 冪等の確認（`idempotency_conflict`／再送）→ 新しい案の 1 日の上限（`limit_exceeded`）→ `INSERT`。スイッチ以降は書き込み接続の 1 トランザクション（`BEGIN IMMEDIATE`）の中で順に確認するので、確認と `INSERT` の間に別の受け付けは割り込まない。
 
 - 形の規則: 引数の表は API 仕様 §3.16。未知の引数・`mode` は拒否（`strictDecode`）。文字列は制御文字を拒否（`metalabelsettings` の出典と同じ考え方）。数値は有限の正の値だけ。`open_long` は `quantity` と `budget_jpy` のどちらか 1 つ・`stop_loss_price`・`exit_plan`・`max_loss_jpy` が必須。`LIMIT` のときだけ `limit_price`（`stop_loss_price` は指値より小さい。成行のときの「直近値より下」はアプリが確かめる）。`close` は、保有中ポジション全体の決済で、`quantity`・`budget_jpy`・`stop_loss_price`・`take_profit_price`・`max_loss_jpy` を受け付けない（黙って全量決済にならないよう拒否する）。`bucket` は `stock` / `bond_etf` だけ
-- 上限: 受け付けた案は **JST の 1 日あたり 20 件まで**（仮の値。issue #826 で確認中）。21 件目は `limit_exceeded`。上限と再送の順は上のとおりなので、上限に達した日の同じ案の再送は、元の案ではなく `limit_exceeded` になる
+- 上限: 受け付けた案は **JST の 1 日あたり 20 件まで**（仮の値。issue #826 で確認中）。21 件目の新しい案は `limit_exceeded`。冪等の確認は上限より先なので、受け付け済みの案の再送は上限に達した日でも保存済みの案を返す（`replayed: true`。上限は新しい案にだけ掛かる。数える件数は変えない）。上限に達した日に同じキーで内容が違えば `idempotency_conflict`
 - 冪等: `idempotency_key`（8〜64 文字、`[A-Za-z0-9_-]`）は `order_proposals` で UNIQUE。同じキーで内容（`idempotency_key` を除いた引数を正規化して SHA-256 にした `request_hash`。文字列の前後の空白・時刻の表記ゆれは吸収する）も同じなら、新しい行を作らず最初の案の `proposal_id` と**いまの**状態を返す（`replayed: true`）。内容が違えば `idempotency_conflict`（409）で、何も書かない
 
 ### 8.4 記録と書き込みの狭さ
