@@ -156,6 +156,7 @@ sequenceDiagram
 - 各事例は方向・confidence・regime（`response_json`由来）に加え、紐付き済みなら最短horizonの`horizon_minutes`・`future_return`（%単位、1.0=+1%）・`was_direction_correct`（NONE判断はnull）をJSONへ載せる。未付与の判断は方向・confidence・regimeのみ（FR-RAG-3）
 - 質問文末尾の共通ガイド（`stateGuide`）は、実結果付きの事例を小標本の弱い文脈として扱い、`market`の現在の根拠を上回らせないようJevに指示する（`question_version`は`scout-v3`/`trader-v3`）
 - コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）。現在のスナップショット自身・直近の足・同一状態のScout判断は上記の自己除外で類似事例に返らないため、過去の蓄積が無い間は文脈が空になる
+- ベクトル検索でヒットしたのに対応する行が無い（`market_snapshots`/`jev_decisions`。vec0にFKは無い）事例は、データなしとしてスキップし、`rag.Service.Context`は成功で返す。行なし以外の読み出しエラー（DB障害など）は、スナップショット側も判断側と同じく`rag: load similar snapshot: %w`のエラーとして返し、部分的な文脈を成功として返さない。呼び出し側のJev Scout/Traderはこのエラーをログに残し、類似事例なしで続行する（上記コールドスタートと同じ扱い、issue #1214）
 
 ## 8. 自己改善ループ（Sol / Opus 連携）
 

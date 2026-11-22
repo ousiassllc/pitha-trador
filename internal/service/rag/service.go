@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -186,7 +187,9 @@ type Context struct {
 //
 // A search or hydration error is only ever returned for a true
 // technical failure (e.g. a closed/broken database connection); a
-// cold-start empty result is not an error (FR-RAG-4).
+// cold-start empty result is not an error (FR-RAG-4). A vector hit whose
+// decision or snapshot row no longer exists is skipped as no data, not
+// an error (issue #1214).
 func (s *Service) Context(ctx context.Context, in FeatureInput, sub Subject, k int) (Context, error) {
 	if k <= 0 {
 		k = DefaultK
@@ -238,8 +241,12 @@ func (s *Service) Context(ctx context.Context, in FeatureInput, sub Subject, k i
 		}
 		for _, m := range snapshotMatches {
 			snap, err := s.snapshots.Get(ctx, m.id)
-			if err != nil {
+			if errors.Is(err, market.ErrSnapshotNotFound) {
+				// vec0 has no FK: a hit whose snapshot row is gone is no data.
 				continue
+			}
+			if err != nil {
+				return Context{}, fmt.Errorf("rag: load similar snapshot: %w", err)
 			}
 			cases = append(cases, SimilarCase{
 				Source:    "market_snapshot",
