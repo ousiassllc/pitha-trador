@@ -19,7 +19,14 @@ func pollAttrs(props PanelProps) templ.Attributes {
 	if props.State != "starting" || props.RevealedKey != "" {
 		return nil
 	}
-	return templ.Attributes{"hx-get": "/settings/mcp-panel", "hx-trigger": "every 2s", "hx-target": "#mcp-panel", "hx-swap": "innerHTML"}
+	return templ.Attributes{
+		"hx-get":     "/settings/mcp-panel",
+		"hx-trigger": "every 2s",
+		"hx-target":  "#mcp-panel",
+		"hx-swap":    "innerHTML",
+		// A timer poll is not operator activity (FR-RISK-6, issue #1210).
+		"hx-headers": `{"X-Pitha-Background":"1"}`,
+	}
 }
 
 func processAttrs(action, testID string, disabled bool) templ.Attributes {
