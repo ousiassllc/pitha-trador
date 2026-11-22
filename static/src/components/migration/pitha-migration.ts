@@ -1,22 +1,25 @@
 // PC 移行 panel of the Settings screen (issue #1075; docs/components/screens.md
 // 「PC 移行」). The export is a plain GET form; this module drives the import:
 //   1. 「内容を確認」 uploads the chosen file as the raw body of
-//      POST /api/v1/migration/preview. The server validates it (version
+//      POST to the preview URL. The server validates it (version
 //      compatibility first, then checksum / integrity / no secrets) and answers
 //      with what it holds and what it would replace; NOTHING is changed.
 //   2. The preview is drawn from the panel's <template>s: bundle date and
 //      version, a table of row counts (current / bundle), and - when the
 //      current database has data - a checkbox the operator must tick.
 //   3. 「取り込みを予約する」 asks once more in the confirm dialog, then
-//      POST /api/v1/migration/confirm. The database is replaced only at the
+//      POST to the confirm URL. The database is replaced only at the
 //      next start of the application; the panel says so.
 // CSP forbids inline JS and the panel's markup (with its Tailwind classes)
 // lives in internal/web/organisms/migration_panel.templ; this file only fills
 // text content and toggles `hidden`, never building HTML from server text.
+// Every URL it calls (preview / confirm / cancel / status) is injected by the
+// panel as a `data-<name>-url` attribute (HATEOAS, like the other components).
 
 import { askConfirm } from '../confirm/pitha-confirm';
 import { ApiError, get, post } from '../lib/api';
 import { formatJstDateTime } from '../lib/jst-datetime';
+import { logger } from '../lib/logger';
 
 interface TableRow {
   name: string;
@@ -56,6 +59,15 @@ const ASK_REPLACE =
 
 function part<T extends Element>(root: ParentNode, name: string): T | null {
   return root.querySelector<T>(`[data-migration-${name}]`);
+}
+
+type UrlName = 'preview' | 'confirm' | 'cancel' | 'status';
+
+/** The panel's `data-<name>-url` attribute, or null (after logging) when the server did not set it. */
+function urlOf(root: HTMLElement, name: UrlName): string | null {
+  const url = root.dataset[`${name}Url`];
+  if (!url) logger.error(`pitha-migration: data-${name}-url is not set`);
+  return url || null;
 }
 
 function setMessage(root: HTMLElement, text: string): void {
@@ -133,6 +145,8 @@ function drawPreview(root: HTMLElement, preview: Preview): void {
 }
 
 async function preview(root: HTMLElement): Promise<void> {
+  const url = urlOf(root, 'preview');
+  if (!url) return;
   const input = part<HTMLInputElement>(root, 'file');
   const file = input?.files?.[0];
   clearResult(root);
@@ -142,7 +156,7 @@ async function preview(root: HTMLElement): Promise<void> {
   }
   setMessage(root, 'ファイルを確認しています…');
   try {
-    drawPreview(root, await post<Preview>('/api/v1/migration/preview', file));
+    drawPreview(root, await post<Preview>(url, file));
   } catch (err) {
     showError(root, detailOf(err));
   }
@@ -151,7 +165,8 @@ async function preview(root: HTMLElement): Promise<void> {
 async function confirm(root: HTMLElement): Promise<void> {
   const result = part<HTMLElement>(root, 'result');
   const token = result?.dataset.token;
-  if (!result || !token) return;
+  const url = urlOf(root, 'confirm');
+  if (!result || !token || !url) return;
   const needsReplace = result.dataset.targetHasData === 'true';
   const box = result.querySelector<HTMLInputElement>('[data-migration-replace]');
   if (needsReplace && !box?.checked) {
@@ -160,7 +175,7 @@ async function confirm(root: HTMLElement): Promise<void> {
   }
   if (!(await askConfirm(ASK_REPLACE))) return;
   try {
-    await post('/api/v1/migration/confirm', { token, replace_existing: needsReplace });
+    await post(url, { token, replace_existing: needsReplace });
     clearResult(root);
     setMessage(root, '取り込みを予約しました。アプリを再起動すると入れ替わります。');
     await loadStatus(root);
@@ -170,8 +185,10 @@ async function confirm(root: HTMLElement): Promise<void> {
 }
 
 async function cancel(root: HTMLElement): Promise<void> {
+  const url = urlOf(root, 'cancel');
+  if (!url) return;
   try {
-    await post('/api/v1/migration/cancel');
+    await post(url);
     clearResult(root);
     setMessage(root, '取り込みをやめました。何も変更していません。');
     await loadStatus(root);
@@ -183,10 +200,13 @@ async function cancel(root: HTMLElement): Promise<void> {
 /** Fills the status line: a pending import (applied at the next start) and what the last start did. */
 export async function loadStatus(root: HTMLElement): Promise<void> {
   const el = part(root, 'status');
-  if (!el) return;
+  const url = urlOf(root, 'status');
+  if (!el || !url) return;
   const lines: string[] = [];
+  let hasPending = false;
   try {
-    const status = await get<Status>('/api/v1/migration/status', { background: true });
+    const status = await get<Status>(url, { background: true });
+    hasPending = Boolean(status.pending);
     if (status.pending) {
       lines.push(
         `取り込みを予約済みです（ファイル作成: ${formatJstDateTime(status.pending.manifest.created_at)}）。アプリを再起動すると入れ替わります。`,
@@ -206,10 +226,7 @@ export async function loadStatus(root: HTMLElement): Promise<void> {
     // The status line is a convenience; the panel works without it.
   }
   el.textContent = lines.join('\n');
-  part(root, 'cancel-pending')?.toggleAttribute(
-    'hidden',
-    !lines.some((l) => l.startsWith('取り込みを予約済み')),
-  );
+  part(root, 'cancel-pending')?.toggleAttribute('hidden', !hasPending);
 }
 
 /** `click`: dispatch the panel's buttons. */

@@ -62,5 +62,3 @@ func insertDecision(t *testing.T, db *sql.DB, instrumentID int64, symbol string,
 	}
 	return id
 }
-
-func ptr[T any](v T) *T { return &v }

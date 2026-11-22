@@ -5,12 +5,11 @@
 // proposals, which are only recorded here (issue #827).
 //
 // Transport: MCP "Streamable HTTP" implemented as a small JSON-RPC 2.0
-// handler (POST only, every response a single application/json body). It
-// has nine read tools (tools.go), the settings tools (settingstool) and the
-// order-proposal tools (proposaltool, issue #827). The only
-// write path is mcpset.Writer: a whitelisted runtime_settings upsert plus its
-// audit row, the write switch, one order_proposals row plus its first event,
-// and the order-proposal switch turned off. The read connection is mode=ro
+// handler (POST only, every response a single application/json body). The
+// tools are the dispatch table of tools.go plus the definitions ext_tools.go
+// adds from the tool packages (ToolNames lists them all). The only write path
+// is mcpset.Writer's narrow transactions (the package comment of mcpset lists
+// them). The read connection is mode=ro
 // with query_only=ON and the dispatch table is the only way to SQL. Every
 // request - initialize and tools/list included - needs the Bearer API key, checked in constant time before any
 // SQL runs or any database connection is opened.

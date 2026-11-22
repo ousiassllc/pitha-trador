@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 )
 
 // Reasons recorded in metalabel_models.reject_reason when the LLM cutoff does
@@ -34,7 +35,7 @@ const (
 // (metalabelsettings.CutoffUnverified) is only a warning in Paper, so Paper
 // operation is not blocked for an operator who set just the date, but it
 // stops the adoption before Live (issue #780, decided 2026-10-19).
-func cutoffGate(s metalabelsettings.Settings, mode metalabelsettings.Mode, oos []Row) (reason, detail string) {
+func cutoffGate(s metalabelsettings.Settings, mode metalabelsettings.Mode, oos []walkforward.Row) (reason, detail string) {
 	switch s.CutoffStatus() {
 	case metalabelsettings.CutoffPlaceholder:
 		return RejectLLMCutoffPlaceholder, fmt.Sprintf("metalabel.llm_cutoff is %s (unset or the placeholder default)", s.LLMCutoff)
@@ -70,9 +71,9 @@ func logCutoffWarning(ctx context.Context, s metalabelsettings.Settings) {
 // fitBeforeCutoff counts the fit and calibration rows decided before the cutoff:
 // the model learns from them although the OOS evaluation never uses them (the
 // documented decision of FR-META-6; they are only logged).
-func fitBeforeCutoff(split Split) int {
+func fitBeforeCutoff(split walkforward.Split) int {
 	n := 0
-	for _, rows := range [][]Row{split.Fit, split.Calibrate} {
+	for _, rows := range [][]walkforward.Row{split.Fit, split.Calibrate} {
 		for _, r := range rows {
 			if r.DecidedAt.Before(split.LLMCutoff) {
 				n++

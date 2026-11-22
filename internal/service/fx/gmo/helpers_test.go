@@ -63,11 +63,10 @@ func fixture(t *testing.T, name string) string {
 // step is one scripted server response: the HTTP status (200 when zero) and
 // a body, taken from a fixture file or given inline.
 type step struct {
-	status  int
-	fixture string
-	body    string
-	// retryAfter, when set, is sent as the Retry-After header.
-	retryAfter string
+	status     int
+	fixture    string
+	body       string
+	retryAfter string // when set, sent as the Retry-After header
 }
 
 // fakeServer plays steps in order, one per request, and records each request
@@ -178,8 +177,7 @@ func testClient(t *testing.T, srv *fakeServer, clk *fakeClock, cfg Config, opts 
 	return c, logs
 }
 
-// advance moves virtual time without recording a Sleep (time passing on its
-// own between calls).
+// advance moves virtual time without recording a Sleep (time between calls).
 func (f *fakeClock) advance(d time.Duration) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

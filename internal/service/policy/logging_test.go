@@ -42,7 +42,7 @@ func decodeLogLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 }
 
 func TestEngine_Evaluate_LogsTradeSignalDecidedOncePerEvaluation(t *testing.T) {
-	db := newHandlerTestDB(t)
+	db := newTestDB(t)
 	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})

@@ -1,8 +1,10 @@
 // Pure helpers for `pitha-price-chart`: series data derivation, the pane
 // layout and the text alternative of the canvas.
 
-import type { LineData, WhitespaceData } from 'lightweight-charts';
-import { toUTCTimestamp } from './bars';
+import type { LineData, SeriesMarker, Time, WhitespaceData } from 'lightweight-charts';
+import { type Bar, toUTCTimestamp } from './bars';
+import { markerColor } from './chart-colors';
+import type { Candle } from './chart-types';
 
 // The candlestick/VWAP pane sits in the top 65% and the volume histogram in
 // the bottom 20%. Without margins the overlay volume scale defaults to the
@@ -23,6 +25,29 @@ export function vwapSeriesData(
     const time = toUTCTimestamp(c.time);
     return c.vwap > 0 ? { time, value: c.vwap } : { time };
   });
+}
+
+/** The candlestick series data of `candles`. */
+export function candleBars(candles: readonly Candle[]): Bar[] {
+  return candles.map((c) => ({
+    time: toUTCTimestamp(c.time),
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }));
+}
+
+/** The arrow marker for a Jev direction change on the bar at `time`. */
+export function jevMarker(time: Time, direction: string): SeriesMarker<Time> {
+  const isLong = direction === 'LONG';
+  return {
+    time,
+    position: isLong ? 'belowBar' : 'aboveBar',
+    color: markerColor(direction),
+    shape: isLong ? 'arrowUp' : 'arrowDown',
+    text: direction,
+  };
 }
 
 /** What the chart currently shows, as plain values for the accessible name. */

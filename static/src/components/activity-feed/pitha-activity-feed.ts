@@ -17,6 +17,13 @@ import { lightDomErrorClass, lightDomFieldClass, lightDomWsNoticeClass } from '.
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import {
+  applyJobUpdate,
+  InFlightWs,
+  matchesFilter,
+  overlayEvents,
+  overlaySnapshot,
+} from './activity-feed-merge';
+import {
   type ActivityAPIResponse,
   type ActivityEvent,
   type ActivityWsMessage,
@@ -80,7 +87,8 @@ export class PithaActivityFeed extends LitElement {
   @state() private asOf = '';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
-  private snapshotGeneration = 0;
+  private snapshotWs = new InFlightWs();
+  private killSwitchWs = new InFlightWs();
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -110,35 +118,43 @@ export class PithaActivityFeed extends LitElement {
       logger.error('pitha-activity-feed: api-url is not set');
       return;
     }
-    // Only the latest request may touch state: a slower, older response
-    // (previous filter, or a pre-reconnect fetch) must not overwrite it.
-    const generation = ++this.snapshotGeneration;
+    // Only the latest request may touch state: an older response (previous filter or
+    // pre-reconnect fetch) is dropped, and WS messages pushed meanwhile are laid over it.
+    const request = this.snapshotWs.begin();
     try {
       const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
-      if (generation !== this.snapshotGeneration) return;
-      this.queues = response.queues;
-      this.events = response.events;
+      const pushed = this.snapshotWs.finish(request);
+      if (!pushed) return;
+      const snapshot = overlaySnapshot(response, pushed, MAX_EVENTS);
+      this.queues = snapshot.queues;
+      this.events = snapshot.events;
       this.asOf = response.as_of;
       this.loaded = true;
       this.error = null;
     } catch (err) {
-      if (generation !== this.snapshotGeneration) return;
+      if (!this.snapshotWs.finish(request)) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load activity snapshot', { error: err });
     }
   }
 
+  // Guarded like loadSnapshot: a slower, older response must not replace a
+  // newer one, nor a Kill Switch event pushed over the WS in the meantime.
   private async loadKillSwitchEvents(background = false): Promise<void> {
     if (!this.killSwitchEventsUrl) {
       logger.error('pitha-activity-feed: kill-switch-events-url is not set');
       return;
     }
+    const request = this.killSwitchWs.begin();
     try {
       const response = await get<ActivityAPIResponse>(this.killSwitchEventsUrl, { background });
-      this.killSwitchEvents = response.events;
+      const pushed = this.killSwitchWs.finish(request);
+      if (!pushed) return;
+      this.killSwitchEvents = overlayEvents(response.events, pushed, KILL_SWITCH_LIMIT);
       this.killSwitchLoaded = true;
       this.killSwitchError = null;
     } catch (err) {
+      if (!this.killSwitchWs.finish(request)) return;
       this.killSwitchError = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load kill switch events', { error: err });
     }
@@ -165,38 +181,23 @@ export class PithaActivityFeed extends LitElement {
 
   private onWsMessage(message: ActivityWsMessage): void {
     if (message.type === 'job_update') {
-      this.queues = this.queues.map((q) =>
-        q.queue === message.queue
-          ? {
-              ...q,
-              pending: message.pending,
-              running: message.running,
-              failed_recent: message.failed_recent ?? q.failed_recent,
-            }
-          : q,
-      );
+      this.queues = applyJobUpdate(this.queues, message);
+      this.snapshotWs.record(message);
     } else if (message.type === 'resync') {
       // The server dropped messages for this slow client (#536).
       void this.loadSnapshot(true);
       void this.loadKillSwitchEvents(true);
     } else if (message.type === 'activity_event') {
       const { event } = message;
-      if (this.matchesFilter(event)) {
+      if (matchesFilter(event, this.typeFilter, this.queueFilter)) {
         this.events = [event, ...this.events].slice(0, MAX_EVENTS);
+        this.snapshotWs.record(message);
       }
       if (event.type === 'kill_switch') {
         this.killSwitchEvents = [event, ...this.killSwitchEvents].slice(0, KILL_SWITCH_LIMIT);
+        this.killSwitchWs.record(message);
       }
     }
-  }
-
-  // Mirrors the server's filter semantics (activityfeed.Service): a queue
-  // filter matches only job events on that queue.
-  private matchesFilter(event: ActivityEvent): boolean {
-    if (this.typeFilter && event.type !== this.typeFilter) return false;
-    if (this.queueFilter && (event.type !== 'job' || event.queue !== this.queueFilter))
-      return false;
-    return true;
   }
 
   private onTypeChange(event: Event): void {

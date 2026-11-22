@@ -79,6 +79,8 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 		t.Fatalf("DELETE /settings/JEV_API_KEY did not remove only that key: %v", store)
 	}
 
+	// Setup is complete again, so the guard lets the unknown key reach the handler.
+	store["JEV_API_KEY"] = "jev-key"
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil)))
 	if rec.Code != http.StatusBadRequest {

@@ -13,7 +13,6 @@ func TestNewAppliesDefaults(t *testing.T) {
 	}
 	want := Config{
 		BaseURL:        DefaultBaseURL,
-		Symbols:        []string{"USD_JPY"},
 		MinInterval:    time.Second,
 		MaxAttempts:    5,
 		InitialBackoff: time.Second,

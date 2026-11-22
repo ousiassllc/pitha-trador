@@ -1,0 +1,19 @@
+package policy_test
+
+import (
+	"database/sql"
+	"path/filepath"
+	"testing"
+
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+)
+
+func newTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	if err != nil {
+		t.Fatalf("sqlitedb.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}

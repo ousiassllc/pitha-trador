@@ -56,4 +56,4 @@ API キー（`EDINET_API_KEY`）・認証情報・URL・エラーの本文・書
 
 ### テスト
 
-`internal/service/paperresultsmcp/disclosuresrctests`（件数・最終取得時刻・失敗件数・既定オフ・秘密と本文を返さないこと・引数の厳格さと書き込めないこと）。ツールの登録は `internal/service/paperresultsmcp/disclosure_sources_tool.go`、SQL は `internal/service/paperresultsmcp/disclosuresrcdiag`。
+`internal/service/paperresultsmcp/disclosuresrctests`（件数・最終取得時刻・失敗件数・既定オフ・秘密と本文を返さないこと・引数の厳格さと書き込めないこと）。ツールの登録は `internal/service/paperresultsmcp/jev_models_tool.go`（`disclosureSourcesStatusTool`）、SQL は `internal/service/paperresultsmcp/disclosuresrcdiag`。

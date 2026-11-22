@@ -2,9 +2,7 @@ package mcpsettings
 
 import (
 	"fmt"
-	"math"
 	"strconv"
-	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
@@ -215,21 +213,6 @@ func testHelp(t experiment.Test) string {
 		*t.T, *t.DF)
 }
 
-// optYen2 is a yen figure rounded to 0.01, "—" when there is none.
-func optYen2(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return yen(math.Round(*v*100) / 100)
-}
-
-func optSignedYen2(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return signedYen(math.Round(*v*100) / 100)
-}
-
 // variableName is what the experiment changed, as the screen names it: a
 // setting by the name the Settings screen gives it (never its key); a model or
 // a prompt version by its own name.
@@ -272,49 +255,4 @@ func periodText(start string, end *string) string {
 		return jst(start) + " 〜 実行中"
 	}
 	return jst(start) + " 〜 " + jst(*end)
-}
-
-func jst(rfc3339 string) string {
-	t, err := time.Parse(time.RFC3339, rfc3339)
-	if err != nil {
-		return rfc3339
-	}
-	return t.In(query.JST).Format("2006-01-02 15:04")
-}
-
-func yen(v float64) string { return dailyguardsettings.FormatYen(v) + " 円" }
-
-func signedYen(v float64) string {
-	if v > 0 {
-		return "+" + yen(v)
-	}
-	return yen(v)
-}
-
-func signedInt(v int) string {
-	if v > 0 {
-		return "+" + strconv.Itoa(v)
-	}
-	return strconv.Itoa(v)
-}
-
-func optYen(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return yen(*v)
-}
-
-func percent(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return strconv.FormatFloat(*v*100, 'f', 1, 64) + " %"
-}
-
-func deref(v *int64) int64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }

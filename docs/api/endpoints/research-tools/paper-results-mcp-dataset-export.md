@@ -22,7 +22,7 @@
 
 ラベルのホライズンは固定（保存済み calibration の 5・10・15・30・60 分、研究用の 30m・60m・close、見送り候補の反実仮想）で、引数では変えられない。未知のキー（`path` / `dir` など書き先を示すものを含む）・型違い・上記の範囲外・`split_at` の位置の誤りは `invalid_argument`、期間の不備は `invalid_period`。1 回に書き出せる判断は 20000 件まで（超えたら `limit_exceeded`。期間を狭める。何も書かない）。
 
-分割（`split_at` あり）の規則（詳細は `training-dataset.md` §7）:
+分割（`split_at` あり）の規則（詳細は `docs/architecture/research-tools/training-dataset.md` §7）:
 
 - `train` = 判断の日 < `split_at`。`eval` = 判断の日 >= `split_at` + `embargo_days`。間の日の判断は書き出さず `rows_in_embargo` に数える。
 - train の行のうち、ラベルの窓（判断の時刻 + その行の最長のラベルのホライズン。`close` は同じ日の 15:30 JST）の終わりが eval の開始に届くものは書き出さず `rows_purged` に数える。
@@ -57,7 +57,7 @@
 | `save_dir` | 書き出したフォルダの絶対パス（パスは応答に出してよい） |
 | `notice` | 同上 |
 
-ファイルの SHA-256 が `files[].sha256` と一致し、`dataset_sha256` が `training-dataset.md` §10 の式で再現できる。同じ期間・分割・内容は同じバイト列・同じ `dataset_id` になる（Parquet もバイト単位で再現する）。応答は manifest だけで、Parquet の中身（行）も返さない。
+ファイルの SHA-256 が `files[].sha256` と一致し、`dataset_sha256` が `docs/architecture/research-tools/training-dataset.md` §10 の式で再現できる。同じ期間・分割・内容は同じバイト列・同じ `dataset_id` になる（Parquet もバイト単位で再現する）。応答は manifest だけで、Parquet の中身（行）も返さない。
 
 ## 変更履歴
 
@@ -65,3 +65,4 @@
 |---|---|---|---|
 | 1.0 | 2026-11-15 | 新規 | issue #1094 |
 | 1.1 | 2026-11-19 | Parquet 出力（`files[].format`）、`dataset_id` に期間と分割を含める、`schema_version` 2 | issue #1121・#1124 |
+| 1.2 | 2026-11-22 | 「詳細は `training-dataset.md` §7」「§10 の式」の参照 2 件を、実在するパス（`docs/architecture/research-tools/training-dataset.md`）に直した | issue #1203 |

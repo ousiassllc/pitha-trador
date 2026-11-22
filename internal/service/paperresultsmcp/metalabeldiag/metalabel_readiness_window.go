@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
-	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training/walkforward"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -70,7 +70,7 @@ type oosReach struct {
 	floor       time.Time
 	floorSource string // OOSStartCutoffFloor or OOSStartMaxWindow
 	reason      string
-	reachable   []training.Row // eligible rows decided on or after the floor, oldest first
+	reachable   []walkforward.Row // eligible rows decided on or after the floor, oldest first
 }
 
 // reachOOS reads the rule training.SplitWalkForward opens its OOS window by
@@ -79,7 +79,7 @@ type oosReach struct {
 // against the split's own OOSStart (metalabel_readiness_window_test.go does so
 // on many shapes), so a change of that rule shows up as a failure, not as a
 // wrong reason.
-func reachOOS(sorted []training.Row, asOf, cutoff time.Time, walk training.WalkForwardConfig) oosReach {
+func reachOOS(sorted []walkforward.Row, asOf, cutoff time.Time, walk walkforward.WalkForwardConfig) oosReach {
 	floor, source := asOf.Add(-walk.OOSMaxWindow), OOSStartMaxWindow
 	if cutoff.After(floor) {
 		floor, source = cutoff, OOSStartCutoffFloor
@@ -106,7 +106,7 @@ func reachOOS(sorted []training.Row, asOf, cutoff time.Time, walk training.WalkF
 
 // firstRowOfNewestDays is the index of the first row of the days-th newest JST
 // day of the time-ordered rows (0 when they span fewer days), as training's.
-func firstRowOfNewestDays(rows []training.Row, days int) int {
+func firstRowOfNewestDays(rows []walkforward.Row, days int) int {
 	seen, prev := 0, ""
 	for j := len(rows) - 1; j >= 0; j-- {
 		if d := rows[j].DecidedAt.In(marketcalendar.JST).Format(time.DateOnly); d != prev {
@@ -121,8 +121,8 @@ func firstRowOfNewestDays(rows []training.Row, days int) int {
 
 // eligibleRows are the rows SplitWalkForward uses as of asOf (decided before
 // it, label complete by it), oldest first.
-func eligibleRows(rows []training.Row, asOf time.Time) []training.Row {
-	out := make([]training.Row, 0, len(rows))
+func eligibleRows(rows []walkforward.Row, asOf time.Time) []walkforward.Row {
+	out := make([]walkforward.Row, 0, len(rows))
 	for _, r := range rows {
 		if r.DecidedAt.Before(asOf) && !r.LabelEnd.After(asOf) {
 			out = append(out, r)
@@ -134,7 +134,7 @@ func eligibleRows(rows []training.Row, asOf time.Time) []training.Row {
 
 // shortfall counts what is missing against the retraining's minimums, given
 // the window start the split actually used.
-func shortfall(sorted []training.Row, reach oosReach, oosStart, asOf time.Time, walk training.WalkForwardConfig) Shortfall {
+func shortfall(sorted []walkforward.Row, reach oosReach, oosStart, asOf time.Time, walk walkforward.WalkForwardConfig) Shortfall {
 	var pre, purged int
 	for _, r := range sorted {
 		if !r.DecidedAt.Before(oosStart) {
@@ -174,7 +174,7 @@ func shortfall(sorted []training.Row, reach oosReach, oosStart, asOf time.Time, 
 
 // rowsPerTradingDay is the rows decided on the n newest trading days before
 // asOf's JST day, divided by n (a day without rows counts).
-func rowsPerTradingDay(sorted []training.Row, asOf time.Time, n int) float64 {
+func rowsPerTradingDay(sorted []walkforward.Row, asOf time.Time, n int) float64 {
 	days := map[string]struct{}{}
 	for d := asOf.In(query.JST).AddDate(0, 0, -1); len(days) < n && asOf.Sub(d) < 60*24*time.Hour; d = d.AddDate(0, 0, -1) {
 		if marketcalendar.TSE.IsTradingDay(d) {

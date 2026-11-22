@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
 // Bootstrap settings of the adoption intervals (issue #780). The documented
@@ -36,8 +35,6 @@ type scoredRow struct {
 	take        bool
 	ret         float64
 }
-
-func dayOf(r Row) string { return r.DecidedAt.In(marketcalendar.JST).Format("2006-01-02") }
 
 // clusters indexes scored rows into (day, symbol) clusters grouped by day.
 type clusters struct {

@@ -52,7 +52,14 @@ func (w *Writer) SetWithExperiment(ctx context.Context, client, key, raw, hypoth
 			return err
 		}
 		entry = saved
-		args.Changes[0].Before, args.Changes[0].After, args.AuditID = before.Current, after.Current, &entry.ID
+		// A key that was never saved and defaults to empty has no value to
+		// record; an experiment's before cannot be empty, so it reads UnsetValue
+		// there (the setting and its audit row keep their own values).
+		beforeText := before.Current
+		if beforeText == "" {
+			beforeText = experiment.UnsetValue
+		}
+		args.Changes[0].Before, args.Changes[0].After, args.AuditID = beforeText, after.Current, &entry.ID
 		req, err := args.Validate(now)
 		if err != nil {
 			return err

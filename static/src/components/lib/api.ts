@@ -1,7 +1,7 @@
 // Shared JSON API client used by every Lit component
 // (docs/components/overview.md §6). All fetches MUST go through this
 // module instead of calling `fetch()` directly, so CSRF handling and error
-// behavior stay consistent across `pitha-*` components.
+// behavior stay consistent across `pitha-*` components. A 204 (no body) resolves to undefined.
 
 // Marks a request the page fires by itself (not an operator action), so the
 // server's Heartbeat middleware does not count it as operator activity
@@ -94,7 +94,7 @@ async function request<T>(
     throw new ApiError(method, path, response.status, await readProblemDetail(response));
   }
 
-  return (await response.json()) as T;
+  return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
 export function get<T>(path: string, options?: GetOptions): Promise<T> {

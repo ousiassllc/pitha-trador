@@ -4,7 +4,7 @@
 
 ## 5. Lit Web Components 仕様
 
-命名規則: `pitha-{feature-name}`。以下5種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
+命名規則: `pitha-{feature-name}`。以下6種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
 
 | コンポーネント | 用途 | 埋め込みページ | データソース |
 |---------------|------|---------------|------------|
@@ -161,12 +161,12 @@ templ KillSwitchPanel(state domain.SystemState) {
 - 直近Kill Switchイベントは`kill-switch-events-url`属性（Templ注入。値は`/api/v1/activity?type=kill_switch&limit=10`）で別途取得し、WSの`kill_switch`イベントで先頭に追加する（コンポーネント側の切り詰め件数はこの`limit`と同じ10件）。クエリ文字列はクライアントで組み立てない
 - WebSocketが切断後に再接続（`open`へ復帰）した時は、切断中に失ったイベントを補うため`GET /api/v1/activity`（現在のフィルタ付き）と`?type=kill_switch&limit=10`を再取得する（#221）。これは操作者不在でも発火するため`background: true`で送り、ハートビートに数えさせない（§6、FR-RISK-6）。初回・フィルタ変更時の取得は操作者操作のため`background`を付けない
 - Kill Switch履歴は取得状態を3つに区別して表示する。取得前は「Kill Switch の履歴を読み込んでいます…」、取得失敗時は`role="alert"`の「Kill Switch の履歴を読み込めませんでした: …」を表示し、「Kill Switch の履歴はありません。」は取得に成功して0件のときだけ表示する（安全に関わる情報を取得できていないだけの状態を「イベントなし」と誤認させない）。保持済みの履歴がある場合は、取得に失敗してもその一覧を表示したままエラーを併記し、以後の再取得（WS再接続）が成功すればエラー表示は消える（#346）。履歴の行は`lib/labels.ts`の`activityDetail`で「理由: 日次の損失上限に達した（解除: 手動）」の形に直して出す（issue #904）
-- スナップショット（`GET /api/v1/activity`）の取得は最新のリクエストの応答だけを`queues`/`events`/エラー状態に反映する。フィルタ変更や再接続直後の再取得より前に発行された古い応答が遅れて届いても、新しい結果を上書きしない（リクエストごとに世代番号`snapshotGeneration`を採番し、完了時に最新世代でなければ破棄する。#345）。Kill Switch履歴の取得（`kill-switch-events-url`）はフィルタに依存しないためこの対象外
+- スナップショット（`GET /api/v1/activity`）とKill Switch履歴（`kill-switch-events-url`）の取得は、どちらも最新のリクエストの応答だけを状態（`queues`/`events`/`killSwitchEvents`/エラー状態）に反映する。フィルタ変更や再接続直後の再取得より前に発行された古い応答が遅れて届いても、新しい結果を上書きしない。世代の管理は`activity-feed-merge.ts`の`InFlightWs`が行い（スナップショット用とKill Switch履歴用の2本。リクエストごとに世代番号を採番し、完了時に最新世代でなければ破棄する。#345・#1197）、Kill Switch履歴もフィルタに依存しない取得だが同じ世代ガードの対象である。GETが飛んでいる間にWebSocketで届いた`activity_event`・`job_update`は`InFlightWs`が保持し、応答が着いたときに応答の上へ重ねる（`overlaySnapshot`・`overlayEvents`。応答に同じイベントが入っていれば二重に載せない）。WSの差分を捨てず、応答に消させないための挙動である
 - SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、初回スナップショット（`GET /api/v1/activity`）の取得に成功した時点で置き換える（`pitha-scanner-table`と同じ light DOM 方式）。取得完了前・取得失敗時はSSRのテーブルをそのまま残し、ハイドレーションで画面を空白にしない。この間は直近Kill Switchイベント・WS切断/エラー通知のみ追加描画する
 
 ## 6. API クライアント / WebSocket（`lib/`）
 
-`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース。`403`かつ応答ヘッダ`X-CSRF-Reject: stale`（`middleware.CSRFRejectHeader`）はアプリ再起動でページのセッションCookie/CSRFトークンが失効した状態として`StaleSessionError`（メッセージはページ再読み込みを促す固定文言。`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`は公開）を投げ、それ以外の非2xxは`Error`を投げる。`htmx-errors/pitha-htmx-errors.ts`は`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`で同じ失効を見分け、トーストには短い事実「ページの有効期限が切れました。」と「再読み込み」アクションを出す）:
+`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース。`204`（本文なし。`POST /api/v1/migration/cancel`など）は本文を読まず`undefined`で解決する。`403`かつ応答ヘッダ`X-CSRF-Reject: stale`（`middleware.CSRFRejectHeader`）はアプリ再起動でページのセッションCookie/CSRFトークンが失効した状態として`StaleSessionError`（メッセージはページ再読み込みを促す固定文言。`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`は公開）を投げ、それ以外の非2xxは`Error`を投げる。`htmx-errors/pitha-htmx-errors.ts`は`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`で同じ失効を見分け、トーストには短い事実「ページの有効期限が切れました。」と「再読み込み」アクションを出す）:
 
 ```typescript
 get<T>(path: string, options?: { background?: boolean }): Promise<T>
