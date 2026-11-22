@@ -3,7 +3,9 @@ package rag_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,5 +147,63 @@ func TestService_Context_PrioritizesDecisionsOverSnapshotsAndBackfillsToK(t *tes
 	}
 	if got.Cases[0].Source != "jev_decision" || got.Cases[1].Source != "market_snapshot" {
 		t.Errorf("Context(k=2).Cases sources = [%q, %q], want [jev_decision, market_snapshot]", got.Cases[0].Source, got.Cases[1].Source)
+	}
+}
+
+// A vec0 hit whose market_snapshots row no longer resolves (vec0 has no FK,
+// er/tables-system.md) is no data, not a failure: skipped, Context succeeds
+// (issue #1214).
+func TestService_Context_SkipsSimilarSnapshotWithoutRow(t *testing.T) {
+	db := newTestDB(t)
+	svc := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db))
+
+	in := rag.FeatureInput{Return1m: ptr(0.01)}
+	const orphanSnapshotID = 424242
+	if err := svc.IndexSnapshot(context.Background(), orphanSnapshotID, in); err != nil {
+		t.Fatalf("IndexSnapshot: %v", err)
+	}
+
+	got, err := svc.Context(context.Background(), in, rag.Subject{}, rag.DefaultK)
+	if err != nil {
+		t.Fatalf("Context: %v (a vector without a snapshot row is ErrSnapshotNotFound and must be skipped)", err)
+	}
+	if len(got.Cases) != 0 {
+		t.Errorf("Context().Cases = %+v, want empty: the only hit has no market_snapshots row", got.Cases)
+	}
+}
+
+// Any snapshot load error other than "no row" (here: the repository's
+// database is closed) is a real failure and must reach the caller instead of
+// yielding a silently partial Context (issue #1214).
+func TestService_Context_ReturnsErrorWhenSnapshotLoadFails(t *testing.T) {
+	db := newTestDB(t)
+	svc0 := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db))
+	in := rag.FeatureInput{Return1m: ptr(0.01)}
+	if err := svc0.IndexSnapshot(context.Background(), 1, in); err != nil {
+		t.Fatalf("IndexSnapshot: %v", err)
+	}
+
+	// Same vector index, but the snapshot repository's handle is dead.
+	brokenDB, err := sqlitedb.Open(filepath.Join(t.TempDir(), "broken.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := brokenDB.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	svc := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(brokenDB))
+
+	got, err := svc.Context(context.Background(), in, rag.Subject{}, rag.DefaultK)
+	if err == nil {
+		t.Fatalf("Context() = %+v, nil error; want the snapshot load failure returned", got)
+	}
+	if errors.Is(err, market.ErrSnapshotNotFound) {
+		t.Errorf("Context error = %v, must not be ErrSnapshotNotFound", err)
+	}
+	if !strings.Contains(err.Error(), "rag: load similar snapshot") {
+		t.Errorf("Context error = %q, want it wrapped as \"rag: load similar snapshot: ...\"", err)
+	}
+	if len(got.Cases) != 0 {
+		t.Errorf("Context().Cases = %+v, want zero Context on error", got.Cases)
 	}
 }
