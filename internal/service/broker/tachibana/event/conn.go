@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
 )
 
@@ -29,8 +30,9 @@ func (e *StreamError) Error() string {
 }
 
 type readResult struct {
-	data []byte
-	err  error
+	data     []byte
+	err      error
+	panicked bool // the read goroutine panicked (already logged)
 }
 
 // query is the connection's URL query: 時価配信あり (p_rid=22) with one row
@@ -70,15 +72,12 @@ func (f *Feed) serve(ctx context.Context, sess tachibana.EventSession, changed <
 	defer rcancel()
 	msgs := make(chan readResult, 1)
 	go func() {
-		for {
-			_, data, err := conn.Read(rctx)
+		// A panic here would end the process, and the supervisor of Run is in
+		// another goroutine: hand it over to serve, which panics in its own.
+		if safego.Run("tachibana EVENT read", func() { readLoop(rctx, conn, msgs) }) {
 			select {
-			case msgs <- readResult{data, err}:
+			case msgs <- readResult{panicked: true}:
 			case <-rctx.Done():
-				return
-			}
-			if err != nil {
-				return
 			}
 		}
 	}()
@@ -103,6 +102,9 @@ func (f *Feed) serve(ctx context.Context, sess tachibana.EventSession, changed <
 		case <-watchdog.C():
 			return 0, ErrKeepAliveTimeout
 		case r := <-msgs:
+			if r.panicked {
+				panic("tachibana: EVENT read goroutine panicked")
+			}
 			if r.err != nil {
 				return 0, f.client.Sanitize(r.err)
 			}
@@ -111,6 +113,21 @@ func (f *Feed) serve(ctx context.Context, sess tachibana.EventSession, changed <
 			if err := f.handle(ctx, sess, symbols, string(r.data)); err != nil {
 				return 0, err
 			}
+		}
+	}
+}
+
+// readLoop forwards the connection's frames to msgs until a read fails.
+func readLoop(ctx context.Context, conn *websocket.Conn, msgs chan<- readResult) {
+	for {
+		_, data, err := conn.Read(ctx)
+		select {
+		case msgs <- readResult{data: data, err: err}:
+		case <-ctx.Done():
+			return
+		}
+		if err != nil {
+			return
 		}
 	}
 }

@@ -7,6 +7,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -71,6 +72,10 @@ type Config struct {
 	// master's morning fetch hangs on it). It must return when ctx is done;
 	// Wait waits for it. May be nil.
 	OnLogin func(ctx context.Context)
+	// OnStop runs once when the session loop panicked too often and the
+	// adapter stopped it (issue #1211), after the status and the notice say so;
+	// the adapter stops the rest of the 立花 connection from it. May be nil.
+	OnStop func()
 }
 
 // Session keeps one login alive: it logs in at start, once every morning
@@ -102,6 +107,7 @@ type Session struct {
 	phase     phase
 	contended bool
 	skewed    bool
+	stopped   bool // the loop gave up after repeated panics: no more logins
 }
 
 var _ tachibana.SessionObserver = (*Session)(nil)
@@ -128,12 +134,12 @@ func New(cfg Config) *Session {
 func (s *Session) Start(ctx context.Context) error {
 	err := s.attempt(ctx)
 	s.wg.Add(1)
-	go func() { defer s.wg.Done(); s.run(ctx) }()
+	go func() { defer s.wg.Done(); s.supervise(ctx) }()
 	return err
 }
 
 // Wait blocks until the loop has ended and logged out, which happens after the
-// ctx given to Start is done.
+// ctx given to Start is done (or the loop was stopped after repeated panics).
 func (s *Session) Wait() { s.wg.Wait() }
 
 // LoginNow makes one login attempt right away (a no-op for the schedule: the
@@ -141,11 +147,19 @@ func (s *Session) Wait() { s.wg.Wait() }
 // re-login time.
 func (s *Session) LoginNow(ctx context.Context) error { return s.attempt(ctx) }
 
+// errStopped is the login result once the loop has been stopped.
+var errStopped = errors.New("tachibana: the session was stopped after repeated panics; restart the app to reconnect")
+
 // Status is the state of the most recent login (never blocks on the network).
 func (s *Session) Status() broker.SessionStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.status
+	if s.stopped {
+		st.Issue, st.Code, st.Guidance = broker.SessionIssueStopped, 0, guidanceStopped
+		st.NextReauth = time.Time{}
+		return st
+	}
 	if st.Issue == broker.SessionIssueNone && s.skewed {
 		st.Issue, st.Code = broker.SessionIssueClockSkew, tachibana.ErrnoClock
 		st.Guidance = guidanceClock

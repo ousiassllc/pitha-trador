@@ -153,3 +153,43 @@ type autoTimer struct{ c chan time.Time }
 
 func (t *autoTimer) C() <-chan time.Time { return t.c }
 func (t *autoTimer) Stop() bool          { return false }
+
+// PanicClock wraps a clock and makes the next n Now calls panic (Arm), to
+// drive a panic through the code that reads the time: a resident goroutine
+// that must survive it. Unarmed it is the wrapped clock.
+type PanicClock struct {
+	tachibana.Clock
+	mu    sync.Mutex
+	left  int
+	fired int
+}
+
+// NewPanicClock wraps clk.
+func NewPanicClock(clk tachibana.Clock) *PanicClock { return &PanicClock{Clock: clk} }
+
+// Arm makes the next n Now calls panic.
+func (c *PanicClock) Arm(n int) {
+	c.mu.Lock()
+	c.left = n
+	c.mu.Unlock()
+}
+
+// Fired is how many Now calls panicked so far.
+func (c *PanicClock) Fired() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.fired
+}
+
+// Now implements tachibana.Clock.
+func (c *PanicClock) Now() time.Time {
+	c.mu.Lock()
+	if c.left > 0 {
+		c.left--
+		c.fired++
+		c.mu.Unlock()
+		panic("tachibanatest: injected panic")
+	}
+	c.mu.Unlock()
+	return c.Clock.Now()
+}

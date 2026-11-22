@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,12 +26,12 @@ type harness struct {
 	sess   *session.Session
 }
 
-func newHarness(settings config.TachibanaSettings, n session.Notifier, hc *http.Client, clk tachibana.Clock) *harness {
-	client := tachibana.NewClient(tachibana.Config{BaseURL: settings.BaseURL(), RequestsPerSecond: settings.RequestMaxPerSecond, HTTPClient: hc, Clock: clk})
+func newHarness(settings config.TachibanaSettings, n session.Notifier, hc *http.Client, clk, clientClk tachibana.Clock, onStop func()) *harness {
+	client := tachibana.NewClient(tachibana.Config{BaseURL: settings.BaseURL(), RequestsPerSecond: settings.RequestMaxPerSecond, HTTPClient: hc, Clock: clientClk})
 	u, _ := url.Parse(settings.BaseURL())
 	sess := session.New(session.Config{
 		Client: client, AuthID: tt.AuthID, KeyPath: settings.PrivateKeyPath(), ReauthTime: settings.ReauthTime,
-		APIVersion: path.Base(u.Path), Clock: clk, Notifier: n,
+		APIVersion: path.Base(u.Path), Clock: clk, Notifier: n, OnStop: onStop,
 	})
 	return &harness{client: client, sess: sess}
 }
@@ -46,10 +47,13 @@ func (h *harness) Run(ctx context.Context)              { <-ctx.Done(); h.sess.W
 type rig struct {
 	t      *testing.T
 	clk    *tt.ManualClock
+	pc     *tt.PanicClock // the client's clock: Arm makes the loop's logins panic
 	fb     *tt.FakeBroker
 	a      *harness
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	stops atomic.Int32 // Config.OnStop calls
 
 	mu      sync.Mutex
 	notices []session.Notice
@@ -58,12 +62,13 @@ type rig struct {
 func newRig(t *testing.T, start time.Time) *rig {
 	t.Helper()
 	r := &rig{t: t, clk: tt.NewManualClock(start)}
+	r.pc = tt.NewPanicClock(r.clk)
 	r.fb = tt.New(t, r.clk)
 	r.a = newHarness(r.fb.Settings(), session.NotifierFunc(func(_ context.Context, n session.Notice) {
 		r.mu.Lock()
 		r.notices = append(r.notices, n)
 		r.mu.Unlock()
-	}), r.fb.Server().Client(), r.clk)
+	}), r.fb.Server().Client(), r.clk, r.pc, func() { r.stops.Add(1) })
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	t.Cleanup(func() { r.cancel(); r.a.Run(r.ctx) })
 	return r
@@ -113,5 +118,5 @@ func (r *rig) call() error {
 
 // newAdapterWith builds the rig's session again with other settings.
 func newAdapterWith(r *rig, settings config.TachibanaSettings) *harness {
-	return newHarness(settings, nil, r.fb.Server().Client(), r.clk)
+	return newHarness(settings, nil, r.fb.Server().Client(), r.clk, r.clk, nil)
 }

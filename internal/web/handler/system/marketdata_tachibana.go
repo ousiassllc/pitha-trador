@@ -63,6 +63,8 @@ func tachibanaGuidance(issue broker.SessionIssue, environment string) string {
 		return "PCの時計がサーバ時刻と30秒以上ずれています（p_errno=8）。PCの時計をNTPで正確に合わせてください。"
 	case broker.SessionIssueOutOfHours:
 		return "サービス時間外です（03:30〜05:30はログインできません）。05:30以降に自動的にログインし直します。"
+	case broker.SessionIssueStopped:
+		return "立花証券への接続を、常駐処理の異常終了が続いたため停止しました（保有監視とRisk周期は動いています）。設定画面のエラーログを確認し、アプリを再起動すると再接続します。"
 	case broker.SessionIssueSessionConflict:
 		return "同じ認証IDで別のログインがあり、仮想URLが失効しました（多重ログイン）。本アプリの二重起動や、他のAPIツールで同じ認証IDを使っていないか確認してください。"
 	case broker.SessionIssueUnreachable:

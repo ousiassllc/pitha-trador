@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,9 +19,12 @@ import (
 type rig struct {
 	t    *testing.T
 	clk  *tt.ManualClock
+	pc   *tt.PanicClock // the client's clock: Arm makes the feed loop's next session lookups panic
 	fb   *tt.FakeBroker
 	c    *tachibana.Client
 	feed *event.Feed
+
+	stops atomic.Int32 // Config.OnStop calls
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -31,14 +35,16 @@ type rig struct {
 func newRig(t *testing.T, budget, refillSeconds int) *rig {
 	t.Helper()
 	r := &rig{t: t, clk: tt.NewManualClock(tt.AtJST(2026, 10, 8, 10, 0)), done: make(chan struct{})}
+	r.pc = tt.NewPanicClock(r.clk)
 	r.fb = tt.New(t, r.clk)
-	r.c = tachibana.NewClient(tachibana.Config{BaseURL: r.fb.BaseURL(), RequestsPerSecond: 10, HTTPClient: r.fb.Server().Client(), Clock: r.clk})
+	r.c = tachibana.NewClient(tachibana.Config{BaseURL: r.fb.BaseURL(), RequestsPerSecond: 10, HTTPClient: r.fb.Server().Client(), Clock: r.pc})
 	if _, err := r.c.Login(context.Background(), tt.AuthID, r.fb.Key()); err != nil {
 		t.Fatal(err)
 	}
 	r.feed = event.New(event.Config{
 		Client: r.c, ConnectionBudget: budget, RefillInterval: time.Duration(refillSeconds) * time.Second,
 		HTTPClient: r.fb.Server().Client(), Clock: r.clk,
+		OnStop: func() { r.stops.Add(1) },
 	})
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	t.Cleanup(func() {

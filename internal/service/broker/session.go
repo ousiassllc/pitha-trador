@@ -32,6 +32,7 @@ const (
 	SessionIssueClockSkew       SessionIssue = "clock_skew"       // p_errno=8: PC時計とサーバ時刻が30秒超ずれ
 	SessionIssueOutOfHours      SessionIssue = "out_of_hours"     // 03:30〜05:30のログイン停止帯などサービス時間外
 	SessionIssueSessionConflict SessionIssue = "session_conflict" // 多重ログインで仮想URLが失効
+	SessionIssueStopped         SessionIssue = "stopped"          // 常駐処理の異常終了が続き、接続を停止 (再起動で復帰)
 )
 
 // A not_logged_in failure streak is "persistent" (issue #712) once it has
