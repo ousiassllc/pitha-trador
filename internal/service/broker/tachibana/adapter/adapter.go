@@ -51,6 +51,7 @@ type Adapter struct {
 	session *session.Session
 	master  *market.Master
 	feed    *event.Feed
+	halt    halter
 }
 
 var _ broker.Broker = (*Adapter)(nil)
@@ -63,6 +64,7 @@ func New(cfg Config) *Adapter {
 		HTTPClient:        cfg.HTTPClient,
 		Clock:             cfg.Clock,
 	})
+	a := &Adapter{client: client}
 	master := market.NewMaster(client, cfg.Clock)
 	sess := session.New(session.Config{
 		Client:     client,
@@ -73,6 +75,8 @@ func New(cfg Config) *Adapter {
 		Clock:      cfg.Clock,
 		Notifier:   cfg.Notifier,
 		OnLogin:    master.LoadWithRetry,
+		// The session loop gave up: stop the EVENT feed with it.
+		OnStop: a.halt.stop,
 	})
 	feed := event.New(event.Config{
 		Client:           client,
@@ -81,8 +85,14 @@ func New(cfg Config) *Adapter {
 		RefillRequests:   cfg.Source.RestQuote.RequestsPerRound,
 		HTTPClient:       cfg.HTTPClient,
 		Clock:            cfg.Clock,
+		// The feed gave up: say so, and stop the session (it logs out) with it.
+		OnStop: func() {
+			a.session.Halt(context.Background())
+			a.halt.stop()
+		},
 	})
-	return &Adapter{client: client, session: sess, master: master, feed: feed}
+	a.session, a.master, a.feed = sess, master, feed
+	return a
 }
 
 // Client is the REQUEST I/F client the adapter's data paths use.
@@ -103,16 +113,18 @@ func (a *Adapter) Capabilities() broker.Capabilities {
 
 // Start implements broker.Session: log in (a failed first attempt returns the
 // sanitized error) and keep the session alive until ctx is done.
-func (a *Adapter) Start(ctx context.Context) error { return a.session.Start(ctx) }
+func (a *Adapter) Start(ctx context.Context) error { return a.session.Start(a.halt.bind(ctx)) }
 
 // Status implements broker.Session.
 func (a *Adapter) Status() broker.SessionStatus { return a.session.Status() }
 
 // Run implements broker.StreamFeed: it keeps the EVENT connection until ctx
 // is done and returns once that is closed and the session has logged out, so
-// the composition root's wait group covers both.
+// the composition root's wait group covers both. A session loop or feed that
+// panicked too often (issue #1211) stops the whole 立花 connection: Run then
+// returns early and the status says "stopped"; the app itself keeps running.
 func (a *Adapter) Run(ctx context.Context) {
-	a.feed.Run(ctx)
+	a.feed.Run(a.halt.bind(ctx))
 	a.session.Wait()
 }
 

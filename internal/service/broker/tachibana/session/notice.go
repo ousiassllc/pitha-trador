@@ -24,6 +24,9 @@ const (
 	// NoticeDocumentUpdate: a new 交付書面 update date was announced
 	// (sUpdateInformWebDocument changed to today or later).
 	NoticeDocumentUpdate NoticeKind = "document_update"
+	// NoticeStopped: the session loop or the EVENT feed panicked too often and
+	// the 立花 connection was stopped (issue #1211); the app keeps running.
+	NoticeStopped NoticeKind = "stopped"
 )
 
 // Notice is one message for the operator. Message is safe to show and log:

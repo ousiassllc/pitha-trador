@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/guard"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/market"
 )
 
@@ -50,6 +51,9 @@ type Config struct {
 	HTTPClient *http.Client
 	// Clock overrides the wall clock (tests).
 	Clock tachibana.Clock
+	// OnStop runs once when Run panicked too often and gave up (issue #1211);
+	// the adapter stops the rest of the 立花 connection from it. May be nil.
+	OnStop func()
 }
 
 // Feed is the EVENT I/F receiver and broker.StreamFeed's Latest.
@@ -60,6 +64,7 @@ type Feed struct {
 	budget         int
 	refillInterval time.Duration
 	refillSymbols  int // symbols one refill may name
+	onStop         func()
 
 	wake chan struct{} // cap 1: the desired subscription changed
 
@@ -104,6 +109,7 @@ func New(cfg Config) *Feed {
 		budget:         budget,
 		refillInterval: interval,
 		refillSymbols:  requests * market.MaxSymbolsPerRequest,
+		onStop:         cfg.OnStop,
 		wake:           make(chan struct{}, 1),
 		states:         map[string]*symbolState{},
 	}
@@ -213,7 +219,23 @@ func (f *Feed) wait(ctx context.Context, d time.Duration, changed <-chan struct{
 // failure (never re-logging in by itself: only an ST with p_errno=2 reports
 // the session lost), and reconnects at once after a new login or a planned
 // swap. It returns after closing the connection.
+//
+// A panic is guarded (FR-SCHED-6, issue #1211): it is logged, and after a
+// delay the loop starts again, which dials with the current watch list and
+// resumes after the last event number (a re-subscription). After
+// guard.MaxRestarts panicking runs in a row Run gives up and calls
+// Config.OnStop; quotes then come from REST refills only.
 func (f *Feed) Run(ctx context.Context) {
+	gaveUp := guard.Supervise(ctx, f.clock, "tachibana EVENT feed", func() { f.run(ctx) }, func() { f.setSubscribed(nil) })
+	if gaveUp {
+		f.setSubscribed(nil)
+		if f.onStop != nil {
+			f.onStop()
+		}
+	}
+}
+
+func (f *Feed) run(ctx context.Context) {
 	backoff := backoffMin
 	reason := "initial"
 	for ctx.Err() == nil {

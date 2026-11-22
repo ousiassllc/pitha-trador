@@ -5,13 +5,59 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/guard"
 )
+
+// supervise runs the session loop under the panic guard (FR-SCHED-6, issue
+// #1211): a panic is logged and the loop starts again with a fresh login after
+// a delay; once it panicked guard.MaxRestarts times in a row the
+// session is stopped (status, notice, OnStop) and only the 立花 connection
+// goes down. The logout at the end runs either way.
+func (s *Session) supervise(ctx context.Context) {
+	defer safego.Recover("tachibana session shutdown")
+	gaveUp := guard.Supervise(ctx, s.clock, "tachibana session loop", func() { s.run(ctx) }, s.afterPanic)
+	if gaveUp {
+		s.stop(ctx)
+	}
+	s.logout()
+	if gaveUp && s.cfg.OnStop != nil {
+		s.cfg.OnStop()
+	}
+}
+
+// afterPanic is the "restart" of the loop: whatever the panic interrupted, the
+// next thing the loop does is a fresh login (the retry phase with no wait).
+func (s *Session) afterPanic() {
+	s.setPhase(phaseRetry)
+	s.retryWait = 0
+}
+
+// stop records that the loop gave up: the status says so, the operator is
+// told, and no login is made again until the process restarts.
+func (s *Session) stop(ctx context.Context) {
+	s.mu.Lock()
+	s.stopped = true
+	s.mu.Unlock()
+	notify(ctx, s.cfg.Notifier, Notice{Kind: NoticeStopped, Message: guidanceStopped})
+}
+
+// Halt stops the session from outside, for the adapter when its EVENT feed
+// gave up: the status and notice say the connection is stopped and no login
+// is made again. It does not end the loop (cancel the Start context for that).
+func (s *Session) Halt(ctx context.Context) {
+	s.mu.Lock()
+	already := s.stopped
+	s.mu.Unlock()
+	if !already {
+		s.stop(ctx)
+	}
+}
 
 // run is the session loop.
 func (s *Session) run(ctx context.Context) {
-	defer s.logout()
 	for ctx.Err() == nil {
 		lost := s.sleep(ctx, s.waitFor())
 		if ctx.Err() != nil {
@@ -115,6 +161,12 @@ func (s *Session) onLost(ctx context.Context) {
 
 // attempt makes one login and moves the loop to the matching phase.
 func (s *Session) attempt(ctx context.Context) error {
+	s.mu.Lock()
+	stopped := s.stopped
+	s.mu.Unlock()
+	if stopped {
+		return errStopped
+	}
 	key, err := tachibana.LoadPrivateKey(s.cfg.KeyPath)
 	var info tachibana.LoginInfo
 	if err == nil {
@@ -131,7 +183,13 @@ func (s *Session) attempt(ctx context.Context) error {
 	s.succeeded()
 	if s.cfg.OnLogin != nil {
 		s.wg.Add(1)
-		go func() { defer s.wg.Done(); s.cfg.OnLogin(ctx) }()
+		go func() {
+			defer s.wg.Done()
+			// The next login starts it again, so a give-up only logs.
+			if guard.Supervise(ctx, s.clock, "tachibana on-login task", func() { s.cfg.OnLogin(ctx) }, func() {}) {
+				slog.Error("tachibana: the on-login task keeps panicking; it runs again after the next login")
+			}
+		}()
 	}
 	return nil
 }
