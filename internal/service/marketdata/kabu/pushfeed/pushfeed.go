@@ -83,13 +83,17 @@ func New(universe Universe, broker Broker, url string, exchange int) *Feed {
 // RegisterUniverse registers the active stocks (capped at
 // MaxRegisterSymbols) so their updates arrive over PUSH. Symbols beyond
 // the cap are served by the REST poll only, which rotates through the
-// remaining registration slots. The registration list is emptied first:
-// kabu station keeps registrations across app restarts, and stale ones
-// would leave no slot for the REST poll (4002006).
+// remaining registration slots. The registration list is emptied first,
+// even when the universe is empty (nothing is then registered, kabu
+// rejects an empty /register): kabu station keeps registrations across app
+// restarts, and stale ones would leave no slot for the REST poll (4002006).
 func (f *Feed) RegisterUniverse(ctx context.Context) error {
 	stocks, err := f.Universe.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return fmt.Errorf("pushfeed: list universe: %w", err)
+	}
+	if err := f.Broker.UnregisterAll(ctx); err != nil {
+		return fmt.Errorf("pushfeed: unregister all symbols: %w", err)
 	}
 	if len(stocks) == 0 {
 		return nil
@@ -102,9 +106,6 @@ func (f *Feed) RegisterUniverse(ctx context.Context) error {
 	symbols := make([]marketdata.RegisterSymbol, len(stocks))
 	for i, inst := range stocks {
 		symbols[i] = marketdata.RegisterSymbol{Symbol: inst.Symbol, Exchange: f.Exchange}
-	}
-	if err := f.Broker.UnregisterAll(ctx); err != nil {
-		return fmt.Errorf("pushfeed: unregister all symbols: %w", err)
 	}
 	if _, err := f.Broker.RegisterSymbols(ctx, symbols); err != nil {
 		return fmt.Errorf("pushfeed: register symbols: %w", err)

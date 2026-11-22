@@ -46,6 +46,7 @@ type fakeKabu struct {
 	mu       sync.Mutex
 	regs     [][]marketdata.RegisterSymbol
 	unregs   [][]marketdata.RegisterSymbol
+	unregAll int
 	boards   int
 	board    marketdata.Board
 }
@@ -58,6 +59,9 @@ func newFakeKabu(t *testing.T, restBoard marketdata.Board, pushMessages ...marke
 		case r.Method == http.MethodPost && r.URL.Path == "/token":
 			_ = json.NewEncoder(w).Encode(map[string]any{"ResultCode": 0, "Token": "tok"})
 		case r.Method == http.MethodPut && r.URL.Path == "/unregister/all":
+			f.mu.Lock()
+			f.unregAll++
+			f.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(marketdata.RegisterSuccess{})
 		case r.Method == http.MethodPut && r.URL.Path == "/unregister":
 			var req struct{ Symbols []marketdata.RegisterSymbol }
@@ -110,6 +114,12 @@ func (f *fakeKabu) registrations() [][]marketdata.RegisterSymbol {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([][]marketdata.RegisterSymbol(nil), f.regs...)
+}
+
+func (f *fakeKabu) unregisterAllCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.unregAll
 }
 
 func (f *fakeKabu) boardFetches() int {
