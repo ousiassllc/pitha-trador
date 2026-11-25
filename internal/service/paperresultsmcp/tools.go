@@ -31,12 +31,13 @@ type toolEnv struct {
 	capitalJPY float64
 	now        time.Time
 	// The fields below serve the settings tools (settingstool).
-	client      string                         // the caller's host, for the audit log
-	paperLimits *config.RiskLimits             // risk.yaml's Paper section (defaults of the Paper keys)
-	policy      *config.PolicyConfig           // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
-	writer      func() (*mcpset.Writer, error) // the narrow write connection, opened on first use
-	experiments *experiment.SummaryCache       // experiments_list's rows of finished experiments
-	backtests   *backtestjob.Manager           // backtest_start's job manager (backtesttool)
+	client      string                          // the caller's host, for the audit log
+	paperLimits *config.RiskLimits              // risk.yaml's Paper section (defaults of the Paper keys)
+	policy      *config.PolicyConfig            // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
+	writer      func() (*mcpset.Writer, error)  // the narrow write connection, opened on first use
+	experiments *experiment.SummaryCache        // experiments_list's rows of finished experiments
+	backtests   *backtestjob.Manager            // backtest_start's job manager (backtesttool)
+	freshRead   func() (query.Q, func(), error) // a read handle outside the call's transaction (updatetool)
 }
 
 // tool is one entry of the dispatch table. The table is the complete set of

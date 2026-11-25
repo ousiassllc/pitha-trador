@@ -88,50 +88,13 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 		Ready:          status.Ready,
 	}
 	if props.Failed {
-		props.ErrorReason = errorReason(status.ErrorKind)
+		props.ErrorReason = updater.ErrorReason(status.ErrorKind)
 	}
 	if props.Blocked {
-		props.BlockedReason = blockedReason(status.BlockedKind)
+		props.BlockedReason = updater.BlockedReason(status.BlockedKind)
 	}
 	if !status.CheckedAt.IsZero() {
 		props.CheckedAt = atoms.FormatJST(status.CheckedAt)
 	}
 	shared.RenderHTML(c, http.StatusOK, organisms.UpdatePanel(props))
-}
-
-// blockedReason words the safety-gate condition holding a newer release
-// back (issue #241); the gate's own log detail stays in the log.
-func blockedReason(kind updater.BlockKind) string {
-	switch kind {
-	case updater.BlockOpenPositions:
-		return "ポジションを保有しているため"
-	case updater.BlockKillSwitch:
-		return "Kill Switch が発動しているため"
-	case updater.BlockRecentOrder:
-		return "直近に発注があったため"
-	case updater.BlockCheckFailed:
-		return "安全条件を確認できなかったため"
-	default:
-		return "理由を特定できません"
-	}
-}
-
-// errorReason words why a check failed (issue #241) without exposing the
-// raw error text, which may carry URLs or local paths; that stays in the
-// log.
-func errorReason(kind updater.ErrorKind) string {
-	switch kind {
-	case updater.ErrorNetwork:
-		return "ネットワークまたは GitHub 側の問題で接続できませんでした"
-	case updater.ErrorRateLimit:
-		return "GitHub API のレート制限に達しました"
-	case updater.ErrorAccess:
-		return "GitHub のリリース情報にアクセスできません"
-	case updater.ErrorVerification:
-		return "ダウンロードしたインストーラーの検証に失敗しました（更新は中止されました）"
-	case updater.ErrorRelease:
-		return "取得したリリース情報の内容が不正です（タグ名またはインストーラー資産を確認してください）"
-	default:
-		return "原因を特定できませんでした（詳細はログを参照してください）"
-	}
 }

@@ -89,6 +89,10 @@ const (
 	// BlockCheckFailed: a gate's own lookup failed, so safety could not be
 	// established (fail closed).
 	BlockCheckFailed BlockKind = "check_failed"
+	// BlockMarketHours: a trading day's 立会時間帯 (JST 9:00-15:30). Not a
+	// SafeGate condition: only the Paper results MCP's update_apply
+	// (mcpbridge, issue #1222) holds an install back for it.
+	BlockMarketHours BlockKind = "market_hours"
 )
 
 // BlockReason is why SafeToUpdate rejected an installation: Kind for the

@@ -48,6 +48,10 @@ type Env struct {
 	CapitalJPY float64
 	// Experiments is experiments_list's cache of the rows of finished experiments.
 	Experiments *experiment.SummaryCache
+	// FreshRead opens a read-only handle of its own, outside Q's transaction
+	// (whose snapshot cannot see a later commit), and returns it with its
+	// close function. The update tools poll the application's answer through it.
+	FreshRead func() (query.Q, func(), error)
 }
 
 // Run executes the tool and returns its data and the row count to log. An

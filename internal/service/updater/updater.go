@@ -249,6 +249,14 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	return Result{Ready: true, Version: release.TagName, InstallerPath: installerPath}, nil
 }
 
+// SafeToUpdate evaluates the same SafeGate CheckForUpdate does, without
+// downloading or recording anything. The Paper results MCP's update_apply
+// (issue #1222) calls it right before QuitForUpdate, so a verified installer
+// is never launched on a gate that no longer passes.
+func (c *Checker) SafeToUpdate(ctx context.Context) (bool, BlockReason) {
+	return c.gate.SafeToUpdate(ctx)
+}
+
 // holdBack evaluates SafeGate. When it does not pass it records status as
 // Blocked (so the scheduler retries soon, SchedulerAdapter.UpdatePending)
 // and reports true; otherwise it records status unchanged and reports

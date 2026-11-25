@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/researchnote/notetool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settingstool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/tooldef"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/updatetool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/virtualpapertool"
 )
 
@@ -21,7 +22,7 @@ import (
 func init() {
 	for _, d := range slices.Concat(
 		experimenttool.Defs(), backtesttool.Defs(), jevshadowtool.Defs(), virtualpapertool.Defs(), notetool.Defs(),
-		proposaltool.Defs(), settingstool.Defs(),
+		proposaltool.Defs(), settingstool.Defs(), updatetool.Defs(),
 	) {
 		tools = append(tools, fromDef(d))
 	}
@@ -47,7 +48,7 @@ func fromDef(d tooldef.Def) tool {
 			return args, func(ctx context.Context, e toolEnv) (any, int, error) {
 				data, n, err := run(ctx, tooldef.Env{
 					Q: e.q, Range: e.r, Now: e.now, Client: e.client, Writer: e.writer, Backtests: e.backtests,
-					PaperLimits: e.paperLimits, CapitalJPY: e.capitalJPY, Experiments: e.experiments,
+					PaperLimits: e.paperLimits, CapitalJPY: e.capitalJPY, Experiments: e.experiments, FreshRead: e.freshRead,
 				})
 				if f := (*tooldef.Failure)(nil); errors.As(err, &f) {
 					return data, n, toolErrorOf(f)

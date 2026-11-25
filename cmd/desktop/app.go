@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/mcpbridge"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
@@ -31,6 +32,11 @@ type App struct {
 	// the MCP process when its settings are enabled, shutdown stops it. Nil
 	// when the per-user config directory is unavailable.
 	mcp *admin.Service
+	// updates hands the updater to the MCP process (issue #1222): startup runs
+	// it, shutdown waits for it (updatesDone) before the database closes. Nil
+	// until main builds it.
+	updates     *mcpbridge.Bridge
+	updatesDone chan struct{}
 
 	// mu guards pendingInstaller: QuitForUpdate (issue #65) runs on
 	// internal/service/scheduler's own cron goroutine, while shutdown
@@ -93,6 +99,13 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	mcpwire.Start(runCtx, a.mcp)
+	if a.updates != nil {
+		a.updatesDone = make(chan struct{})
+		go func() {
+			defer close(a.updatesDone)
+			a.updates.Run(runCtx)
+		}()
+	}
 }
 
 // cleanupStaleUpdateDownloads removes the installer directories a previous
@@ -141,6 +154,9 @@ func (a *App) shutdown(ctx context.Context) {
 	// First: the MCP process ends with the application (a crash is covered by
 	// the OS instead: internal/service/paperresultsmcp/proc).
 	mcpwire.Stop(a.mcp)
+	if a.updatesDone != nil {
+		<-a.updatesDone // withdraws the published update status; the database is still open
+	}
 	a.services.Stop()
 	a.cleanupNotifications(ctx)
 

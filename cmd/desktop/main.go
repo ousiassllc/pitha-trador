@@ -20,7 +20,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/migrationwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
+	"github.com/ousiassllc/pitha-trador/internal/repository/updatecontrol"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/mcpbridge"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 	"github.com/ousiassllc/pitha-trador/internal/supervisor"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -93,6 +95,9 @@ func run() error {
 	app := NewApp()
 	services := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(brokerSettings), bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
 	app.services = services
+	if services.Updater != nil { // the MCP's update tools reach the updater only through this hand-over (issue #1222)
+		app.updates = mcpbridge.New(mcpbridge.Config{Store: updatecontrol.New(state.DB), Checker: services.Updater.Checker, Quitter: app})
+	}
 	app.mcp = mcpwire.New() // started by app.startup, stopped by app.shutdown (issue #795)
 
 	wsListeners, wsBase := listenWebSocket()
