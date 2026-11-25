@@ -60,3 +60,4 @@
 | 1.53 | 2026-11-22 | §1・§7 導入・§7.3・図の「設定と注文案だけ」「10 種類」の限定を、個別に定めた狭い書き込み（書き込みツール 18 本。`mcptests/tools_test.go` の `writingTools`）の言い方に直した。§7.3 に、リプレイ（`jev_replay_runs`）・バックテスト（`backtest_runs`）・仮想 Paper（`virtual_paper_profiles` ほか）の書き込みを足し、`training_dataset_export` が DB に書かずファイルを書く例外を明記した（実装の変更は無い） | issue #1187 |
 | 1.54 | 2026-11-22 | §5 の「`runtime_settings` を書けるのは…だけ」の列挙に、`jev_prompt_promote` が書くライブ版のキー`jev.trader_prompt_version`（ホワイトリスト外。§7.3 ⑥）を加え、書き込みは §7.3 の書き込みツールの狭い 1 トランザクションだけと言い直した（実装の変更は無い） | issue #1201 |
 | 1.55 | 2026-11-22 | §5 の分割章の参照 2 件（`paper-results-mcp-dataset-export.md`・`paper-results-mcp-jev-slices.md`）を、実在するパス（`research-tools/` の下）に直した（実装の変更は無い） | issue #1203 |
+| 1.56 | 2026-11-25 | §7.1 のホワイトリストを 29 → 35 個にし、お試しの 6 キーと検証（`mcpset/trialkeys`）を追記。「費用の上限は Settings 画面だけ」をシャドーのものに限定（issue #1220） |

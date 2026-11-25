@@ -157,6 +157,9 @@ SELECT arm_id, COALESCE(SUM(counted_cost_usd), 0) FROM jev_trial_decisions WHERE
 	if l.Codex, err = readCodexLimits(ctx, q, cfg.Codex, from, to, now); err != nil {
 		return Limits{}, err
 	}
+	if l.ProviderKeys, err = readProviderKeys(ctx, q); err != nil {
+		return Limits{}, err
+	}
 	skipped, err := skippedToday(ctx, q, from, to)
 	if err != nil {
 		return Limits{}, err

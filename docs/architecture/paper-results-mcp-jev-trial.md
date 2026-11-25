@@ -9,7 +9,7 @@
 - 読む表: `jev_trial_decisions`（本体）、`jev_decisions`（ライブの判断。時刻・方向）、`calibration_outcomes`（実現した結果の既存ラベル）、`counterfactual_labels`（見送り候補の反実仮想の既存ラベル）、`runtime_settings` の `jev.trial.*`（固定キーを 1 キーずつ。上限・止まりの記録の表示）
 - 書くもの: 無い。MCP の読み取り接続（`mode=ro` + `query_only`）の読み取りトランザクションの中だけで動き、書き込み用の接続を開かない
 - 返さない列: `response_json`・`error_excerpt`（読みもしない）。API キーは MCP プロセスに無い。エラー本文の全文は表に残さない設計（`error_excerpt` は 200 バイトまで）で、ツールはその抜粋も返さない
-- `jev.trial.enabled`・`jev.trial.arms`・`jev.trial.daily_cost_cap_usd`・各止まりのキーは `mcpwritesettings` のホワイトリストに入れない。トライアルは費用が発生するので、オンにできるのはアプリの Settings 画面だけ
+- この 2 ツールは設定を書かない。オン・オフ・アーム・全体上限・Codex のスイッチと上限の 6 キー（`jev.trial.enabled`・`jev.trial.arms`・`jev.trial.daily_cost_cap_usd`・`jev.trial.codex.enabled`・`jev.trial.codex.daily_call_cap`・`jev.trial.codex.daily_token_cap`）は、`mcpwritesettings` のホワイトリストに入り `settings_get`／`settings_set` で変える（issue #1220。「オンにできるのは Settings 画面だけ」としていた従来の規則を、この 6 キーについて改めた。書き込み許可・日次上限・ランナー側の上限はそのまま効く）。各止まりの記録（`jev.trial.halt*`・`jev.trial.failures.*`・`jev.trial.throttle.*`・`jev.trial.codex.halt`・`jev.trial.codex.login`）はホワイトリストに入れない
 - 実装: SQL と集計は `internal/service/paperresultsmcp/query/trialquery`（`jev_shadow_*` の `query/shadowquery` と同じ分け方）、引数と説明は `internal/service/paperresultsmcp/trialtool`、登録は `jev_models_tool.go`（`diagTool`）。テストは `internal/service/paperresultsmcp/trialtests`
 
 ## 2. 比較の考え方（公平さ）
@@ -68,9 +68,29 @@
 
 取引・Risk・発注・Paper ガード・資金・Policy の閾値・ライブの Jev・既存のシャドー・RAG・較正・メタモデルの学習の経路は読みも変えもしない。トライアルの行はこれらのどこにも入らず、このツールも出力を他の経路へ渡さない。
 
+## 設定の書き込み（issue #1220）
+
+お試し記録の操作者向け 6 キーは、`settings_get` / `settings_set` のホワイトリスト（`paper-results-mcp.md` §3.10。35 キー）に載る。専用の書き込みツールは作らない。値の検証と保存は Settings 画面と同じ `jevtrial.Service` の規則で、保存前に掛ける（`mcpset/trialkeys`）。
+
+| キー | 単位 | 内容 | 許容 |
+|---|---|---|---|
+| `jev.trial.enabled` | 文字列（`text`） | お試し記録（モデル比較。issue #1220。Settings 画面の「トライアルを有効にする」）のオン・オフ。オンにすると `jev.trial.arms` のアームごとに有料の呼び出しが発生しうる。既定 `false` | `true` / `false`（`1` / `0` も可）。アームが空でもオンにできる（そのときランナーは何も呼ばない） |
+| `jev.trial.arms` | 文字列（`text`） | お試し記録のアーム（比べるモデル）の JSON 配列。追加・編集・削除・複製は配列全体を書く。応答の `value` もコンパクトな JSON 配列。既定 `[]` | 最大 8 件・id 重複不可・登録済みのプロンプト版・提供元ごとの組み合わせ（Settings 画面と同じ検証。`jevtrial.ParseArms`）。`codex_chatgpt` のアームは `jev.trial.codex.enabled` がオンのときだけ |
+| `jev.trial.daily_cost_cap_usd` | 文字列（`text`） | お試し記録の全アーム合計の 1 日の費用上限（USD、JST の日）。既定 `0.1`。外す（なしにする）手段は無い | 0 より大きく 100 以下の数 |
+| `jev.trial.codex.enabled` | 文字列（`text`） | ChatGPT サブスク（Codex）のアームを動かすスイッチ。既定 `false` | `true` / `false`（`1` / `0` も可）。`codex_chatgpt` のアームが保存されている間はオフにできない |
+| `jev.trial.codex.daily_call_cap` | 回（`count`） | ChatGPT サブスクの 1 日（JST）の呼び出し回数の上限。既定 30 | 1 以上 10000 以下の整数 |
+| `jev.trial.codex.daily_token_cap` | 回（`count`） | ChatGPT サブスクの 1 日（JST）のトークン数（入力＋出力）の上限。既定 500000 | 1 以上 100000000 以下の整数 |
+- 応答の `value` と `settings_get` の値は、スイッチが `true` / `false`、アームがコンパクトな JSON 配列、上限が数値の文字列。`settings_get` の `default` は `false`・`[]`・`0.1`・`false`・`30`・`500000`。
+- 拒否（`invalid_value`。設定も監査行も残らない）: id の重複・未登録のプロンプト版・9 件目・OpenRouter 以外での `provider_only`／ZDR・Codex アームでの endpoint や USD 上限・`jev.trial.codex.enabled` がオフのままの `codex_chatgpt` アーム・`codex_chatgpt` のアームがあるままの Codex スイッチのオフ・上限 0／100 USD 超／数値でない値・範囲外の Codex の上限・真偽として読めない値。アームが空のままのオンは拒否しない（Settings 画面と同じ）。
+- 上限を外す手段は無い（0 は拒否。未保存なら既定の上限が効く）。ランナーの全体・アーム・Codex の上限、失敗回数の上限（20）、呼び出し間隔、429/529 のクールダウン、停止の記録はそのまま効く。
+- `settings_write_enable` がオフなら `write_disabled`。ホワイトリスト外（停止・失敗・クールダウン・Codex のログインの記録、`ai.role.*`、ライブの Jev の設定、秘密キー）は `key_not_allowed`。
+- 監査: 通った変更は `settings_audit` に `actor=mcp` で残る。Settings 画面のお試しの保存も同じ表に `actor=gui` で残る（`mcpset/jevaudit` の `Trial`。値が変わったキーだけ。空欄の上限は `reset`）。
+- API キー（`OPENROUTER_API_KEY`・`JEV_API_KEY`）の値は読み書きも出力もしない。`jev_trial_cost` の `limits.provider_keys.openrouter.key_set`・`limits.provider_keys.custom.key_set` が bool で保存済みかだけを返す（`secrets` の行の有無だけを問い、値の列は読まない）。ChatGPT サブスクはキーではなく `limits.codex.login`。
+
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-11-13 | 新規 | issue #1060 |
 | 1.1 | 2026-11-15 | `subscription`と`limits.codex`を追加 | issue #1081 |
+| 1.2 | 2026-11-25 | 設定の書き込みの方針を、お試しの操作者向け 6 キーは `settings_set` で変えられる、に改めた。`jev_trial_cost` の `limits.provider_keys`（キーの有無だけの bool）を追加 | issue #1220 |

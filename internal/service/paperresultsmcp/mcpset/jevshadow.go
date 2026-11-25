@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset/trialkeys"
 )
 
 // The Jev shadow's switch and candidate version are on the settings_set
@@ -28,20 +29,26 @@ func isJevShadowKey(key string) bool {
 	return key == jevshadowsettings.KeyEnabled || key == jevshadowsettings.KeyCandidateVersion
 }
 
-// getSetting returns key's effective value through svc, or, for a shadow key,
-// from store.
+// getSetting returns key's effective value through svc, or, for a shadow or a
+// trial key (trialkeys), from store.
 func getSetting(ctx context.Context, store opsettings.Store, svc *opsettings.Service, key string) (opsettings.Value, error) {
 	if isJevShadowKey(key) {
 		return JevShadowValue(ctx, store, key)
+	}
+	if trialkeys.Is(key) {
+		return trialkeys.Value(ctx, store, key)
 	}
 	return svc.Get(ctx, key)
 }
 
 // saveSetting validates raw for key and stores it through svc, or, for a shadow
-// key, into store. now stamps a shadow key's row.
+// or a trial key, into store. now stamps such a key's row.
 func saveSetting(ctx context.Context, store opsettings.Store, svc *opsettings.Service, key, raw string, now time.Time) error {
 	if isJevShadowKey(key) {
 		return saveJevShadow(ctx, store, key, raw, now)
+	}
+	if trialkeys.Is(key) {
+		return trialkeys.Save(ctx, store, key, raw, now)
 	}
 	return svc.Save(ctx, key, raw)
 }

@@ -24,9 +24,11 @@ func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 		"research.index.enabled",                                               // #1084: only the recording switch of the research index values (default off); research.index.symbols is not here
 		"research.tachibana_bars.enabled", "research.tachibana_quotes.enabled", // #1082, #1083: only the two switches of the 立花 research collections (default off); their other keys are Settings-screen only
 		"research.eval.enabled", "research.model.enabled", "research.export.enabled", // #1089, #1092, #1094: only the three switches (default off); the retentions and promotion criteria are not here
+		"jev.trial.enabled", "jev.trial.arms", "jev.trial.daily_cost_cap_usd", // #1220: the お試し記録's switch, arms and overall cap; the halt / failures / throttle records are not here
+		"jev.trial.codex.enabled", "jev.trial.codex.daily_call_cap", "jev.trial.codex.daily_token_cap", // #1220: the Codex switch and its two caps; the Codex halt and login records are not here
 	}
-	if len(want) != 29 {
-		t.Fatalf("the test lists %d keys, issues #1073, #1082, #1083, #1084, #1089, #1092 and #1094 make the whitelist 29", len(want))
+	if len(want) != 35 {
+		t.Fatalf("the test lists %d keys, issues #1073, #1082, #1083, #1084, #1089, #1092, #1094 and #1220 make the whitelist 35", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)
@@ -45,6 +47,10 @@ func TestWhitelistHoldsNothingDangerous(t *testing.T) {
 		"kill", "release", "broker", "system.", "mcp."}
 	for _, key := range mcpwritesettings.Keys() {
 		for _, b := range banned {
+			// The Codex trial's daily cap on LLM tokens is a count, not a credential.
+			if b == "token" && key == "jev.trial.codex.daily_token_cap" {
+				continue
+			}
 			if strings.Contains(key, b) {
 				t.Errorf("whitelisted key %q contains %q", key, b)
 			}

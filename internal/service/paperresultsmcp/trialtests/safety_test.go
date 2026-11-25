@@ -35,8 +35,8 @@ func walkKeys(v any, visit func(key string)) {
 }
 
 // Both tools are registered read-only (annotation), take only the declared arguments, and reach
-// no write: the trial's switch, arms and caps are not on the MCP's settings whitelist.
-func TestTrialToolsAreReadOnlyAndTheTrialSettingsAreNotWritable(t *testing.T) {
+// no write: the runner's stop, failure, throttle and login records are not on the MCP's settings whitelist.
+func TestTrialToolsAreReadOnlyAndTheRunnerStateIsNotWritable(t *testing.T) {
 	srv, w := newServer(t)
 	var env struct {
 		Result struct {
@@ -76,9 +76,18 @@ func TestTrialToolsAreReadOnlyAndTheTrialSettingsAreNotWritable(t *testing.T) {
 		t.Fatalf("found %d trial tools in tools/list, want 2", found)
 	}
 
-	// No trial key is on the write whitelist, and settings_set refuses them without storing anything.
-	keys := append(jevtrialsettings.Keys(), jevtrialsettings.HaltKey(armA), jevtrialsettings.FailuresKey(armA), jevtrialsettings.ThrottleKey(armA))
-	for _, k := range keys {
+	// Only the six operator keys (issue #1220) are on the write whitelist; the runner's
+	// own state is not, and settings_set refuses it without storing anything.
+	runnerState := []string{
+		jevtrialsettings.KeyHalt, jevtrialsettings.KeyCodexHalt, jevtrialsettings.KeyCodexLogin,
+		jevtrialsettings.HaltKey(armA), jevtrialsettings.FailuresKey(armA), jevtrialsettings.ThrottleKey(armA),
+	}
+	for _, k := range jevtrialsettings.Keys() {
+		if !slices.Contains(jevtrialsettings.OperatorKeys(), k) && !slices.Contains(runnerState, k) {
+			t.Errorf("%s is neither an operator key nor runner state: classify it", k)
+		}
+	}
+	for _, k := range runnerState {
 		if mcpwritesettings.IsAllowed(k) {
 			t.Errorf("%s is writable from the MCP", k)
 		}

@@ -3,7 +3,8 @@
 // jev_trial_compare and jev_trial_cost (docs/api/endpoints/paper-results-mcp-jev-trial.md).
 // The SQL and the aggregation are query/trialquery's. Neither tool writes
 // anything: the trial's switch (jev.trial.enabled), its arms and its caps are
-// the Settings screen's, not on the MCP's write whitelist.
+// changed through settings_set (the six keys of jevtrialsettings.OperatorKeys,
+// issue #1220), not through these tools.
 package trialtool
 
 import (
@@ -34,7 +35,8 @@ const CostDescription = "意思決定モデルの比較（お試し）の費用�
 	"reported（応答が報告した費用）・list_price_estimate（定価×トークンの推定）・unknown（どちらも無い。実費は null で 0 円ではない。" +
 	"unknown_counted_usd は上限の判定に数えた最悪値側の額で、他の合計に混ぜない）を出所別に、counted_total_usd（上限の判定に数えた額）。" +
 	"limits に、いまの全体上限・アームごとの上限と今日の数えた額・止まった記録（理由と日だけ）・失敗回数・429/529 の止まり・有効かどうか（enabled）・今日の見送り（呼ばなかった比較）の件数 skipped_today（理由別）を読み取りで返す。" +
-	"設定の変更はできない（有効化・上限・アームは Settings 画面だけ）。API キー・エラー本文・応答本文は返さない"
+	"provider_keys に、プロバイダーごとの API キーが保存済みかを bool（key_set）だけで返す（openrouter・custom。ChatGPT サブスクはキーではなく limits.codex.login）。" +
+	"このツールは設定を変更しない（有効化・アーム・上限は settings_get / settings_set の jev.trial.* の 6 キー。停止の記録や失敗回数の上限などは変えられない）。API キーの値・エラー本文・応答本文は返さない"
 
 // SchemaProperties are the tools' own arguments besides the period.
 func SchemaProperties() map[string]any {

@@ -20,7 +20,7 @@ func TestAIRoleSettingsAreNotWritableFromTheMCP(t *testing.T) {
 	srv, w := settingsServer(t, nil) // the write switch is on by default
 	keys := []string{
 		"ai.role", "ai.role.", "ai.roles", "ai.role.jev.provider", "ai.role.jev.model",
-		config.KeyJevModel, config.KeyJevAPIKey, config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL, "jev.trial.arms",
+		config.KeyJevModel, config.KeyJevAPIKey, config.KeyOpenRouterAPIKey, config.KeyOpenRouterBaseURL,
 	}
 	for _, role := range airole.Roles() {
 		keys = append(keys, airole.Key(role))

@@ -22,7 +22,13 @@
 // not on it) and the on/off switches of the research
 // daily evaluation record, the research model training and the training-dataset
 // export (researchjobsettings, issues #1089, #1092, #1094: only the switches; the
-// retentions and the promotion criteria are not on it). It never holds a Live value
+// retentions and the promotion criteria are not on it) and the お試し記録
+// (jevtrialsettings, issue #1220: exactly the six operator keys,
+// jevtrialsettings.OperatorKeys - switch, arms, overall daily cost cap, Codex
+// switch and its two caps; the stop, failure, throttle and login records are the
+// runner's and are not on it. The trial costs money, so this reverses the earlier
+// "turned on from the Settings screen only" rule: the write switch below and the
+// trial's own caps still apply). It never holds a Live value
 // (policy.long|short.min_entry_quality, the Live thresholds, are not on it),
 // the Paper bootstrap switch, a secret, or anything that orders, moves money or
 // releases the Kill Switch - those have no key in runtime_settings the MCP
@@ -44,6 +50,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -126,6 +133,16 @@ const (
 	shadowCandidateConstraint = "このビルドに登録されている版（jev_shadow_cost の registered_versions）のうち、ライブの版と違うもの"
 )
 
+// The accepted values of the six お試し記録 keys (issue #1220). The writes are
+// validated by mcpset with the Settings screen's own checks (service/jevtrial);
+// these texts only tell a client what to send.
+var (
+	trialEnabledConstraint = "true / false（1 / 0 も可）。アームが空でもオンにできる（その間は何も呼ばない）"
+	trialSwitchConstraint  = "true / false（1 / 0 も可）。オフにできるのは codex_chatgpt のアームが無いときだけ"
+	trialArmsConstraint    = fmt.Sprintf("JSON 配列（空は []）。最大 %d 件・id は重複不可・prompt_version はこのビルドに登録済み。codex_chatgpt のアームは jev.trial.codex.enabled がオンのときだけ保存できる（endpoint・provider_only・USD の上限・定価は使えない）。provider_only と data_collection は openrouter 専用", jevtrialsettings.MaxArms)
+	trialCapConstraint     = fmt.Sprintf("0 より大きく %g 以下の数（USD）", jevshadowsettings.MaxDailyCostCapUSD)
+)
+
 var specs = []Spec{
 	{papersettings.KeyInitialCapitalJPY, UnitYen, "Paper の運用資金（円）。1 銘柄・総エクスポージャ・1 回の最大損失の % はこの金額が基準", "0 円より大きく 1 兆円（1000000000000）以下", false},
 	{papersettings.KeyMaxPositionPerSymbolPct, UnitPercent, "Paper の 1 銘柄あたりの建玉上限（運用資金に対する %）", "0 より大きく 100 以下", false},
@@ -156,6 +173,12 @@ var specs = []Spec{
 	{researchjobsettings.KeyEvalEnabled, UnitText, "Jev の評価の主な数字（日ごと・モデルと版ごとの和と件数）を毎日の引け後に研究専用の表へ 1 行ずつ残す日次記録のオン・オフ。取引には使わない。既定 0（オフ）で、オフの間は何も書かない。保持期間（research.eval.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
 	{researchjobsettings.KeyModelEnabled, UnitText, "特徴量だけで学習する研究用モデル（AI を使わない）の夜間の学習と予測の記録のオン・オフ。予測は研究専用の表に残すだけで取引には使わない。既定 0（オフ）で、オフの間は学習が動かず何も書かない。保持期間（research.model.retention_days）はこの API から変えられない", researchLabelEnabledConstraint, false},
 	{researchjobsettings.KeyExportEnabled, UnitText, "training_dataset_export（学習用データセットの書き出し。ローカルのフォルダへ書くだけで外へは送らない）のオン・オフ。既定 0（オフ）で、オフの間はツールが何も書き出さない", researchLabelEnabledConstraint, false},
+	{jevtrialsettings.KeyEnabled, UnitText, "お試し記録（複数モデルの比較。ライブの判断と同じ状態を各アームのモデルにも聞いて別表に残すだけで、取引には使わない。Paper のみ）のオン・オフ。既定 false（オフ）。アームが空のままオンにしても何も呼ばない。オンにすると jev.trial.arms のアームごとに有料の呼び出しが発生しうる（全体は jev.trial.daily_cost_cap_usd、アームごとは各アームの上限、Codex は回数とトークンの上限で止まる）。失敗回数の上限・呼び出し間隔・429/529 の待機・停止の記録はこの API から変えられない", trialEnabledConstraint, false},
+	{jevtrialsettings.KeyArms, UnitText, "お試し記録のアーム（比べるモデル）の一覧。JSON 配列を丸ごと書き込む（追加・編集・削除・複製はどれも新しい配列全体を送る）。各要素は id・provider（openrouter / custom / codex_chatgpt）・model・prompt_version など。既定は [] （アームなし）。送る前に settings_get の value を取り、変更して返す。Settings 画面と同じ検証をして、通らなければ保存しない", trialArmsConstraint, false},
+	{jevtrialsettings.KeyDailyCostCapUSD, UnitText, "お試し記録の全アーム合計の 1 日の費用上限（USD。JST の日ごと）。到達でその日のお試し全体が止まる。既定 0.1。上限を外す（なしにする）ことはできない", trialCapConstraint, false},
+	{jevtrialsettings.KeyCodexEnabled, UnitText, "お試し記録の ChatGPT サブスク（Codex CLI のログイン。provider が codex_chatgpt のアーム）のオン・オフ。既定 false（オフ）で、オフの間は codex_chatgpt のアームは呼ばれず保存もできない。サブスクは USD ではなく呼び出し回数とトークン数で数える", trialSwitchConstraint, false},
+	{jevtrialsettings.KeyCodexDailyCallCap, UnitCount, "ChatGPT サブスクのお試し呼び出しの 1 日（JST）の回数上限。既定 30。到達でその日のサブスクのアームが止まる", fmt.Sprintf("1 以上 %d 以下の整数", jevtrialsettings.MaxCodexDailyCallCap), false},
+	{jevtrialsettings.KeyCodexDailyTokenCap, UnitCount, "ChatGPT サブスクのお試し呼び出しの 1 日（JST）のトークン数（入力＋出力）上限。既定 500000。到達でその日のサブスクのアームが止まる", fmt.Sprintf("1 以上 %d 以下の整数", jevtrialsettings.MaxCodexDailyTokenCap), false},
 }
 
 // Specs returns the whitelist in display order. The slice is a copy.
@@ -191,12 +214,16 @@ func IsAllowed(key string) bool {
 // one to the whitelist unmarked.
 var secretName = regexp.MustCompile(`(?i)(secret|password|passwd|token|api_?key|private_?key|credential)`)
 
+// notSecretNames are whitelisted keys whose name matches secretName without
+// holding a credential: the Codex trial's daily cap on LLM tokens (a count).
+var notSecretNames = []string{jevtrialsettings.KeyCodexDailyTokenCap}
+
 // IsSecret reports whether key's values must be masked: the key is marked
 // secret or its name looks secret-class. A key that is not on the whitelist
 // is treated as secret (masked by default).
 func IsSecret(key string) bool {
 	s, ok := Lookup(key)
-	return !ok || s.Secret || secretName.MatchString(key)
+	return !ok || s.Secret || (secretName.MatchString(key) && !slices.Contains(notSecretNames, key))
 }
 
 // Mask returns value, or Masked when key is secret-class (IsSecret).

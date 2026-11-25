@@ -45,6 +45,8 @@ func armsMessage(err error) string {
 		return which + " の llm_cutoff は空（未確認）か YYYY-MM-DD の日付にしてください"
 	case jevtrialsettings.ArmsErrEndpoint:
 		return which + " の API の送り先は「既定（/v1/systemone）」か「/alpha/decisions」を選んでください（codex_chatgpt では選べません）"
+	case jevtrialsettings.ArmsErrJSON:
+		return "アームは JSON 配列（要素は id・provider・model・prompt_version など）で指定してください。" + ae.Err.Error()
 	}
 	return "アームの設定が正しくありません"
 }

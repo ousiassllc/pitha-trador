@@ -39,6 +39,8 @@ func TestEveryWhitelistedKeyIsWritable(t *testing.T) {
 		"metalabel.llm_cutoff_confirmed_on": "2026-10-19", "metalabel.llm_cutoff_source": "vendor page",
 		"jev.shadow.candidate_version": "trader-v5", "jev.shadow.enabled": "true",
 		"research.labels.enabled": 1, "research.fx.enabled": 1, "research.index.enabled": 1, "research.tachibana_bars.enabled": 1, "research.tachibana_quotes.enabled": 1, "research.eval.enabled": 1, "research.model.enabled": 1, "research.export.enabled": 1,
+		"jev.trial.enabled": "true", "jev.trial.arms": `[{"id":"a1","provider":"openrouter","model":"vendor/model","prompt_version":"trader-v3"}]`, "jev.trial.daily_cost_cap_usd": 0.25,
+		"jev.trial.codex.enabled": "true", "jev.trial.codex.daily_call_cap": 12, "jev.trial.codex.daily_token_cap": 250000,
 	}
 	// Turning the shadow on needs a candidate, so the candidate goes first.
 	set(srv, t, "jev.shadow.candidate_version", "trader-v5").data(t, "settings_set", &struct{}{})
