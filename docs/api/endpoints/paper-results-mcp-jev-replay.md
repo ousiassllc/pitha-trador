@@ -14,7 +14,7 @@
 | `replay_progress` | 読み取り専用 | run の状態と進み具合（1 件、または新しい順の一覧） |
 | `replay_results` | 読み取り専用 | run の結果。`jev_trial_compare` と同じ指標 |
 
-**書き込みの範囲**: `replay_start` が書くのは `jev_replay_runs` への 1 行の追加、`replay_stop` が書くのは停止フラグだけ。**取引の設定・リスク・資金の値・`settings_set` のキー・リプレイのスイッチ `jev.replay.enabled` には触れない**。`jev.replay.enabled`（既定オフ。行が無い・壊れているときもオフ）は `jev.trial.enabled` と同じく `settings_set` のホワイトリストに**無く**、オンにできるのはアプリの Settings 画面だけ。MCP は外部（OpenRouter）へ**何も送らない**: 呼び出しはアプリ内のランナーが、スイッチがオン・キーあり・アームありのときだけ行う。API キー・応答本文（`response_json`）・エラーの抜粋・エラー本文は**返さない**。
+**書き込みの範囲**: `replay_start` が書くのは `jev_replay_runs` への 1 行の追加、`replay_stop` が書くのは停止フラグだけ。**取引の設定・リスク・資金の値・`settings_set` のキー・リプレイのスイッチ `jev.replay.enabled` には触れない**。`jev.replay.enabled`（既定オフ。行が無い・壊れているときもオフ）は `settings_set` のホワイトリストに**無く**、オンにできるのはアプリの Settings 画面だけ（お試し記録の `jev.trial.*` の 6 キーは issue #1220 でホワイトリストに入ったが、リプレイのスイッチは入れない）。MCP は外部（OpenRouter）へ**何も送らない**: 呼び出しはアプリ内のランナーが、スイッチがオン・キーあり・アームありのときだけ行う。API キー・応答本文（`response_json`）・エラーの抜粋・エラー本文は**返さない**。
 
 - `replay_start` は **MCP の書き込み許可**（`settings_write_enable`）がオフなら `write_disabled`（403）。`replay_stop` は費用を減らすだけの操作なので書き込み許可のスイッチを見ない。
 - 開始の条件は、(a) `jev.replay.enabled` がオン、(b) 動いている・待っている run が無い（**同時に 1 件**）、(c) 呼び出しが 1 件以上、(d) `confirm_token` が**その場で取り直した見積もり**と一致、の全部。(a)(b)(c)(d) のどれかが外れると `invalid_value`（422。`error.data.detail` に理由）で、何も書かない。見積もりの後に判断・アームの設定が変わると (d) で拒否される（**見積もりを経ない開始・上限を超える開始はできない**）。

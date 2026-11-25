@@ -143,7 +143,10 @@ type Limits struct {
 	// Codex is the ChatGPT subscription provider's switch, login, caps and stop
 	// (issue #1081).
 	Codex CodexLimits `json:"codex"`
-	Arms  []ArmLimits `json:"arms"`
+	// ProviderKeys says, per provider, whether its API key is stored (a bool only;
+	// issue #1220).
+	ProviderKeys ProviderKeys `json:"provider_keys"`
+	Arms         []ArmLimits  `json:"arms"`
 }
 
 // CostReport is jev_trial_cost's data.

@@ -81,7 +81,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithMCPWriteGate(mcpGate),
 		router.WithJevPromptSettings(jevaudit.New(jevprompt.New(state.DB), state.DB)),
 		router.WithAIRoleSettings(services.aiRoles.Settings(services.Settings, secretsRepo)),
-		router.WithJevTrialSettings(jevtrial.New(state.DB).WithKeyStore(secretsRepo)),
+		router.WithJevTrialSettings(jevaudit.NewTrial(jevtrial.New(state.DB).WithKeyStore(secretsRepo), state.DB)),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),
 		router.WithHealthAlertSource(services.HealthAlerts),

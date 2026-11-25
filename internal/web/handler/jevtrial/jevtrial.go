@@ -2,8 +2,9 @@
 // section: `GET /settings/jev-trial-panel` and `POST /settings/jev-trial`
 // (switch, arms, overall daily cost cap) and the arm form's add / remove row
 // fragments. Like every POST it passes the session
-// cookie and CSRF check. This is the only route that can turn the trial on:
-// nothing in the MCP writes these settings.
+// cookie and CSRF check. The switch, arms, caps and Codex settings it saves are
+// the six operator keys the MCP's settings_set also writes (issue #1220); the
+// service it is wired to records a save in the MCP's audit log as actor gui.
 package jevtrial
 
 import (

@@ -1,6 +1,7 @@
 package isolationflow_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,10 +64,12 @@ func TestOnlyTheTrialRepositoryTouchesTheTrialTable(t *testing.T) {
 	})
 }
 
-// No trial key can be changed by the self-improvement loop, the MCP or the
-// generic operational Settings path: jev.trial.enabled in particular is turned on
-// from the app's Settings screen only (issue #1059). The trial and shadow key
-// spaces never overlap.
+// No trial key can be changed by the self-improvement loop or the generic
+// operational Settings path. The MCP's settings_set reaches exactly the six
+// operator keys (jevtrialsettings.OperatorKeys, issue #1220: the switch, the arms,
+// the overall cap and the Codex switch and caps); the runner's own state (stop
+// records, failure counters, throttle records, the Codex login) is not writable
+// by it. The trial and shadow key spaces never overlap.
 func TestTrialKeysAreOutsideEveryAutomaticWritePath(t *testing.T) {
 	keys := append(jevtrialsettings.Keys(),
 		jevtrialsettings.HaltKey("a"), jevtrialsettings.FailuresKey("a"), jevtrialsettings.ThrottleKey("a"))
@@ -75,8 +78,8 @@ func TestTrialKeysAreOutsideEveryAutomaticWritePath(t *testing.T) {
 		if err == nil {
 			t.Errorf("ValidatePolicyChanges accepts %q: the self-improvement loop could change it", key)
 		}
-		if mcpwritesettings.IsAllowed(key) {
-			t.Errorf("%q is on the MCP settings_set whitelist: the trial must not be writable by the MCP", key)
+		if operator := slices.Contains(jevtrialsettings.OperatorKeys(), key); mcpwritesettings.IsAllowed(key) != operator {
+			t.Errorf("%q: on the MCP settings_set whitelist = %v, want %v (only the six operator keys)", key, mcpwritesettings.IsAllowed(key), operator)
 		}
 		if opsettings.IsKnownKey(key) {
 			t.Errorf("%q is a generic Settings key", key)

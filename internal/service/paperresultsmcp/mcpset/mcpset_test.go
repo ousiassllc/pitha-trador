@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -221,14 +223,14 @@ func TestPaperCapitalJPY(t *testing.T) {
 
 // Every whitelisted key is one the application's opsettings manages, so a
 // GUI-visible validation exists for it (the MCP never invents its own) - except
-// the two Jev shadow keys, which the Settings screen saves through
-// jevprompt.Service and mcpset validates with the same jevprompt.ValidateCandidate
-// (issue #929); they must stay out of opsettings.
+// the two Jev shadow keys (jevprompt.Service, issue #929) and the six trial keys
+// (jevtrial.Service, issue #1220), which the Settings screen saves through their
+// own services and mcpset validates with the same checks; they stay out of opsettings.
 func TestWhitelistedKeysAreOpsettingsKeys(t *testing.T) {
 	for _, key := range mcpwritesettings.Keys() {
-		shadow := key == jevshadowsettings.KeyEnabled || key == jevshadowsettings.KeyCandidateVersion
-		if known := opsettings.IsKnownKey(key); known == shadow {
-			t.Errorf("%s: opsettings.IsKnownKey = %v, want %v", key, known, !shadow)
+		own := key == jevshadowsettings.KeyEnabled || key == jevshadowsettings.KeyCandidateVersion || slices.Contains(jevtrialsettings.OperatorKeys(), key)
+		if known := opsettings.IsKnownKey(key); known == own {
+			t.Errorf("%s: opsettings.IsKnownKey = %v, want %v", key, known, !own)
 		}
 	}
 }

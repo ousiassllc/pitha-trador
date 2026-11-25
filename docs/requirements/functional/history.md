@@ -199,3 +199,4 @@
 | 1.194 | 2026-11-22 | FR-SCHED-4・FR-SCHED-10 の PUSH 板の鮮度上限を、古い「直近30秒（`pushfeed.BoardMaxAge`）」から、FR-FE-7 と同じ「`Feed.BoardMaxAge`＝Settings の `scan.snapshot_max_age_seconds`。未設定は `pushfeed.DefaultBoardMaxAge`＝20秒」に訂正（issue #754 で 30 秒 → 20 秒に変えたときの取り残し。立花の `event.MaxEventAge` の30秒は別の値で変更なし。要件・実装は変更なし） | issue #1190 |
 | 1.195 | 2026-11-22 | FR-SCHED-2・FR-SCHED-7 の「窓の基準バーの許容」の参照先を、OFI の FR-FE-6 から定義のある FR-FE-5 に訂正（issue #750 で FR-FE-6 を挿入したときの参照の取り残し。FR-ID の番号・内容は変更なし） | issue #1193 |
 | 1.196 | 2026-11-22 | FR-MCP-17 の `attention_codes[]` の列挙と受け入れ条件を、実装（`query.AttentionCodes()`）の 11 個（`partial_session`・`order_proposal_stalled` を追加）に訂正し、FR-MCP-32 の「9 種」を FR-MCP-17 の 11 個への参照にした（要件・挙動は変更なし） | issue #1194 |
+| 1.197 | 2026-11-25 | FR-MCP-20 のホワイトリストを 29 → 35 キーにした（お試し記録 `jev.trial.*` の操作者向け 6 キー）。「お試しは Settings 画面だけがオンにできる」規則をこの 6 キーについて改め、FR-MCP-24 のコメントと FR-MCP-37 の記述を合わせ、受け入れ条件を追加（issue #1220） |

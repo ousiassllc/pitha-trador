@@ -3,11 +3,14 @@
 // cost cap, today's and the total counted cost, and per arm the cost, failures
 // and stop reasons of today) and saves the switch, the arms and the cap.
 //
-// The trial costs money and runs only in Paper, so the Settings screen is the
-// one place that can turn it on: nothing in the MCP (mcpwritesettings) writes
-// these keys, and nothing in the self-improvement loop or the trading flow calls
-// this package. It stores the runtime_settings keys of jevtrialsettings, which
-// the runner (internal/service/jev/trial) reads; it never imports the runner.
+// The trial costs money and runs only in Paper. Its six operator keys
+// (jevtrialsettings.OperatorKeys) are on the MCP's settings_set whitelist
+// (issue #1220), validated by this package's rules (ValidateArms, ParseArms,
+// ValidateCap, ValidateCodex) and gated by the MCP's write switch; the Settings
+// screen saves the same keys and records them in the same audit log
+// (mcpset/jevaudit). Nothing in the self-improvement loop or the trading flow
+// calls this package. It stores the runtime_settings keys of jevtrialsettings,
+// which the runner (internal/service/jev/trial) reads; it never imports the runner.
 package jevtrial
 
 import (
@@ -95,6 +98,15 @@ type Service struct {
 	results  *judgement.TrialRepository
 	keys     KeyStore
 	now      func() time.Time
+}
+
+// WithSettings returns a copy of s that reads and writes the runtime settings
+// through store (typically a repository over a transaction), so a change can
+// commit together with its audit row (mcpset/jevaudit). Validation is unchanged.
+func (s *Service) WithSettings(store *system.RuntimeSettingsRepository) *Service {
+	c := *s
+	c.settings = store
+	return &c
 }
 
 // New returns a Service over the application database.
@@ -195,6 +207,22 @@ func ValidateArms(arms []jevtrialsettings.Arm) (string, error) {
 	return jevtrialsettings.EncodeArms(arms)
 }
 
+// ParseArms decodes the arms from the JSON text of jev.trial.arms (the MCP's
+// settings_set value) and checks them as ValidateArms does. It returns the arms
+// and the value to store. A text that is not a JSON array of arms is refused the
+// same way (ErrInvalidInput).
+func ParseArms(jsonValue string) ([]jevtrialsettings.Arm, string, error) {
+	arms, err := jevtrialsettings.ParseArms(jsonValue)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %s", ErrInvalidInput, armsMessage(err))
+	}
+	value, err := ValidateArms(arms)
+	if err != nil {
+		return nil, "", err
+	}
+	return arms, value, nil
+}
+
 // SetArms saves the arms (nil or empty for none). An arm of the ChatGPT
 // subscription is refused while the provider's own switch is off (Save checks it
 // against the form's switch instead).
@@ -204,7 +232,7 @@ func (s *Service) SetArms(ctx context.Context, arms []jevtrialsettings.Arm) erro
 		return err
 	}
 	cfg := jevtrialsettings.Load(ctx, s.settings)
-	if err := validateCodex(Form{CodexEnabled: cfg.Codex.Enabled}, arms); err != nil {
+	if err := ValidateCodex(Form{CodexEnabled: cfg.Codex.Enabled}, arms); err != nil {
 		return err
 	}
 	return s.settings.Set(ctx, jevtrialsettings.KeyArms, value, s.now())

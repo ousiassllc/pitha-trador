@@ -43,10 +43,12 @@ func (s *Service) codexStatus(ctx context.Context, cfg jevtrialsettings.CodexSet
 	return st, nil
 }
 
-// validateCodex checks the Codex part of the form against the arms: an arm of the
+// ValidateCodex checks the Codex part of the form against the arms: an arm of the
 // ChatGPT subscription is saved only while the provider's own switch is on in the
-// same form, so nothing can start a Codex call before a person turned it on.
-func validateCodex(f Form, arms []jevtrialsettings.Arm) error {
+// same form, so nothing can start a Codex call before a person turned it on. The
+// MCP's per-key writes (mcpset) call it with a form holding only the part they
+// change, so they are refused for the same reasons as the screen.
+func ValidateCodex(f Form, arms []jevtrialsettings.Arm) error {
 	if f.CodexCallCap != nil || f.CodexTokenCap != nil {
 		calls, tokens := jevtrialsettings.DefaultCodexDailyCallCap, jevtrialsettings.DefaultCodexDailyTokenCap
 		if f.CodexCallCap != nil {

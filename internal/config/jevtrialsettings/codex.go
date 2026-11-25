@@ -16,8 +16,9 @@ import (
 const ProviderCodexChatGPT = "codex_chatgpt"
 
 // Keys of the Codex provider's runtime_settings rows. All of them are provider
-// wide (every codex_chatgpt arm shares one ChatGPT account and one login), and
-// none is on the MCP's write whitelist.
+// wide (every codex_chatgpt arm shares one ChatGPT account and one login). The
+// switch and the two caps are on the MCP's write whitelist (issue #1220); the
+// halt and login records are the runner's and are not.
 const (
 	// KeyCodexEnabled is the Codex provider's own switch: the JSON integer 1 (on)
 	// or 0 (off). OFF while nothing is stored or the stored value is damaged. With
@@ -225,6 +226,12 @@ func loadCodex(rd *reader) CodexSettings {
 		}
 	}
 	return c
+}
+
+// ParseCodexEnabled decodes the runtime_settings value of KeyCodexEnabled (the
+// JSON integer 0 or 1).
+func ParseCodexEnabled(jsonValue string) (bool, error) {
+	return parseSwitch(KeyCodexEnabled, jsonValue)
 }
 
 func parseSwitch(key, jsonValue string) (bool, error) {

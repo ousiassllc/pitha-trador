@@ -29,14 +29,16 @@ var trialImportTargets = []string{"internal/service/jevtrial", "internal/service
 // the reason. Anything else (a new package that reaches the trial) must be
 // added here on purpose; an entry that no longer imports one fails too.
 var allowedTrialImporters = map[string]string{
-	"internal/bootstrap":             "wires the runner and the Settings service into the app",
-	"internal/bootstrap/airolewire":  "builds the trial arms' provider connections (trial.Keys) from the AI provider layer (issue #1080)",
-	"internal/web/handler/jevtrial":  "the Settings screen's trial section (service/jevtrial)",
-	"internal/web/handler/settings":  "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
-	"internal/service/jev/trial":     "the runner builds its arms from trialwire and codexwire",
-	"internal/service/jev/codexwire": "the Codex client answers with a trialwire.Response and reuses its request state",
-	"internal/service/jevreplay":     "the replay evaluation prices, stores and calls the trial's arms like the runner (issue #1085)",
-	"internal/bootstrap/replaywire":  "wires the replay runner over the trial's arm callers and keys (issue #1085)",
+	"internal/bootstrap":                                "wires the runner and the Settings service into the app",
+	"internal/bootstrap/airolewire":                     "builds the trial arms' provider connections (trial.Keys) from the AI provider layer (issue #1080)",
+	"internal/web/handler/jevtrial":                     "the Settings screen's trial section (service/jevtrial)",
+	"internal/web/handler/settings":                     "reads trialwire.DefaultBaseURL for the OPENROUTER_BASE_URL hint only",
+	"internal/service/jev/trial":                        "the runner builds its arms from trialwire and codexwire",
+	"internal/service/paperresultsmcp/mcpset/trialkeys": "validates the trial's six operator keys for settings_set with the Settings service's own checks (issue #1220)",
+	"internal/service/paperresultsmcp/mcpset/jevaudit":  "records the Settings screen's trial save in the MCP's audit log (issue #1220)",
+	"internal/service/jev/codexwire":                    "the Codex client answers with a trialwire.Response and reuses its request state",
+	"internal/service/jevreplay":                        "the replay evaluation prices, stores and calls the trial's arms like the runner (issue #1085)",
+	"internal/bootstrap/replaywire":                     "wires the replay runner over the trial's arm callers and keys (issue #1085)",
 }
 
 // liveRoots are the live decision path, Risk, order placement, RAG, Calibration

@@ -6,7 +6,7 @@
 
 ライブの Jev（TypeSafe AI）の判断と**同じ入力**を、別のモデル（**アーム**）にも聞き、答えと費用と失敗を並べて残す、Paper 専用の**比較用の記録**。ライブの採否・発注・RAG・較正・メタモデルには**一切入らない**。既存の Jev プロンプトのシャドー（`internal/service/jev/shadow`、`jev_shadow_decisions`、`jev.shadow.*`）とは**別系統**で、表・ランナー・設定キー・API キー・HTTP クライアントを共有しない（シャドーの挙動は変えない）。
 
-- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jevtrial` / `internal/web/handler/jevtrial` / `internal/web/organisms/jevtrial`（Settings 画面のトライアルカード。オンにできる唯一の経路）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/service/jev/codexwire`（ChatGPT のサブスクのアームの Codex CLI クライアント。issue #1081）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
+- 実装: `internal/service/jev/trial`（ランナー）・`internal/service/jevtrial` / `internal/web/handler/jevtrial` / `internal/web/organisms/jevtrial`（Settings 画面のトライアルカード。MCP の `settings_set` と同じ 6 キーを保存し、同じ監査表に `actor=gui` で残す。issue #1220）・`internal/service/jev/trialwire`（アームの HTTP クライアント）・`internal/service/jev/codexwire`（ChatGPT のサブスクのアームの Codex CLI クライアント。issue #1081）・`internal/config/jevtrialsettings`（`jev.trial.*`）・`internal/repository/judgement/trial_repo.go`（`jev_trial_decisions`）・`internal/domain/jevtrial`。
 - **多数決・合議・「採用すべきアーム」・自動昇格は作らない**。MCP の出力にも無い。比較して何を選ぶかは人が決める。
 
 ## フロー
@@ -84,7 +84,7 @@
 
 ## 設定
 
-すべて `runtime_settings` のキーで、**既定はオフ・空**。**書けるのはアプリの Settings 画面だけ**で、MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）には入れず、自己改善ループ（Sol/Opus）の `policy.*` にも入らない（`shadowflow/shadow_isolation_test.go`・`isolationflow` のテストで固定）。トライアルは費用がかかるため、MCP 経由で有効化できない。
+すべて `runtime_settings` のキーで、**既定はオフ・空**。**操作者が変えるのは 6 キー**（`jev.trial.enabled`・`jev.trial.arms`・`jev.trial.daily_cost_cap_usd`・`jev.trial.codex.enabled`・`jev.trial.codex.daily_call_cap`・`jev.trial.codex.daily_token_cap`。`jevtrialsettings.OperatorKeys()`）で、Settings 画面と MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）の両方から書ける（issue #1220。以前は「オンにできるのは Settings 画面だけ」としていたが、調整は MCP 経由が基本という方針に合わせて改めた）。同じ検証（`jevtrial.ParseArms`・`ValidateCap`・`ValidateCodex`）を保存前に掛け、MCP からの保存は書き込み許可（`settings_write_enable`）に従い、どちらの経路の保存も `mcp_settings_audit` に残る（画面は `actor=gui`）。既定の上限（全体 0.10 USD・アーム 0.05 USD・Codex 30 回／500000 トークン）と、ランナーの上限・失敗回数の上限・呼び出し間隔・停止記録は変えず、停止記録・失敗回数・429/529 の記録・Codex のログイン記録のキーは MCP に出さない。自己改善ループ（Sol/Opus）の `policy.*` には入らない（`shadowflow/shadow_isolation_test.go`・`isolationflow` のテストで固定）。API キーは MCP から読み書きしない。
 
 | キー | 既定 | 意味 |
 |------|------|------|
@@ -148,7 +148,7 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 |------|--------|
 | 取引・リスク・約定・出口・メタラベル・RAG・特徴量・較正・自己改善・バックテスト・ブローカー・取引系リポジトリは、トライアルの表・リポジトリ・設定・ランナーを名前でも参照しない | `internal/service/jev/isolationflow` の `TestTrialIsNotReferencedByTradingRAGCalibrationOrTraining` |
 | `jev_trial_decisions` を名指しするのは `internal/repository/judgement/trial_repo.go` だけ | 同 `TestOnlyTheTrialRepositoryTouchesTheTrialTable` |
-| トライアルのキーは自己改善ループ（`ValidatePolicyChanges`）・MCP の `settings_set`・汎用の運用設定のどれでも書けず、`jev.shadow.*` と重ならない | 同 `TestTrialKeysAreOutsideEveryAutomaticWritePath` |
+| トライアルのキーは自己改善ループ（`ValidatePolicyChanges`）・汎用の運用設定のどれでも書けず、MCP の `settings_set` が書けるのは操作者向けの 6 キーだけ（停止・失敗・クールダウン・ログインの記録は書けない）で、`jev.shadow.*` と重ならない | 同 `TestTrialKeysAreOutsideEveryAutomaticWritePath` |
 | ランナー・ワイヤ層は取引・学習のパッケージを import せず、ライブ Jev のシークレットを読まない | 同 `TestTrialRunnerImportsNoTradingPackageAndReadsNoLiveJevSecret` |
 | ライブの判断経路（Jev 本体・プロンプト・判断の保存）・Risk・発注・RAG・較正・メタモデルは、トライアル側（`internal/service/jevtrial` / `internal/service/jev/trial` / `internal/service/jev/trialwire` / `internal/service/jev/codexwire`）を、直接にも他のパッケージ経由でも import しない。トライアル側を import してよいのは、許可リスト（`internal/bootstrap`・`internal/web/handler/jevtrial`・`internal/web/handler/settings`・`internal/service/jev/trial`。理由はテストに明記）の中だけで、リストに載るのに import しなくなった項目もテストが落ちる | 同 `TestLivePathDoesNotImportTheTrial`（import グラフは `internal/` と `cmd/` の本番ソースから読む） |
 | トライアル側のパッケージは、取引・学習のパッケージに加え、発注（`execution`・`broker`）と注文案の経路（`proposalexec`・`proposalstore`・`paperresultsmcp/proposal`）を直接 import しない（推移的には見ない。ワイヤ層はライブ Jev のプロンプトのパッケージの上に載り、それが Risk の上にあるため） | 同 `TestTrialPackagesImportNoTradingOrOrderPlacementPackage` |
@@ -168,3 +168,4 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | 1.3 | 2026-11-15 | アームの`provider`に`codex_chatgpt`（ChatGPT のサブスク。USD では数えず、呼び出し回数・トークン数の上限、プロバイダー単位の停止）、`cost_source=subscription`、見送りの理由 7 件、`jev.trial.codex.*`のキーを追加。詳細は`integrations-codex-chatgpt.md`。ライブ側からの import を禁じる対象に`codexwire`を追加 | issue #1081 |
 | 1.4 | 2026-11-15 | Settings のアーム入力を、JSON のテキストエリアから 1 アーム 1 カードのフォーム（追加・編集・削除）に変更。検証は保存済み JSON と同じ`jevtrialsettings.ValidateArms`に一本化し、1 つでも不正なら何も保存しない。提供元は openrouter・custom・codex_chatgpt から選べる（main の #1080・#1081 と合流） | issue #1066 |
 | 1.5 | 2026-11-22 | シャドーのテストの参照を、#1173 で `evalflow/` から移された実在のパス `shadowflow/shadow_isolation_test.go` に直し、「`evalflow` ディレクトリが行数の上限に達していたため」の理由の記述を外した（実装の変更は無い） | issue #1207 |
+| 1.6 | 2026-11-25 | 操作者向け 6 キーを MCP の `settings_set`／`settings_get` から読み書きできるようにした（「Settings 画面がオンにできる唯一の経路」の規則を改めた）。Settings 画面の保存も `actor=gui` で監査表に残す | issue #1220 |

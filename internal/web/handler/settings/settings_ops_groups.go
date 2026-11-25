@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
@@ -194,12 +195,19 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 	}
 }
 
-// jevShadowFieldLabels are the names of the two MCP-changeable settings that are
-// not operational settings (opsGroups) but the Jev prompt panel's own fields
-// (issue #929): the labels that panel gives them.
-var jevShadowFieldLabels = map[string]string{
-	jevshadowsettings.KeyEnabled:          "シャドーを有効にする",
-	jevshadowsettings.KeyCandidateVersion: "シャドーの候補の版",
+// panelFieldLabels are the names of the MCP-changeable settings that are not
+// operational settings (opsGroups) but the own fields of the Jev prompt panel
+// (issue #929) and of the model-comparison trial panel (issue #1220): the labels
+// those panels give them.
+var panelFieldLabels = map[string]string{
+	jevshadowsettings.KeyEnabled:           "シャドーを有効にする",
+	jevshadowsettings.KeyCandidateVersion:  "シャドーの候補の版",
+	jevtrialsettings.KeyEnabled:            "トライアルを有効にする",
+	jevtrialsettings.KeyArms:               "トライアルのアーム",
+	jevtrialsettings.KeyDailyCostCapUSD:    "トライアル全体の 1 日の費用上限（USD）",
+	jevtrialsettings.KeyCodexEnabled:       "ChatGPT サブスク（Codex）を有効にする",
+	jevtrialsettings.KeyCodexDailyCallCap:  "ChatGPT サブスクの 1 日の呼び出し回数の上限",
+	jevtrialsettings.KeyCodexDailyTokenCap: "ChatGPT サブスクのトークン数の上限（入力＋出力）",
 }
 
 // FieldLabel is the name the Settings screen gives the operational setting
@@ -208,7 +216,7 @@ var jevShadowFieldLabels = map[string]string{
 // LONG and SHORT Paper entry quality) is led by its group's name, so the two
 // stay apart. A key no group lists is not printed.
 func FieldLabel(key string) string {
-	if label, ok := jevShadowFieldLabels[key]; ok {
+	if label, ok := panelFieldLabels[key]; ok {
 		return label
 	}
 	group, ok := opsGroupByKey(key)

@@ -109,7 +109,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		"state_json", "response_json", "params_json", "features_json", "payload_json", "last_error", "detail_json",
 		"encrypted_value", "current_price", "unrealized_pnl", "slippage_bps", "limit_price"}
 	for _, stmt := range counter.StatementLog() {
-		if strings.TrimSpace(stmt) == settingRead {
+		if trimmed := strings.TrimSpace(stmt); trimmed == settingRead || trimmed == "SELECT EXISTS (SELECT 1 FROM secrets WHERE key = ?)" { // the latter: jev_trial_cost's key_set (#1220), no column selected
 			continue
 		}
 		// jobs.last_error is read only through a bounded head (issue #801):

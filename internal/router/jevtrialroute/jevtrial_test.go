@@ -1,8 +1,8 @@
 // Package jevtrialroute holds the router-level tests of the Settings screen's
 // model-comparison trial section: the card, the panel with the switch, the arms
-// and the cap, that the form is the only way to turn the trial on, that every
-// state change needs the session and CSRF token, and that a rejected form saves
-// nothing.
+// and the cap, that every state change needs the session and CSRF token, that a
+// rejected form saves nothing and that a save is recorded in the MCP's audit log
+// (issue #1220; the trial's six operator keys are also written by the MCP).
 package jevtrialroute_test
 
 import (
@@ -26,6 +26,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevtrial"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset/jevaudit"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -64,6 +65,7 @@ type app struct {
 	t        *testing.T
 	engine   *gin.Engine
 	db       *sql.DB
+	dbPath   string
 	settings *system.RuntimeSettingsRepository
 	cookie   *http.Cookie
 	csrf     string
@@ -75,17 +77,19 @@ func newApp(t *testing.T) *app { return newAppWithKeys(t, nil) }
 func newAppWithKeys(t *testing.T, keys jevtrial.KeyStore) *app {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	db, err := sqlitedb.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	svc := jevtrial.New(db)
+	plain := jevtrial.New(db)
 	if keys != nil {
-		svc.WithKeyStore(keys)
+		plain.WithKeyStore(keys)
 	}
+	svc := jevaudit.NewTrial(plain, db) // as wired in production (internal/bootstrap/router_options.go)
 	svc.SetClock(func() time.Time { return time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC) })
-	a := &app{t: t, db: db, settings: system.NewRuntimeSettingsRepository(db)}
+	a := &app{t: t, db: db, dbPath: dbPath, settings: system.NewRuntimeSettingsRepository(db)}
 	a.engine = router.New(router.WithSecretsStore(fullSecrets{}), router.WithJevTrialSettings(svc))
 	page := httptest.NewRecorder()
 	a.engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/setup", nil))

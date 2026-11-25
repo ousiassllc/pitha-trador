@@ -182,3 +182,30 @@ func (f failingStore) Get(ctx context.Context, key string) (string, bool, error)
 	}
 	return f.fakeStore.Get(ctx, key)
 }
+
+// Issue #1220: the keys an operator sets (and the MCP may write) are exactly six, all
+// arm-less keys of Keys; the runner's stop, failure, throttle and login records are not among them.
+func TestOperatorKeys_AreSixAndExcludeTheRunnersState(t *testing.T) {
+	op := jevtrialsettings.OperatorKeys()
+	if len(op) != 6 {
+		t.Fatalf("OperatorKeys = %v, want 6", op)
+	}
+	all := jevtrialsettings.Keys()
+	for _, k := range op {
+		found := false
+		for _, a := range all {
+			found = found || a == k
+		}
+		if !found {
+			t.Errorf("%s is not in Keys", k)
+		}
+	}
+	for _, k := range []string{jevtrialsettings.KeyHalt, jevtrialsettings.KeyCodexHalt, jevtrialsettings.KeyCodexLogin,
+		jevtrialsettings.HaltKey("a"), jevtrialsettings.FailuresKey("a"), jevtrialsettings.ThrottleKey("a")} {
+		for _, o := range op {
+			if o == k {
+				t.Errorf("%s is the runner's state but an operator key", k)
+			}
+		}
+	}
+}

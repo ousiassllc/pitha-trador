@@ -30,7 +30,7 @@ func (s *Service) Save(ctx context.Context, f Form) error {
 			return err
 		}
 	}
-	if err := validateCodex(f, f.Arms); err != nil {
+	if err := ValidateCodex(f, f.Arms); err != nil {
 		return err
 	}
 	// Turning the trial off comes first, so a later write that fails cannot leave

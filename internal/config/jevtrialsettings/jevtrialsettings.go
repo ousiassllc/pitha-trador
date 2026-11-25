@@ -10,9 +10,15 @@
 //
 // The keys live in runtime_settings and are read by the application
 // (jev/trial.Trial, the Settings screen) and by the Paper results MCP, which
-// share the database but not memory. None of them is on the MCP's settings_set
-// whitelist (mcpwritesettings): the trial costs money, so turning it on is done
-// on the Settings screen only. The overall cap and the arms likewise.
+// share the database but not memory. Six of them, OperatorKeys (the switch, the
+// arms, the overall cap and the Codex switch and caps), are on the MCP's
+// settings_set whitelist (mcpwritesettings, issue #1220): the operator tunes the
+// trial through the MCP, the Settings screen being the fallback, under the same
+// validation (service/jevtrial) and the MCP's write switch. The runner's own
+// state - the stop records, failure counters, throttle records and the Codex
+// login record - is never on it. This reverses the earlier rule that the trial
+// could be turned on from the Settings screen only; the order-proposal switch
+// (mcp.order_proposals_enabled) still follows that rule.
 package jevtrialsettings
 
 import (
@@ -54,6 +60,14 @@ const KeyPrefix = "jev.trial."
 func Keys() []string {
 	return []string{KeyEnabled, KeyArms, KeyDailyCostCapUSD, KeyHalt,
 		KeyCodexEnabled, KeyCodexDailyCallCap, KeyCodexDailyTokenCap, KeyCodexHalt, KeyCodexLogin}
+}
+
+// OperatorKeys returns the keys an operator sets (the switch, the arms, the
+// overall cap and the Codex switch and caps): exactly the ones on the MCP's
+// settings_set whitelist. Every other key of Keys, and every per-arm key, is
+// written by the runner and never by the MCP.
+func OperatorKeys() []string {
+	return []string{KeyEnabled, KeyArms, KeyDailyCostCapUSD, KeyCodexEnabled, KeyCodexDailyCallCap, KeyCodexDailyTokenCap}
 }
 
 // HaltKey, FailuresKey and ThrottleKey are arm's per-arm keys.

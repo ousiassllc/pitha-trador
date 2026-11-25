@@ -7,7 +7,7 @@
 // damaged) the sources send no request and write nothing. The keys live in
 // runtime_settings only (no yaml or environment source) and none of them is on
 // the Paper results MCP's settings_set whitelist (mcpwritesettings): turning a
-// source on is done on the Settings screen only, as `jev.trial.enabled` is.
+// source on is done on the Settings screen only, as `mcp.order_proposals_enabled` is.
 // The MCP reads them (disclosure_sources_status) but cannot write them.
 package disclosuresrcsettings
 
