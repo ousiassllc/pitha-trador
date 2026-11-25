@@ -31,6 +31,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/backtesttool"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
@@ -253,3 +254,14 @@ func (s *Server) Writer() (*mcpset.Writer, error) {
 // ActiveCalls reports how many tool calls hold a concurrency slot (running
 // or waiting for the connection). It is for diagnostics and tests.
 func (s *Server) ActiveCalls() int { return len(s.slots) }
+
+// freshRead opens a second read-only handle of its own, for a tool that must
+// see a commit made after its call's transaction began (the update tools wait
+// for the application's answer). The returned function closes it.
+func (s *Server) freshRead() (query.Q, func(), error) {
+	db, err := readdb.OpenWith(s.opts.DriverName, s.opts.DBPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	return db, func() { _ = db.Close() }, nil
+}

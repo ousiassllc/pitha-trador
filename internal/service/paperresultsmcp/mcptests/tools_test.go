@@ -52,6 +52,7 @@ var exportTools = []string{"training_dataset_export"}                           
 // researchTools (issues #1086 / #1087): backtest_start and the virtual Paper profile create / stop write one research row each; the rest read.
 var researchTools = []string{"backtest_start", "backtest_get", "backtest_list", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed", "virtual_paper_compare"}
 var researchNoteTools = []string{"research_note_create", "research_note_update", "research_notes_list", "research_note_get", "fx_series_summary", "index_series_summary"} // #1095 / #1084: two notes writes, two reads, the FX and index summaries
+var updateTools = []string{"update_status", "update_check_now", "update_apply"}                                                                                           // #1222: one read, two that ask the application (pinned in updatetests)
 
 // writingTools are the tools that change state; every other tool is annotated read-only.
 var writingTools = []string{
@@ -59,7 +60,7 @@ var writingTools = []string{
 	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 	"experiment_create", "experiment_close",
 	"jev_prompt_promote", "replay_start", "replay_stop", "training_dataset_export", "research_note_create", "research_note_update",
-	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed",
+	"backtest_start", "virtual_paper_profile_create", "virtual_paper_profile_stop", "virtual_paper_rerun_failed", "update_check_now", "update_apply",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {
@@ -83,8 +84,7 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the read tools (allTools) and the fixed tool sets (settings, order-proposal, experiment, Jev prompt, research status, replay, export,
-// research and research-note / FX tools); writingTools is the list of writing tools, and every other tool is read-only.
+// tools/list returns exactly the read tools (allTools) and the fixed tool sets (settings, order-proposal, experiment, Jev prompt, research status, replay, export, research, research-note / FX and update tools); writingTools lists the writing tools, every other tool is read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -112,12 +112,12 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchStatusTools, replayTools, exportTools, researchTools, researchNoteTools)
+	want := slices.Concat(allTools, settingsTools, proposalTools, experimentTools, jevShadowTools, researchStatusTools, replayTools, exportTools, researchTools, researchNoteTools, updateTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchStatusTools)+len(replayTools)+len(exportTools)+len(researchTools)+len(researchNoteTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools)+len(experimentTools)+len(jevShadowTools)+len(researchStatusTools)+len(replayTools)+len(exportTools)+len(researchTools)+len(researchNoteTools)+len(updateTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -132,7 +132,7 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) || slices.Contains(replayTools, name) || slices.Contains(exportTools, name) || slices.Contains(researchTools, name) || slices.Contains(researchNoteTools, name) {
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) || slices.Contains(replayTools, name) || slices.Contains(exportTools, name) || slices.Contains(researchTools, name) || slices.Contains(researchNoteTools, name) || slices.Contains(updateTools, name) {
 			continue // their reach is pinned in settingstests, proposaltests, replaytests and exporttests
 		}
 		if !slices.Contains(allTools, name) {

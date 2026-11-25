@@ -61,3 +61,4 @@
 | 1.54 | 2026-11-22 | §5 の「`runtime_settings` を書けるのは…だけ」の列挙に、`jev_prompt_promote` が書くライブ版のキー`jev.trader_prompt_version`（ホワイトリスト外。§7.3 ⑥）を加え、書き込みは §7.3 の書き込みツールの狭い 1 トランザクションだけと言い直した（実装の変更は無い） | issue #1201 |
 | 1.55 | 2026-11-22 | §5 の分割章の参照 2 件（`paper-results-mcp-dataset-export.md`・`paper-results-mcp-jev-slices.md`）を、実在するパス（`research-tools/` の下）に直した（実装の変更は無い） | issue #1203 |
 | 1.56 | 2026-11-25 | §7.1 のホワイトリストを 29 → 35 個にし、お試しの 6 キーと検証（`mcpset/trialkeys`）を追記。「費用の上限は Settings 画面だけ」をシャドーのものに限定（issue #1220） |
+| 1.57 | 2026-11-25 | 分割章 `update-tools/paper-results-mcp-update.md`（自動更新のツール 3 つ。アプリの `mcpbridge` と DB の受け渡し）を追加し、ツール数を 65 → 68 にした | issue #1222 |

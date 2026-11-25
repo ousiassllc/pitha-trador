@@ -76,6 +76,7 @@ erDiagram
 | `docs/architecture/er/research-tools/tables-research-fx.md` | `research_fx_candles` / `research_fx_days`（研究用の為替 1 分足: GMOコイン 外国為替FX の BID・ASK を開始時刻で 1 行にまとめた足と、取引日ごとの取得済みの印。市場休みと欠けを区別する。取引に使わない。マイグレーション `000068`。issue #1084） |
 | `docs/architecture/er/research-tools/tables-research-index.md` | `research_index_minutes` / `research_index_days`（研究用の指数の 1 分値: 立花の日中の時価の記録 `research_quote_samples` に残った指数コード（日経平均 `101`・TOPIX `151` など）の行を立会の分ごとに写した値と、立会日ごとの確認済みの印。取れていない日と欠けを区別する。取引に使わない。マイグレーション `000069`。issue #1084） |
 | `docs/architecture/er/research-tools/tables-research-notes.md` | `research_notes` / `research_note_versions`（研究ノート: 問い・仮説・やったこと・結果・結論・根拠リンク・タグと、更新のたびに追記される版。取引に使わない。issue #1095） |
+| `docs/architecture/er/update-tools/tables-update-control.md` | `update_control_status` / `update_control_requests`（デスクトップアプリの自動更新を別プロセスの Paper 実績 MCP から見る・動かすための受け渡し: アプリが公開する状態 1 行と、MCP の確認・導入の依頼。`update_apply` の行は導入の監査を兼ねる。取引に使わない。マイグレーション `000071`。issue #1222） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-ai-roles.md` | `ai_role_history`（AI の役割ごとのプロバイダー・モデルを画面で変えた履歴と、起動時に使い始めた組。役割の設定は`runtime_settings`の`ai.role.<role>`。issue #1080） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `session_diagnostics_daily` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
@@ -202,3 +203,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.104 | 2026-11-22 | `er/research-tools/tables-research-fx.md`の冒頭の参照パスを、実在する`architecture/research-tools/paper-results-mcp-research-fx.md`と`api/endpoints/research-tools/paper-results-mcp-research-fx.md`に直した（`research-tools/`への移動時の参照漏れ。表定義は変えない） | issue #1188 |
 | 1.105 | 2026-11-22 | `er/tables-jev-replay.md` の `cost_source` を、リプレイに Codex アームが無く CHECK が 3 値（`subscription` を許可しない）ことに合わせて訂正（表定義は変えない）。#1160 の修正時に履歴へ追記が漏れていた分 | issue #1160 |
 | 1.106 | 2026-11-22 | `er/tables-system.md`の`runtime_settings`の説明の「`opsettings.Keys()`は計33件」（#733 当時の値）を、件数を外して「許可キーの一次情報は`opsettings.Keys()`」に改めた（実装は149件。表定義は変えない） | issue #1205 |
+| 1.107 | 2026-11-25 | マイグレーション000071を追加し、`er/update-tools/tables-update-control.md`を新設して`update_control_status`（アプリが公開する自動更新の状態。1 行）・`update_control_requests`（MCP の確認・導入の依頼と、導入の監査）を追加。書くのはアプリの`updater/mcpbridge`と MCP の依頼の INSERT・取り下げだけ | issue #1222 |

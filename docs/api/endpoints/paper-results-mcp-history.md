@@ -58,3 +58,4 @@
 | 1.53 | 2026-11-22 | `research-tools/paper-results-mcp-experiments-labels.md` に、変更前が未設定のキーの実験の `before` を `（未設定）` と記録する旨を追記（改訂履歴は同章の 1.2。実装の変更は無い） | issue #1191 |
 | 1.54 | 2026-11-22 | §3.38 `disclosure_sources_status`・§3.39 `jquants_status` の分割章（`paper-results-mcp-disclosure-sources.md`・`paper-results-mcp-jquants.md`）の「ツールの登録」の参照を、存在しない `disclosure_sources_tool.go`・`jquants_tool.go` から実在する `jev_models_tool.go` に直した（実装の変更は無い） | issue #1208 |
 | 1.55 | 2026-11-25 | §3.10 のホワイトリストを 29 → 35 キーにし、お試しの 6 キーの表と検証・拒否・監査・API キーの扱いを追記。`jev_trial_cost` の `limits.provider_keys`（issue #1220） |
+| 1.56 | 2026-11-25 | §3.52（`update_status` / `update_check_now` / `update_apply`。分割章 `update-tools/paper-results-mcp-update.md`）を追加し、合計を 65 → 68 にした | issue #1222 |
