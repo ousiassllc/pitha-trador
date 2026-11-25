@@ -29,6 +29,17 @@ func (r *rig) panicLogin(n int) {
 	tt.Eventually(r.t, func() bool { return r.pc.Fired() == 1 })
 }
 
+// waitRestartArmed waits until the loop has armed the delay before the next
+// restart (a timer created after created was read). The panic is counted
+// before that timer exists, and advancing the clock in between would fire
+// nothing. The panic of the last restart ends the loop: no timer follows it.
+func (r *rig) waitRestartArmed(created, restart int) {
+	r.t.Helper()
+	if restart < guard.MaxRestarts {
+		r.clk.WaitCreated(r.t, created)
+	}
+}
+
 // restartBackoff is the delay before restart number n (1-based).
 func restartBackoff(n int) time.Duration {
 	d := guard.BackoffMin
@@ -73,9 +84,11 @@ func TestSessionLoopPanicRetriesUpToTheLimit(t *testing.T) {
 		if r.a.Status().Issue == broker.SessionIssueStopped {
 			t.Fatalf("stopped before restart %d", restart)
 		}
+		created := r.clk.Created()
 		r.clk.Advance(time.Nanosecond)
 		want := restart + 1
 		tt.Eventually(t, func() bool { return r.pc.Fired() == want })
+		r.waitRestartArmed(created, restart)
 	}
 	if got := r.pc.Fired(); got != guard.MaxRestarts+1 {
 		t.Errorf("panics = %d, want 1 + %d restarts", got, guard.MaxRestarts)
@@ -88,9 +101,11 @@ func TestSessionLoopStopsPastTheLimit(t *testing.T) {
 	r := newRig(t, tt.AtJST(2026, 10, 8, 10, 0))
 	r.panicLogin(guard.MaxRestarts + 1)
 	for restart := 1; restart <= guard.MaxRestarts; restart++ {
+		created := r.clk.Created()
 		r.clk.Advance(restartBackoff(restart))
 		want := restart + 1
 		tt.Eventually(t, func() bool { return r.pc.Fired() == want })
+		r.waitRestartArmed(created, restart)
 	}
 
 	tt.Eventually(t, func() bool { return r.a.Status().Issue == broker.SessionIssueStopped })
