@@ -49,7 +49,7 @@ erDiagram
 | checked_at | text | NULL可 | 最後の確認が終わった時刻。未確認は NULL |
 | dev_build / no_release / available / blocked / ready | integer | NOT NULL, CHECK IN (0, 1) | `updater.Status` の同名のフラグ |
 | latest_version | text | NOT NULL, 既定 '' | `available` のときの最新リリースのタグ |
-| blocked_kind | text | NOT NULL, CHECK IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed') | `updater.BlockKind`。`blocked` でなければ '' |
+| blocked_kind | text | NOT NULL, CHECK IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'market_hours') | `updater.BlockKind`（`market_hours`＝取引日の JST 9:00〜15:30。MCP の `update_apply` だけが待つ条件で、アプリが公開する行にだけ入る）。`blocked` でなければ '' |
 | error_kind | text | NOT NULL, CHECK IN ('', 'network', 'rate_limit', 'access', 'verification', 'release', 'other') | `updater.ErrorKind`。失敗していなければ '' |
 
 ## update_control_requests
@@ -65,7 +65,7 @@ MCP の依頼。1 依頼 1 行。`update_apply` の行は導入の依頼の**監
 | requested_at | text | NOT NULL | 依頼時刻（RFC3339 UTC） |
 | state | text | NOT NULL, 既定 'pending', CHECK IN ('pending', 'running', 'done') | アプリが着手すると `running`、終えると `done` |
 | outcome | text | NOT NULL, 既定 '', CHECK IN ('', 'checked', 'check_failed', 'accepted', 'deferred', 'expired') | `done` のときの結果。`expired`＝アプリが着手する前に MCP が取り下げた、またはアプリが 30 秒以上待った依頼を実行せず捨てた |
-| reason | text | NOT NULL, 既定 '', CHECK IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'not_ready') | `deferred` の理由（SafeGate の種別、`not_ready`＝検証済みのインストーラーが無い） |
+| reason | text | NOT NULL, 既定 '', CHECK IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'market_hours', 'not_ready') | `deferred` の理由（SafeGate の種別、`market_hours`＝取引日の JST 9:00〜15:30、`not_ready`＝検証済みのインストーラーが無い） |
 | finished_at | text | NULL可 | `done` にした時刻 |
 
 インデックス: `(state, id)`（アプリが 1 秒ごとに `state='pending'` を読み取りだけで探す。見つかったときだけ `UPDATE ... RETURNING` で確保する）。
@@ -77,3 +77,4 @@ MCP の依頼。1 依頼 1 行。`update_apply` の行は導入の依頼の**監
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-25 | 新規作成（マイグレーション 000071） | issue #1222 |
+| 1.1 | 2026-11-25 | `blocked_kind`・`reason` の CHECK に `market_hours` を追加（000071 を直接変更。未リリース） | issue #1222 |

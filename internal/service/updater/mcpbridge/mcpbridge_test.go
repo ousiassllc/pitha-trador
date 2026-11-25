@@ -88,7 +88,13 @@ func newRig(t *testing.T) *rig {
 // run starts a bridge and returns a function that stops it and waits.
 func (r *rig) run(t *testing.T) (stop func()) {
 	t.Helper()
-	b := mcpbridge.New(mcpbridge.Config{Store: r.store, Checker: r.checker, Quitter: r.quit, Version: "v0.1.0", Now: func() time.Time { return now }, Tick: 10 * time.Millisecond})
+	return r.runAt(t, now)
+}
+
+// runAt is run with the bridge's clock fixed at clock.
+func (r *rig) runAt(t *testing.T, clock time.Time) (stop func()) {
+	t.Helper()
+	b := mcpbridge.New(mcpbridge.Config{Store: r.store, Checker: r.checker, Quitter: r.quit, Version: "v0.1.0", Now: func() time.Time { return clock }, Tick: 10 * time.Millisecond})
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -222,5 +228,85 @@ func TestBridgePublishesKindsAndRetiresOnStop(t *testing.T) {
 	stop()
 	if _, ok, err := updatecontrol.ReadStatus(t.Context(), r.db); err != nil || ok {
 		t.Errorf("status after stop: present=%v err=%v, want withdrawn", ok, err)
+	}
+}
+
+func jst(y int, m time.Month, d, h, min int) time.Time {
+	return time.Date(y, m, d, h, min, 0, 0, time.FixedZone("JST", 9*60*60))
+}
+
+// The 立会時間帯 (a trading day's JST 9:00-15:30, lunch break included) defers
+// update_apply with market_hours even though SafeGate passes; outside it, or on
+// a day the exchange is closed, SafeGate alone decides. SafeGate's own kind
+// wins over market_hours when both hold the install back.
+func TestBridgeApplyDefersDuringMarketHours(t *testing.T) {
+	const holiday = 23 // 2026-11-23 Mon, 勤労感謝の日
+	cases := []struct {
+		name       string
+		clock      time.Time
+		safe       bool
+		wantReason string // "" = accepted
+	}{
+		{"morning session", jst(2026, 11, 25, 9, 0), true, "market_hours"},
+		{"lunch break", jst(2026, 11, 25, 12, 0), true, "market_hours"},
+		{"last minute", jst(2026, 11, 25, 15, 29), true, "market_hours"},
+		{"before open", jst(2026, 11, 25, 8, 59), true, ""},
+		{"at close", jst(2026, 11, 25, 15, 30), true, ""},
+		{"evening", jst(2026, 11, 25, 20, 0), true, ""},
+		{"weekday holiday at noon", jst(2026, 11, holiday, 10, 0), true, ""},
+		{"saturday at noon", jst(2026, 11, 28, 10, 0), true, ""},
+		{"holiday, SafeGate blocks", jst(2026, 11, holiday, 10, 0), false, "kill_switch"},
+		{"market hours, SafeGate blocks", jst(2026, 11, 25, 10, 0), false, "kill_switch"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t)
+			r.checker.result = updater.Result{Ready: true, Version: "v0.2.0", InstallerPath: "/x"}
+			r.checker.status = updater.Status{Available: true, Version: "v0.2.0", Ready: true}
+			r.checker.safe = c.safe // the fake's check does not consult it
+			r.runAt(t, c.clock)
+			if req := r.await(t, r.enqueue(t, updatecontrol.KindCheck, c.clock)); req.Outcome != updatecontrol.OutcomeChecked {
+				t.Fatalf("check = %+v", req)
+			}
+			req := r.await(t, r.enqueue(t, updatecontrol.KindApply, c.clock))
+			if c.wantReason == "" {
+				if req.Outcome != updatecontrol.OutcomeAccepted || r.quit.calls() != 1 {
+					t.Errorf("apply = %+v, quits %d, want accepted and one quit", req, r.quit.calls())
+				}
+				return
+			}
+			if req.Outcome != updatecontrol.OutcomeDeferred || req.Reason != c.wantReason || r.quit.calls() != 0 {
+				t.Errorf("apply = %+v, quits %d, want deferred/%s and no quit", req, r.quit.calls(), c.wantReason)
+			}
+		})
+	}
+}
+
+// During the 立会時間帯 the published status says a release is held back for
+// market_hours (what update_status shows); SafeGate's kind keeps precedence,
+// and outside the hours nothing is added.
+func TestBridgePublishesMarketHoursAsBlockedKind(t *testing.T) {
+	cases := []struct {
+		name        string
+		clock       time.Time
+		status      updater.Status
+		wantBlocked bool
+		wantKind    string
+	}{
+		{"available during hours", jst(2026, 11, 25, 10, 0), updater.Status{Available: true, Version: "v0.2.0", Ready: true}, true, "market_hours"},
+		{"nothing available", jst(2026, 11, 25, 10, 0), updater.Status{}, false, ""},
+		{"SafeGate kind wins", jst(2026, 11, 25, 10, 0), updater.Status{Available: true, Version: "v0.2.0", Blocked: true, BlockedKind: updater.BlockRecentOrder}, true, "recent_order"},
+		{"after close", jst(2026, 11, 25, 16, 0), updater.Status{Available: true, Version: "v0.2.0", Ready: true}, false, ""},
+		{"holiday", jst(2026, 11, 23, 10, 0), updater.Status{Available: true, Version: "v0.2.0", Ready: true}, false, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t)
+			r.checker.status = c.status
+			r.runAt(t, c.clock)
+			if got := r.awaitStatus(t); got.Blocked != c.wantBlocked || got.BlockedKind != c.wantKind {
+				t.Errorf("published blocked=%v kind=%q, want %v / %q", got.Blocked, got.BlockedKind, c.wantBlocked, c.wantKind)
+			}
+		})
 	}
 }

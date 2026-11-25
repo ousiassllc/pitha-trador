@@ -13,7 +13,8 @@
 --   checked_at       最後の確認が終わった時刻。まだ確認していなければ NULL。
 --   dev_build / no_release / available / blocked / ready  updater.Status の同名のフラグ（0/1）。
 --   latest_version   available のときの最新リリースのタグ。それ以外は空。
---   blocked_kind     SafeGate が止めた条件（updater.BlockKind）。blocked でなければ空。
+--   blocked_kind     導入を止めている条件（updater.BlockKind。SafeGate の種別と、MCP の update_apply だけが待つ market_hours＝
+--                    取引日の JST 9:00〜15:30）。blocked でなければ空。
 --   error_kind       最後の確認の失敗の種別（updater.ErrorKind）。失敗していなければ空。
 --   生のエラー文・インストーラーのパス・URL・公開鍵は持たない（種別だけ。Settings のパネルと同じ方針、issue #241）。
 --
@@ -26,7 +27,8 @@
 --   state         'pending'（未着手）／'running'（アプリが着手）／'done'。
 --   outcome       'checked'／'check_failed'（確認の結果。種別は status 側）、'accepted'／'deferred'（導入の結果）、
 --                 'expired'（アプリが一定時間内に着手せず、取り下げた）。done になるまで空。
---   reason        deferred の理由（SafeGate の種別、'not_ready'＝検証済みのインストーラーが無い）。それ以外は空。
+--   reason        deferred の理由（SafeGate の種別、'market_hours'＝取引日の JST 9:00〜15:30、'not_ready'＝検証済みの
+--                 インストーラーが無い）。それ以外は空。
 --   finished_at   done にした時刻。
 -- update_apply はアプリが着手する前に MCP が待ち切れなかったとき、pending のまま取り下げる（遅れて導入が動かない）。
 CREATE TABLE update_control_status (
@@ -40,7 +42,7 @@ CREATE TABLE update_control_status (
     latest_version TEXT NOT NULL DEFAULT '',
     blocked INTEGER NOT NULL CHECK (blocked IN (0, 1)),
     blocked_kind TEXT NOT NULL DEFAULT ''
-        CHECK (blocked_kind IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed')),
+        CHECK (blocked_kind IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'market_hours')),
     ready INTEGER NOT NULL CHECK (ready IN (0, 1)),
     error_kind TEXT NOT NULL DEFAULT ''
         CHECK (error_kind IN ('', 'network', 'rate_limit', 'access', 'verification', 'release', 'other'))
@@ -56,7 +58,7 @@ CREATE TABLE update_control_requests (
     outcome TEXT NOT NULL DEFAULT ''
         CHECK (outcome IN ('', 'checked', 'check_failed', 'accepted', 'deferred', 'expired')),
     reason TEXT NOT NULL DEFAULT ''
-        CHECK (reason IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'not_ready')),
+        CHECK (reason IN ('', 'open_positions', 'kill_switch', 'recent_order', 'check_failed', 'market_hours', 'not_ready')),
     finished_at TEXT
 );
 

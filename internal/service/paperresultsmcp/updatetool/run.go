@@ -67,7 +67,7 @@ func checkState(req updatecontrol.Request) string {
 // applyData is update_apply's data.
 type applyData struct {
 	Result string `json:"result"`
-	// Reason is set for a deferral: a SafeGate kind, not_ready, unavailable or timeout.
+	// Reason is set for a deferral: a SafeGate kind, market_hours, not_ready, unavailable or timeout.
 	Reason     string `json:"reason,omitempty"`
 	ReasonText string `json:"reason_text,omitempty"`
 	RequestID  int64  `json:"request_id,omitempty"`

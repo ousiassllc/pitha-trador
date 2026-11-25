@@ -6,6 +6,7 @@
 
 - 既存のアップデーターを再利用する。GitHub の取得・署名（ed25519 の分離署名）とチェックサムの検証・URL とサイズの制限・SafeGate・`dev` ビルドのスキップ・`checkMu` の直列化は、`Checker.CheckForUpdate` のまま。導入は `cmd/desktop` の `QuitForUpdate`（`OnShutdown` が `mcpwire.Stop` と `Services.Stop` のあとにインストーラーを起動する）のまま。MCP 側で再実装しない。
 - 専用の設定キーは増やさない（更新は `runtime_settings` ではなく `Checker` が持つ状態）。
+- 追加（issue #1222 の決定 2026-11-25）: MCP の `update_apply` は、SafeGate の 3 条件に加えて、**取引日の JST 9:00〜15:30（昼休みを含む）は導入せず `deferred`（理由 `market_hours`）** を返す。立会・取引日の判定は新設せず `marketcalendar.TSE`（`OpenAt`・`CloseAt`。休場日は `IsTradingDay` が偽）を使う（`updater.InMarketHours`）。対象は MCP の `update_apply` だけで、`SafeGate` 自体・周期確認・Settings の「今すぐ確認」の自動導入は変えない。
 - SafeGate の条件（ポジション 0・Kill Switch 非発動・直近の発注から 5 分以上）・署名必須・URL / サイズ制限・`dev` ビルドのスキップ・6 時間周期とバックオフ再試行（issue #240）・Paper 発注・Risk・ガードは変えない。
 
 ## 2. プロセス境界
@@ -43,8 +44,9 @@ sequenceDiagram
 ## 3. 確認と導入を分ける
 
 - `update_check_now` の依頼は `Checker.CheckForUpdate` だけを呼び、`QuitForUpdate` は呼ばない。結果の `Result{Ready, InstallerPath}` は `Bridge` がメモリに持つ（`Status` にはパスが無い）。**導入できるのは `Bridge` 自身の確認が検証したインストーラーだけ**。
-- `update_apply` の依頼: ① `Bridge` が検証済みのインストーラーを持ち `Status` が今も同じ版で `Ready` か（違えば `deferred`/`not_ready`）、② `Checker.SafeToUpdate`（`SafeGate` を導入の直前にもう一度評価）、保留なら `deferred`/種別、③ 通ったら**結果（`accepted`）を DB に記録してから** `QuitForUpdate`（MCP は終了手順の最初に止まるため、記録を先にしないと呼び出し側が結果を読めない。記録に失敗したら導入しない）。
+- `update_apply` の依頼: ① `Bridge` が検証済みのインストーラーを持ち `Status` が今も同じ版で `Ready` か（違えば `deferred`/`not_ready`）、② `Checker.SafeToUpdate`（`SafeGate` を導入の直前にもう一度評価）、保留なら `deferred`/種別、②' SafeGate が通ったうえで取引日の立会時間帯（`updater.InMarketHours`）なら `deferred`/`market_hours`（SafeGate の種別が先）、③ 通ったら**結果（`accepted`）を DB に記録してから** `QuitForUpdate`（MCP は終了手順の最初に止まるため、記録を先にしないと呼び出し側が結果を読めない。記録に失敗したら導入しない）。
 - 署名・チェックサムの検証に失敗したリリースは `Checker` がインストーラーを残さず、`ErrorVerification` が `Status` に残る。`Bridge` は Ready を持たないので `update_apply` は `not_ready`。署名を飛ばす手段は無い。
+- `update_status` の理由にも出すため、`Bridge` は公開する状態の行だけ、`Available` で SafeGate の保留でないときに立会時間帯なら `Blocked`/`market_hours` として書く（`Checker.Status` は変えないので、Settings のパネルと周期確認の再試行（`UpdatePending`）には影響しない）。
 - アプリ自身の自動更新の契約は変えない。MCP の `update_check_now` のあとに `Status.Ready` が残っても、スケジューラーの周期確認は今までどおり Ready なら導入しうる。`settings_write_enable` が効くのは MCP 起点の `update_apply` だけ。
 
 ## 4. 書き込み許可・監査・取り下げ
@@ -66,3 +68,4 @@ sequenceDiagram
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-11-25 | 新規作成 | issue #1222 |
+| 1.1 | 2026-11-25 | MCP の `update_apply` に取引日の JST 9:00〜15:30 の保留（`market_hours`）を追加。`update_status` の `blocked_kind` にも出す。周期確認・Settings の自動導入は変えない | issue #1222（悠太さんの決定） |

@@ -25,7 +25,7 @@
 | `current_version` | 動いているアプリの版（`internal/version.Version`。リリースでないビルドは `dev`）。コミットは埋め込まれていないので出さない |
 | `latest_version` | 最後の確認で見た最新リリースのタグ。新しい版があるときだけ |
 | `available` / `blocked` / `ready` / `dev_build` / `no_release` | `updater.Status` の同名のフラグ。`ready` は検証済みのインストーラーがあること |
-| `blocked_kind` / `blocked_reason` | SafeGate の保留の種別（`open_positions` / `kill_switch` / `recent_order` / `check_failed`）と、Settings と同じ文言。`blocked` のときだけ |
+| `blocked_kind` / `blocked_reason` | 導入を止めている条件の種別（SafeGate の `open_positions` / `kill_switch` / `recent_order` / `check_failed`、と、取引日の立会時間帯 JST 9:00〜15:30 の `market_hours`）と、Settings と同じ文言。`blocked` のときだけ。SafeGate の種別が先で、SafeGate が通っているのに立会時間帯のときだけ `market_hours`（`blocked_reason` は「取引時間中（9:00〜15:30）のため」）。立会時間帯の `market_hours` は MCP の `update_status` にだけ出る表示で、`Checker.Status`・Settings の更新パネル・周期確認の保留（`blocked`）は変わらない |
 | `checked_at` | 最後の確認が終わった時刻（RFC3339 UTC）。未確認なら省略 |
 | `error_kind` / `error_reason` | 最後の確認が失敗したときの種別（`network` / `rate_limit` / `access` / `verification` / `release` / `other`）と、Settings と同じ文言 |
 | `last_apply` | 直近の `update_apply` の依頼（監査。`requested_at` / `actor`（`mcp`）/ `client` / `result`（`accepted` / `deferred` / `expired` / `pending`）/ `reason`）。依頼が無ければ省略 |
@@ -39,7 +39,7 @@
 | キー | 内容 |
 |---|---|
 | `result` | `accepted`（導入を受け付けた。応答のあとアプリは通常の終了手順に入り、MCP は先に止まり、インストーラーが起動する）／`deferred`（導入しなかった。アプリは終了しない）／`pending`（アプリが着手したが、この呼び出しの間に結果が出なかった。`update_status` の `last_apply` で見る） |
-| `reason` / `reason_text` | `deferred` の理由: SafeGate の種別（`open_positions` / `kill_switch` / `recent_order` / `check_failed`。導入の直前に評価し直す）、`not_ready`（検証済みのインストーラーが無い。署名・チェックサムの検証に失敗した場合も含む。先に `update_check_now`）、`unavailable`（アップデーターが無い）、`timeout`（アプリが 2 秒以内に着手せず、依頼を取り下げた。あとから導入されることはない） |
+| `reason` / `reason_text` | `deferred` の理由: SafeGate の種別（`open_positions` / `kill_switch` / `recent_order` / `check_failed`。導入の直前に評価し直す）、`market_hours`（取引日の JST 9:00〜15:30。昼休みを含む。SafeGate が通っていても導入しない。立会・取引日の判定は `internal/service/marketcalendar` の `TSE`。土日・祝日・年末年始の休場日は時間帯に関係なく SafeGate だけで判定する）、`not_ready`（検証済みのインストーラーが無い。署名・チェックサムの検証に失敗した場合も含む。先に `update_check_now`）、`unavailable`（アップデーターが無い）、`timeout`（アプリが 2 秒以内に着手せず、依頼を取り下げた。あとから導入されることはない） |
 | `request_id` | 記録した依頼の ID（`unavailable` のときは無い） |
 
 エラー: 書き込み許可がオフの `update_apply` は `write_disabled`（403）。確認も導入も依頼の記録（監査行）もしない。ほかは `docs/architecture/paper-results-mcp-errors.md` の共通のコード。
@@ -47,7 +47,7 @@
 挙動の要点:
 
 - 導入されるのは、**この MCP の `update_check_now` が（アプリの `Checker` を通して）ダウンロードし検証した**インストーラーだけ。署名検証・チェックサム・URL とサイズの制限に通らなかったリリースは今どおり導入されず、`error_kind=verification` などとして状態に残る（署名を飛ばす手段は無い）。
-- `update_check_now` のあとに `ready` が残った場合でも、アプリ自身の自動更新の契約は変わらない（スケジューラーの周期確認は、Ready なら今までどおり導入しうる）。`settings_write_enable` が効くのは MCP 起点の `update_apply` だけ。
+- `update_check_now` のあとに `ready` が残った場合でも、アプリ自身の自動更新の契約は変わらない（スケジューラーの周期確認は、Ready なら今までどおり導入しうる）。立会時間帯の保留（`market_hours`）は MCP の `update_apply` だけに掛かり、周期確認と Settings の「今すぐ確認」の自動導入は変えない。`settings_write_enable` が効くのは MCP 起点の `update_apply` だけ。
 - 通った・保留になった `update_apply` は、`actor=mcp`・`client`（接続元ホスト）・時刻・結果を `update_control_requests` に残す（`er/update-tools/tables-update-control.md`）。書き込みオフの拒否は何も残さない。
 
 #### 例（実際の応答。テストの偽の GitHub・偽の QuitForUpdate での出力）
@@ -106,6 +106,34 @@
 
 ```json
 {"id":1,"jsonrpc":"2.0","result":{"structuredContent":{"data":{"reason":"open_positions","reason_text":"ポジションを保有しているため","request_id":2,"result":"deferred"},"tool":"update_apply"},"isError":false,"content":"（structuredContent の JSON を text にしたもの）"}}
+```
+
+`update_apply`（取引日の立会時間帯 JST 9:00〜15:30。SafeGate が通っていても導入しない。アプリは終了しない）:
+
+リクエスト:
+
+```json
+{"id":1,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{},"name":"update_apply"}}
+```
+
+レスポンス（HTTP 200）:
+
+```json
+{"id":1,"jsonrpc":"2.0","result":{"structuredContent":{"data":{"reason":"market_hours","reason_text":"取引時間中（9:00〜15:30）のため","request_id":2,"result":"deferred"},"tool":"update_apply"},"isError":false,"content":"（structuredContent の JSON を text にしたもの）"}}
+```
+
+`update_status`（同じ立会時間帯。確認済みの新しい版があり、`market_hours` で保留される。上の `update_apply` のあと）:
+
+リクエスト:
+
+```json
+{"id":1,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{},"name":"update_status"}}
+```
+
+レスポンス（HTTP 200）:
+
+```json
+{"id":1,"jsonrpc":"2.0","result":{"structuredContent":{"data":{"available":true,"blocked":true,"blocked_kind":"market_hours","blocked_reason":"取引時間中（9:00〜15:30）のため","checked_at":"2026-11-25T09:55:30Z","current_version":"v0.1.0","dev_build":false,"last_apply":{"actor":"mcp","client":"127.0.0.1","reason":"market_hours","requested_at":"2026-11-25T01:00:00Z","result":"deferred"},"latest_version":"v0.2.0","no_release":false,"ready":true,"unavailable":false},"tool":"update_status"},"isError":false,"content":"（structuredContent の JSON を text にしたもの）"}}
 ```
 
 `update_apply`（書き込み許可がオフ。何も実行・記録しない）:

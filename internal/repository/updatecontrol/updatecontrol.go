@@ -49,7 +49,7 @@ const (
 // status (the application is gone and left its row behind).
 const StaleAfter = time.Minute
 
-// ReasonNotReady is the deferral reason "no verified installer yet" (the SafeGate kinds are the other reasons).
+// ReasonNotReady is the deferral reason "no verified installer yet" (the SafeGate kinds and updater.BlockMarketHours are the other reasons).
 const ReasonNotReady = "not_ready"
 
 // Reader is satisfied by *sql.DB and *sql.Tx.

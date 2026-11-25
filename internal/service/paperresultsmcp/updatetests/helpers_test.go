@@ -152,6 +152,7 @@ type stack struct {
 	gate    *gateInputs
 	quit    *quitter
 	checker *updater.Checker
+	now     time.Time // the clock of the MCP server and the bridge
 }
 
 func newChecker(gh *github, gate *gateInputs) *updater.Checker {
@@ -166,19 +167,26 @@ func newChecker(gh *github, gate *gateInputs) *updater.Checker {
 // application's side runs too (published status, requests executed).
 func newStack(t *testing.T, current, latest string, bridge bool) *stack {
 	t.Helper()
+	return newStackAt(t, current, latest, bridge, testkit.FixedNow())
+}
+
+// newStackAt is newStack with the clock of the MCP server and the bridge fixed
+// at now (testkit.FixedNow is a Sunday, outside the 立会時間帯).
+func newStackAt(t *testing.T, current, latest string, bridge bool, now time.Time) *stack {
+	t.Helper()
 	setVersion(t, current)
 	path, db := testkit.NewMigratedDB(t) // before TMPDIR moves: the template database is built once, in the first test's temp dir
 	tmp := t.TempDir()                   // the installer downloads land here and go with the test
 	t.Setenv("TMPDIR", tmp)
 	t.Setenv("TMP", tmp)
 	t.Setenv("TEMP", tmp)
-	st := &stack{db: db, gh: newGitHub(t, latest), gate: &gateInputs{}, quit: &quitter{}}
+	st := &stack{db: db, gh: newGitHub(t, latest), gate: &gateInputs{}, quit: &quitter{}, now: now}
 	st.checker = newChecker(st.gh, st.gate)
 
 	cfg := settings.Default()
 	cfg.Enabled, cfg.APIKey = true, testAPIKey
 	srv := paperresultsmcp.New(paperresultsmcp.Options{
-		Settings: cfg, DBPath: path, CapitalJPY: 30_000_000, Now: testkit.FixedNow,
+		Settings: cfg, DBPath: path, CapitalJPY: 30_000_000, Now: func() time.Time { return st.now },
 		Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)),
 	})
 	st.srv = httptest.NewServer(srv.Handler())
@@ -196,7 +204,7 @@ func (st *stack) runBridge(t *testing.T) {
 	t.Helper()
 	b := mcpbridge.New(mcpbridge.Config{
 		Store: updatecontrol.New(st.db), Checker: st.checker, Quitter: st.quit,
-		Now: testkit.FixedNow, Tick: 20 * time.Millisecond,
+		Now: func() time.Time { return st.now }, Tick: 20 * time.Millisecond,
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

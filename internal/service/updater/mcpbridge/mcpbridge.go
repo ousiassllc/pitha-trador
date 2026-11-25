@@ -10,8 +10,10 @@
 // install only through the application's own QuitForUpdate, and only for an
 // installer that this bridge's own check downloaded and verified (signature,
 // checksum, URL and size rules all live in the Checker), after SafeGate is
-// evaluated again. The scheduler's own behavior is unchanged: a periodic check
-// that finds a Ready installer still quits at once.
+// evaluated again and only outside a trading day's 立会時間帯 (JST 9:00-15:30,
+// updater.InMarketHours; deferred with BlockMarketHours otherwise, issue #1222).
+// The scheduler's own behavior is unchanged: a periodic check that finds a
+// Ready installer still quits at once.
 //
 // cmd/server has no updater and never starts a bridge, so the MCP finds no
 // published status there and says the build has no updater.
@@ -132,8 +134,8 @@ func (b *Bridge) publishLoop(ctx context.Context) {
 func (b *Bridge) publish(ctx context.Context, force bool) {
 	b.pubMu.Lock()
 	defer b.pubMu.Unlock()
-	st := b.cfg.Checker.Status()
 	now := b.cfg.Now()
+	st := b.marketHoursStatus(b.cfg.Checker.Status(), now)
 	if !force && b.published && st == b.last && now.Sub(b.lastAt) < b.cfg.Heartbeat {
 		return
 	}
@@ -144,6 +146,19 @@ func (b *Bridge) publish(ctx context.Context, force bool) {
 		return
 	}
 	b.last, b.lastAt, b.published = st, now, true
+}
+
+// marketHoursStatus is st as update_status must show it: a release that
+// update_apply would defer for the 立会時間帯 is Blocked with BlockMarketHours,
+// unless SafeGate's own kind already holds it back (SafeGate is evaluated
+// first). Only the published row carries this; Checker.Status, which the
+// periodic check and the Settings panel read, is unchanged.
+func (b *Bridge) marketHoursStatus(st updater.Status, now time.Time) updater.Status {
+	if st.Available && !st.Blocked && updater.InMarketHours(now) {
+		st.Blocked = true
+		st.BlockedKind = updater.BlockMarketHours
+	}
+	return st
 }
 
 // row is st as the published row: kinds only, never LastError.
@@ -250,7 +265,7 @@ func (b *Bridge) apply(ctx context.Context, req updatecontrol.Request, finish fu
 		_ = finish(updatecontrol.OutcomeDeferred, updatecontrol.ReasonNotReady)
 		return
 	}
-	if safe, why := b.cfg.Checker.SafeToUpdate(ctx); !safe {
+	if safe, why := b.safeToApply(ctx); !safe {
 		slog.Info("update bridge: apply deferred by safety gate", "kind", string(why.Kind), "detail", why.Detail)
 		_ = finish(updatecontrol.OutcomeDeferred, string(why.Kind))
 		return
@@ -266,6 +281,18 @@ func (b *Bridge) apply(ctx context.Context, req updatecontrol.Request, finish fu
 	b.mu.Unlock()
 	slog.Info("update bridge: install requested through the MCP", "version", ready.Version, "client", req.Client)
 	b.cfg.Quitter.QuitForUpdate(ready.InstallerPath)
+}
+
+// safeToApply is SafeGate's three conditions, then the 立会時間帯 that only the
+// MCP's update_apply waits for (issue #1222).
+func (b *Bridge) safeToApply(ctx context.Context) (bool, updater.BlockReason) {
+	if safe, why := b.cfg.Checker.SafeToUpdate(ctx); !safe {
+		return false, why
+	}
+	if updater.InMarketHours(b.cfg.Now()) {
+		return false, updater.BlockReason{Kind: updater.BlockMarketHours, Detail: "trading hours: JST 09:00-15:30 on a trading day"}
+	}
+	return true, updater.BlockReason{}
 }
 
 // stillReady is true while the Checker's status still reports the installer

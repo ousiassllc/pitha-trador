@@ -12,6 +12,8 @@ func BlockedReason(kind BlockKind) string {
 		return "Kill Switch が発動しているため"
 	case BlockRecentOrder:
 		return "直近に発注があったため"
+	case BlockMarketHours:
+		return "取引時間中（9:00〜15:30）のため"
 	case BlockCheckFailed:
 		return "安全条件を確認できなかったため"
 	default:

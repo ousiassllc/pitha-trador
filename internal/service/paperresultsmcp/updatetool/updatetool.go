@@ -49,7 +49,7 @@ func statusDef() tooldef.Def {
 	return tooldef.Def{
 		Name: "update_status",
 		Description: "デスクトップアプリの自動更新の状態（読み取り専用）。今のアプリの版 current_version、最後に見た最新リリース latest_version、" +
-			"available / blocked / ready / dev_build / no_release、SafeGate の保留の種別 blocked_kind と理由 blocked_reason（Settings と同じ文言）、" +
+			"available / blocked / ready / dev_build / no_release、導入を止めている条件の種別 blocked_kind（SafeGate の open_positions / kill_switch / recent_order / check_failed と、取引日の 9:00〜15:30 の market_hours）と理由 blocked_reason（Settings と同じ文言）、" +
 			"最終確認時刻 checked_at、失敗の種別 error_kind と理由 error_reason、直近の update_apply の結果 last_apply を返す。" +
 			"アップデーターが無いビルド、またはアプリが動いていないときは unavailable=true（エラーにはならない）。生のエラー文・パス・URL・鍵は出さない",
 		Schema:   tooldef.ObjectSchema(map[string]any{}),
@@ -79,7 +79,7 @@ func applyDef() tooldef.Def {
 		Name: "update_apply",
 		Description: "check 済み（update_check_now で署名とチェックサムを検証したインストーラーを取得済み）の新しい版を、アプリの既存の導入手順（QuitForUpdate）で導入する依頼。" +
 			"書き込み許可（settings_write_enable）がオンのときだけ動き、オフなら write_disabled で何もしない。" +
-			"導入の直前に SafeGate（ポジションなし・Kill Switch なし・直近 5 分の発注なし）を再評価し、保留なら result=deferred と reason（open_positions / kill_switch / recent_order / check_failed）、" +
+			"導入の直前に SafeGate（ポジションなし・Kill Switch なし・直近 5 分の発注なし）を再評価し、さらに取引日の東証の立会時間帯（JST 9:00〜15:30。昼休みを含む）は導入せず、保留なら result=deferred と reason（open_positions / kill_switch / recent_order / check_failed / market_hours）、" +
 			"検証済みのインストーラーが無ければ result=deferred reason=not_ready（先に update_check_now）を返し、どちらもアプリを終了しない。通ったときだけ result=accepted を返し、" +
 			"応答のあとアプリは通常の終了手順に入り（MCP は先に止まる）、インストーラーが起動する。依頼は actor=mcp と client を付けて監査に残る。" +
 			"版・URL・アセットの指定、SafeGate や署名検証を飛ばす引数は無い（ダウングレードもできない）",
@@ -178,7 +178,7 @@ func unavailableView() view {
 
 const unavailableText = "このビルドはアップデートの確認に対応していません。"
 
-// reasonText words a deferral reason: SafeGate's kinds like the Settings panel, plus this tool's own.
+// reasonText words a deferral reason: SafeGate's kinds and market_hours like the Settings panel, plus this tool's own.
 func reasonText(reason string) string {
 	switch reason {
 	case updatecontrol.ReasonNotReady:

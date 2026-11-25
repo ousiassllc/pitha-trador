@@ -201,3 +201,4 @@
 | 1.196 | 2026-11-22 | FR-MCP-17 の `attention_codes[]` の列挙と受け入れ条件を、実装（`query.AttentionCodes()`）の 11 個（`partial_session`・`order_proposal_stalled` を追加）に訂正し、FR-MCP-32 の「9 種」を FR-MCP-17 の 11 個への参照にした（要件・挙動は変更なし） | issue #1194 |
 | 1.197 | 2026-11-25 | FR-MCP-20 のホワイトリストを 29 → 35 キーにした（お試し記録 `jev.trial.*` の操作者向け 6 キー）。「お試しは Settings 画面だけがオンにできる」規則をこの 6 キーについて改め、FR-MCP-24 のコメントと FR-MCP-37 の記述を合わせ、受け入れ条件を追加（issue #1220） |
 | 1.198 | 2026-11-25 | FR-MCP-52（自動更新の状態確認・今すぐ確認・導入のツール 3 つ）を追加し、FR-MCP-4 のツール数を 65 → 68 にした | issue #1222 |
+| 1.199 | 2026-11-25 | FR-MCP-52 に、`update_apply` が取引日の JST 9:00〜15:30 は導入せず `deferred`（`market_hours`）を返す条件を追加（`update_status` の理由にも出す。周期確認・Settings の自動導入は変えない） | issue #1222 |
