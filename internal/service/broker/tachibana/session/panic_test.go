@@ -30,13 +30,16 @@ func (r *rig) panicLogin(n int) {
 }
 
 // waitRestartArmed waits until the loop has armed the delay before the next
-// restart (a timer created after created was read). The panic is counted
-// before that timer exists, and advancing the clock in between would fire
-// nothing. The panic of the last restart ends the loop: no timer follows it.
+// restart. created is Created() read before the clock was advanced to fire the
+// delay of the restart that has just run. That restart creates two timers
+// before the next delay exists: the loop's zero-length wait of its retry phase
+// (afterPanic), then, after the panic (counted before the timer exists), the
+// next delay. Advancing the clock in between would fire nothing. The panic of
+// the last restart ends the loop: no delay follows it.
 func (r *rig) waitRestartArmed(created, restart int) {
 	r.t.Helper()
 	if restart < guard.MaxRestarts {
-		r.clk.WaitCreated(r.t, created)
+		r.clk.WaitCreated(r.t, created+1)
 	}
 }
 
