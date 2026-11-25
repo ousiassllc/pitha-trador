@@ -98,7 +98,7 @@ erDiagram
 
 ## 関連する `runtime_settings` のキー
 
-アプリ（トライアルのランナー・Settings 画面）と MCP が同じ DB から読む。**MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）では 1 キーも書けない**（`jev.trial.enabled` を含む）。有効化・アーム・上限の変更はアプリの Settings 画面だけ。自己改善ループ（Sol/Opus）が書ける `policy.*` にも入らない。いずれも `jev.shadow.*` とは別系統で、キーが重ならない（`evalflow`・`isolationflow` のテストで固定）。
+アプリ（トライアルのランナー・Settings 画面）と MCP が同じ DB から読む。**MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）で書けるのは操作者向けの 6 キー**（`jev.trial.enabled`・`jev.trial.arms`・`jev.trial.daily_cost_cap_usd`・`jev.trial.codex.enabled`・`jev.trial.codex.daily_call_cap`・`jev.trial.codex.daily_token_cap`。issue #1220。Settings 画面と同じ検証・書き込み許可に従う）で、停止・失敗回数・429/529・Codex のログインの記録のキーは書けない。有効化・アーム・上限は Settings 画面からも変えられ、どちらの保存も `mcp_settings_audit` に残る。自己改善ループ（Sol/Opus）が書ける `policy.*` にも入らない。いずれも `jev.shadow.*` とは別系統で、キーが重ならない（`evalflow`・`isolationflow` のテストで固定）。
 
 | キー | 値 | 意味 |
 |------|----|------|

@@ -295,7 +295,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `market_snapshots` の価格・板・出来高・特徴量（`price` / `bid` / `ask` / `spread_bps` / `volume` / `vwap` / `ofi_*` / `return_*` など。`000016`・`000026`・`000032`） | 時価・板・気配そのもの。鮮度は件数と時刻だけ |
 | `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文。`metalabel_training_readiness`（§3.23）は特徴量の欠けを数えるためにプロセス内で読むが、戻り値には件数と特徴量名しか載せない 別表`jev_trial_decisions`の`response_json`/`error_excerpt`（`000054`。別モデルの応答本文とエラーの抜粋）も、`jev_trial_compare`/`jev_trial_cost`（§3.32）は SQL にも名前を出さず返さない。 |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
-| `secrets` の全列 | `000013`。`key` 名も返さない。`secrets` の値は 1 つも返さない。Settings 画面で `JEV_MODEL` を切り替えたときのモデル**名**だけは、`secrets` と別の表 `jev_model_changes`（`000048`）に平文で残り、`experiment_compare` の `confounders[].values` に出る（モデル名は秘密情報ではない。ほかの秘密情報はこの表に入らない） |
+| `secrets` の全列 | `000013`。`key` 名も返さない。`secrets` の値は 1 つも返さない（`jev_trial_cost` の `limits.provider_keys[*].key_set` だけは、行の有無を bool で返す。値の列は選ばない。issue #1220）。Settings 画面で `JEV_MODEL` を切り替えたときのモデル**名**だけは、`secrets` と別の表 `jev_model_changes`（`000048`）に平文で残り、`experiment_compare` の `confounders[].values` に出る（モデル名は秘密情報ではない。ほかの秘密情報はこの表に入らない） |
 | API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |
 | `metalabel_models.params_json` / `feature_names_json` / `oos_calibration_json` | `000034` |
 | `metalabel_predictions` の行の中身（`features_json` を含む） | `000034`。件数だけ |

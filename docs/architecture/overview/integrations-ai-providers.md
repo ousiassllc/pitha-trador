@@ -22,7 +22,7 @@
 
 ## 画面からだけ変えられる
 
-- 保存は Settings「外部連携・AI」の「役割ごとのプロバイダーとモデル」（`modal-ai-roles`、`GET /settings/ai-roles-panel`・`POST`/`DELETE /settings/ai-roles/:role`）だけ。**MCP の`settings_set`の許可リストに`ai.role.*`は無い**（テスト`TestAIRoleSettingsAreNotWritableFromTheMCP`）。ライブの Jev（売買判断）のプロバイダー・モデルは画面からだけ変えられ、トライアルのアームの`jev.trial.arms`も従来どおり画面だけ。
+- 保存は Settings「外部連携・AI」の「役割ごとのプロバイダーとモデル」（`modal-ai-roles`、`GET /settings/ai-roles-panel`・`POST`/`DELETE /settings/ai-roles/:role`）だけ。**MCP の`settings_set`の許可リストに`ai.role.*`は無い**（テスト`TestAIRoleSettingsAreNotWritableFromTheMCP`）。ライブの Jev（売買判断）のプロバイダー・モデルは画面からだけ変えられる。トライアルのアーム`jev.trial.arms`は、Settings 画面のほか MCP の`settings_set`でも書ける（issue #1220。アームのプロバイダー・モデルはお試し専用で、ライブの Jev には効かない）。
 - 画面の並びは「AI のプロバイダー（独自 API・OpenRouter の接続）→ 役割ごとのモデル → そのほかの接続先」。詳しい説明は各見出しの「?」に入れる。キーの値は画面にも出さない（設定済み／未設定の表示だけ。伏せ字は既存の`secrets`の経路のまま）。
 
 ## 記録（`ai_role_history`、マイグレーション000057）

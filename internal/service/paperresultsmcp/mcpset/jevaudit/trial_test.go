@@ -64,14 +64,17 @@ func TestJevTrialSettings_ScreenSaveWritesAudit(t *testing.T) {
 		t.Fatalf("codex save rows = %+v", got)
 	}
 	for i, k := range wantKeys {
-		// The first save of the form stored the Codex switch as 0 (off), so its before is "false";
-		// the two caps had nothing stored.
-		if got[i].actor != "gui" || got[i].key != k || (i == 0) != (got[i].before != nil) {
+		if got[i].actor != "gui" || got[i].key != k {
 			t.Errorf("row %d = %+v, want a gui row of %s", i, got[i], k)
 		}
 	}
-	if *got[0].before != "false" {
-		t.Errorf("codex switch before = %q, want false", *got[0].before)
+	// The first save of the form stored the Codex switch as 0 (off), so its before is "false";
+	// the two caps had nothing stored, so they have no before.
+	if got[0].before == nil || *got[0].before != "false" {
+		t.Errorf("codex switch before = %v, want false", got[0].before)
+	}
+	if got[1].before != nil || got[2].before != nil {
+		t.Errorf("caps with nothing stored have a before: %v %v", got[1].before, got[2].before)
 	}
 	if *got[0].after != "true" || *got[1].after != "20" || *got[2].after != "100000" {
 		t.Errorf("codex rows after = %q %q %q", *got[0].after, *got[1].after, *got[2].after)
@@ -158,5 +161,22 @@ func TestJevTrialSettings_ScreenAndMCPSeeTheSameValues(t *testing.T) {
 	rows := audit(t, db)
 	if got := rows[len(rows)-1]; got.actor != wantTail.actor || got.key != wantTail.key || !eq(got.before, wantTail.before) || !eq(got.after, wantTail.after) {
 		t.Errorf("last audit row = %+v", got)
+	}
+}
+
+// The setting and its audit row commit together: when the audit insert fails, the form's
+// settings are rolled back and the save reports the error.
+func TestJevTrialSettings_AuditFailureRollsTheSettingsBack(t *testing.T) {
+	svc, db, _ := newTrial(t)
+	if _, err := db.Exec(`DROP TABLE mcp_settings_audit`); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Save(context.Background(), jevtrial.Form{Enabled: true, Arms: orArms(), Cap: capOf(0.25)}); err == nil {
+		t.Fatal("a save whose audit row cannot be written succeeded")
+	}
+	for _, key := range jevtrialsettings.OperatorKeys() {
+		if v, ok := stored(t, db, key); ok {
+			t.Errorf("%s = %s stays stored after the failed audit insert", key, v)
+		}
 	}
 }

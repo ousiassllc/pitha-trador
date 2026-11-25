@@ -20,7 +20,7 @@
 
 - 3 段の関門がすべて要る: トライアル本体のスイッチ`jev.trial.enabled`（Paper のみ）・Codex 用のスイッチ`jev.trial.codex.enabled`（**既定 0**）・専用の`CODEX_HOME`（環境変数`PITHA_CODEX_HOME`。未設定なら`Configured()`が false で**呼ばない**。人の Codex の設定（`~/.codex`）は使わない）。
 - `codex_chatgpt`のアームは、Codex のスイッチがオフの間は**保存できない**（Settings 画面の同じフォームでスイッチもオンにしたときだけ保存できる。`jevtrial.Service.Save`）。保存済みでスイッチがオフに戻れば、呼ばずに`provider_disabled`の見送りを残す。
-- スイッチ・上限・停止記録・ログイン状態のキー（`jev.trial.codex.*`）は Settings 画面だけが書ける。MCP の`settings_set`・自己改善ループ・汎用の運用設定からは書けない（`isolationflow`のテスト）。
+- スイッチ・上限のキー（`jev.trial.codex.enabled`・`daily_call_cap`・`daily_token_cap`）は Settings 画面と MCP の`settings_set`から書ける（issue #1220。同じ検証。`codex_chatgpt`のアームがあるあいだスイッチはオフにできない）。停止記録・ログイン状態のキー（`jev.trial.codex.halt`・`login`）は Settings 画面からも MCP からも書けず、アプリだけが書く。自己改善ループ・汎用の運用設定からはどのキーも書けない（`isolationflow`のテスト）。
 
 ### 2.2 費用の数え方（USD では数えない）
 

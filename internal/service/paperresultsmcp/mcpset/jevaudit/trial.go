@@ -21,29 +21,34 @@ import (
 // transaction as the settings, so settings_diff, settings_audit and an
 // experiment's switch_check see the screen's change like the MCP's. Validation is
 // jevtrial.Service's, run unchanged inside that transaction: a rejected form
-// stores no setting and no audit row. State is the embedded service as is.
+// stores no setting and no audit row. State is the wrapped service's as is. The
+// service's other writers (SetEnabled, SetArms, SetCap, ResetCap) are not exposed,
+// so no unaudited path to these keys hangs off Trial.
 //
 // A blank cap (the form's way to restore a default) removes the stored value; it
 // is recorded as a reset when a value was stored. A save that leaves a key's
 // effective value as it was (the form sends every field on every save) is stored
 // but not recorded: it is not a change.
 type Trial struct {
-	*jevtrial.Service
+	svc *jevtrial.Service
 	db  *sql.DB
 	now func() time.Time
 }
 
 // NewTrial wraps svc, which must run over db, recording into db.
 func NewTrial(svc *jevtrial.Service, db *sql.DB) *Trial {
-	return &Trial{Service: svc, db: db, now: time.Now}
+	return &Trial{svc: svc, db: db, now: time.Now}
 }
 
 // SetClock replaces the clock of the wrapper and of the wrapped service; tests
 // use it.
 func (t *Trial) SetClock(now func() time.Time) {
 	t.now = now
-	t.Service.SetClock(now)
+	t.svc.SetClock(now)
 }
+
+// State reads the trial's state for the Settings panel (see jevtrial.Service.State).
+func (t *Trial) State(ctx context.Context) (jevtrial.State, error) { return t.svc.State(ctx) }
 
 // Save validates and stores the form (see jevtrial.Service.Save) and records the
 // keys it changed.
@@ -58,7 +63,7 @@ func (t *Trial) Save(ctx context.Context, f jevtrial.Form) error {
 	if err != nil {
 		return err
 	}
-	if err := t.Service.WithSettings(store).Save(ctx, f); err != nil {
+	if err := t.svc.WithSettings(store).Save(ctx, f); err != nil {
 		return err
 	}
 	after, err := readTrialKeys(ctx, store)

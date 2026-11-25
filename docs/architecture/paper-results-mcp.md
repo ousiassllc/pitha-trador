@@ -37,7 +37,7 @@ MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同�
 
 | 項目 | #347 kabu ステータス MCP | 本仕様（#783） |
 |------|--------------------------|----------------|
-| 読むもの | 同一 PC の kabu `POST /token` と、`secrets` の `KABU_API_PASSWORD` | アプリの SQLite の集計・ラベル。`secrets` は読まない |
+| 読むもの | 同一 PC の kabu `POST /token` と、`secrets` の `KABU_API_PASSWORD` | アプリの SQLite の集計・ラベル。`secrets` は読まない（`jev_trial_cost` の API キーの有無の確認だけ例外。§5） |
 | トンネル | プライベートトンネル（Tailscale 等）。インターネット非公開 | 同じ方針。選択肢は §3.2。Cloudflare は必須にしない |
 | 認証 | コネクタ用の別 API キー。無い・不一致は kabu へ繋ぐ前に拒否 | 必須は別 API キー（§3.3）。不一致は SQL の前に拒否 |
 | 既定 | オフ。PC 上のローカル設定だけ。Grok からは戻せない | 同じ。ただしオフのとき待受しない（下の差分） |
@@ -127,7 +127,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 - `busy_timeout` は 1 秒。アプリ本体の 60 秒（`sqlitedb` の `_busy_timeout=60000`）には合わせない。根拠: バックアップやチェックポイントでロックを待っている間、リモートの読み取りがアプリの書き込み側の待ちを長引かせない
 - 接続は読み取り 1 本（`SetMaxOpenConns(1)`）。同時実行の上限は API 仕様の表
 - 認証に失敗したリクエストは SQL を発行せず、接続も新規に開かない。起動時の疎通（`SELECT 1`）は、認証設定が §3.3 を満たして待受を開く場合に限り 1 回だけ行ってよい
-- `secrets` への `SELECT` をツールからも疎通確認からも発行しない（Settings 画面の `JEV_MODEL` の切り替えの記録 `jev_model_changes` は `secrets` ではなく別の表で、入るのはモデル名だけ。モデル名は秘密情報ではなく、`experiment_compare` の `confounders[].values` に出る）
+- `secrets` への `SELECT` をツールからも疎通確認からも発行しない。例外は `jev_trial_cost` の `limits.provider_keys` だけで、`SELECT EXISTS (SELECT 1 FROM secrets WHERE key = ?)`（`OPENROUTER_API_KEY`・`JEV_API_KEY` の行の有無。値の列は選ばない。issue #1220）（Settings 画面の `JEV_MODEL` の切り替えの記録 `jev_model_changes` は `secrets` ではなく別の表で、入るのはモデル名だけ。モデル名は秘密情報ではなく、`experiment_compare` の `confounders[].values` に出る）
 
 読み取りの接続は上の通り `mode=ro` のままで、書き込みを試みた SQL は SQLite が拒否する。その失敗をツールの成功応答にしてはならない（受け入れ条件のテストが、MCP の読み取り接続で `INSERT` がエラーになることを確認する）。設定ツール（§7）と注文案ツール（§8）の書き込みは、この接続を使わず、別の狭い書き込み接続（§7.3・§8.4）だけが行う。
 

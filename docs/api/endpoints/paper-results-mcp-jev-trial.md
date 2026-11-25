@@ -123,7 +123,8 @@
 - 上限を外す手段は無い（0 は拒否。未保存なら既定の上限が効く）。ランナーの全体・アーム・Codex の上限、失敗回数の上限（20）、呼び出し間隔、429/529 のクールダウン、停止の記録はそのまま効く。
 - `settings_write_enable` がオフなら `write_disabled`。ホワイトリスト外（停止・失敗・クールダウン・Codex のログインの記録、`ai.role.*`、ライブの Jev の設定、秘密キー）は `key_not_allowed`。
 - 監査: 通った変更は `settings_audit` に `actor=mcp` で残る。Settings 画面のお試しの保存も同じ表に `actor=gui` で残る（`mcpset/jevaudit` の `Trial`。値が変わったキーだけ。空欄の上限は `reset`）。
-- API キー（`OPENROUTER_API_KEY`・`JEV_API_KEY`）の値は読み書きも出力もしない。`jev_trial_cost` の `limits.provider_keys.openrouter.key_set`・`limits.provider_keys.custom.key_set` が bool で保存済みかだけを返す（`secrets` の行の有無だけを問い、値の列は読まない）。ChatGPT サブスクはキーではなく `limits.codex.login`。
+- API キー（`OPENROUTER_API_KEY`・`JEV_API_KEY`）の値は読み書きも出力もしない。`jev_trial_cost` の `limits.provider_keys.openrouter.key_set`・`limits.provider_keys.custom.key_set` が bool で保存済みかだけを返す（`secrets` の行の有無だけを問い、値の列は読まない）。ChatGPT サブスクはキーではなく `limits.codex.login`。保存済みかだけを返し、動いているアプリがそのキーを読み込み済みかは示さない（反映には再起動が要る場合がある）。
+- 壊れた保存値は、読み取りでは既定として扱い警告を付ける。監査行の before は、その壊れた値ではなく既定の値で記録される（シャドーの 2 キーと同じ）。
 
 ## 変更履歴
 
