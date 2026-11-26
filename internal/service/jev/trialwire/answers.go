@@ -68,13 +68,33 @@ func sortedIDs(questions map[string]systemone.Question) []string {
 // subset OpenAI's structured outputs accept (all keys required,
 // additionalProperties false, anyOf with null, enum, minimum/maximum).
 func AnswerSchema(questions map[string]systemone.Question) ([]byte, error) {
+	return answerSchema(questions, true)
+}
+
+// ChatAnswerSchema is AnswerSchema without minimum/maximum on the numbers. Some
+// providers' structured outputs refuse a schema with numerical constraints (Anthropic's
+// documents them as unsupported and answers 400), and a refusal would fail every call of
+// the arm. The 0 to 1 range is asked for in the question's text and checked on the
+// answer by systemone.DecodeTrial (out of range is ErrInvalidResponse), so nothing is
+// lost but the provider-side enforcement.
+func ChatAnswerSchema(questions map[string]systemone.Question) ([]byte, error) {
+	return answerSchema(questions, false)
+}
+
+func answerSchema(questions map[string]systemone.Question, ranges bool) ([]byte, error) {
+	unit := func() map[string]any {
+		if ranges {
+			return map[string]any{"type": "number", "minimum": 0, "maximum": 1}
+		}
+		return map[string]any{"type": "number"}
+	}
 	props := map[string]any{}
 	for _, id := range sortedIDs(questions) {
 		q := questions[id]
 		var shape any
 		switch c := q.Criteria.(type) {
 		case systemone.NoulCriteria:
-			shape = map[string]any{"type": "number", "minimum": 0, "maximum": 1}
+			shape = unit()
 		case systemone.Options:
 			names := make([]string, len(c))
 			for i, o := range c {
@@ -84,7 +104,7 @@ func AnswerSchema(questions map[string]systemone.Question) ([]byte, error) {
 				"type": "object", "additionalProperties": false, "required": []string{"choice", "confidence"},
 				"properties": map[string]any{
 					"choice":     map[string]any{"type": "string", "enum": names},
-					"confidence": map[string]any{"type": "number", "minimum": 0, "maximum": 1},
+					"confidence": unit(),
 				},
 			}
 		default:

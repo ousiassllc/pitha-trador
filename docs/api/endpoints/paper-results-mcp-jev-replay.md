@@ -40,7 +40,7 @@
 | `decision_type` / `from` / `to` / `max_rows` | 解決した指定（JST の日付） |
 | `decisions` / `calls` | 対象の判断の件数・呼び出し数（判断 × アーム。アームごとの学習カットオフ以前の判断を除いた数） |
 | `excluded_invalid_state` | 保存された入力が JSON として不正で送れない判断の数 |
-| `max_cost_usd` | 費用の見込み。**予約と同じ最悪値側の単価**（入力トークンの推定 × `WorstCaseUSDPerMtok`）の合計。run はこの額を超える前に止まる |
+| `max_cost_usd` | 費用の見込み。**予約と同じ最悪値側の単価**（入力トークンの推定 × `WorstCaseUSDPerMtok`）の合計。run はこの額を超える前に止まる。チャットのアーム（`endpoint=/v1/chat/completions`）は、入力と出力の計上単価（最悪 `ChatWorstInputUSDPerMtok`=8・`ChatWorstOutputUSDPerMtok`=40 USD/百万トークン）と出力上限 `max_tokens`=1024 で数え、`list_price_usd` は `null`。 |
 | `list_price_usd` | 定価での費用の目安。定価が分からないアームがあれば `null`（0 ではない） |
 | `arms[]` | アームごと。`arm_id`・`model`・`prompt_version`・`llm_cutoff`（公表済みの日付、無ければ `null`）・`llm_cutoff_status`（`verified` / `unverified`）・`llm_cutoff_label`（`確認済み` / `未確認`）・`reference_only`（`unverified` のとき `true`）・`calls`・`excluded_before_cutoff`（カットオフ以前で対象外にした判断の数）・`max_cost_usd`・`list_price_usd` |
 | `confirm_token` | 見積もりの内容のハッシュ（指定・アームの設定・対象の判断・呼び出し数・費用）。**キーは含まない** |

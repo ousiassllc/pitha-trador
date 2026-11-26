@@ -3,9 +3,9 @@ package trialquery
 import "github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 
 // CostNotice is the fixed caveat jev_trial_cost returns.
-const CostNotice = "費用は出所別に分ける: reported（応答が報告した usage.cost）・list_price_estimate（定価×入力トークンの推定）・unknown（どちらも無い）・subscription（ChatGPT のサブスク。USD は発生しない: usd も counted_usd も無く、USD の上限・合計には 0 としても入らない。呼び出し数とトークン数で数え、止める上限は limits.codex の呼び出し回数・トークン数）。" +
+const CostNotice = "費用は出所別に分ける: reported（応答が報告した usage.cost）・list_price_estimate（定価×入力トークンの推定。チャットのアーム〈endpoint=/v1/chat/completions〉は入力と出力の両方）・unknown（どちらも無い）・subscription（ChatGPT のサブスク。USD は発生しない: usd も counted_usd も無く、USD の上限・合計には 0 としても入らない。呼び出し数とトークン数で数え、止める上限は limits.codex の呼び出し回数・トークン数）。" +
 	"unknown の実費は分からない（actual_usd は null。0 円ではない）。unknown_counted_usd は 1 日の上限の判定に数えた額（最悪値側の単価で数えた上限の見積り。課金されない前提の 4xx・529 応答は 0 と数えるので、その件数を counted_as_zero_calls に出す）で、reported・list_price_estimate の合計には混ぜない。" +
-	"list_price_estimate の usd は定価での推定額で、上限には、処理先を固定していないアーム（provider_only なし）なら定価と最悪値側の単価の高い方で数えた額 counted_usd を数える（低い定価で上限が甘くならないため）。" +
+	"list_price_estimate の usd は定価での推定額で、上限には、処理先を固定していないアーム（provider_only なし）なら定価と最悪値側の単価の高い方で数えた額 counted_usd を数える（低い定価で上限が甘くならないため）。チャットのアームは入力・出力それぞれをチャット用の最悪単価（入力 8・出力 40 USD/百万トークン）との高い方で数える。" +
 	"見送り（呼ばなかった比較。費用は無く、上の呼び出し数・額には入らない）の今日の件数は limits.skipped_today に理由別に出す（全体とアームごと）。" +
 	"counted_total_usd は上限の判定に数えた額の合計（reported.counted_usd + list_price_estimate.counted_usd + unknown_counted_usd）。エラー本文・応答本文・キーは返さない"
 

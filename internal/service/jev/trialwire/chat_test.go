@@ -79,6 +79,9 @@ func TestChat_RequestIsAChatBodyWithAStructuredOutput(t *testing.T) {
 	if string(got.body["max_tokens"]) != "1024" || trialwire.ChatMaxOutputTokens != 1024 || string(got.body["temperature"]) != "0" || string(got.body["model"]) != `"openai/gpt-6.2-astra"` {
 		t.Errorf("max_tokens/temperature/model = %s/%s/%s", got.body["max_tokens"], got.body["temperature"], got.body["model"])
 	}
+	if schema := string(got.body["response_format"]); strings.Contains(schema, `"minimum"`) || strings.Contains(schema, `"maximum"`) {
+		t.Errorf("the chat schema carries numerical constraints some providers refuse: %.300s", schema)
+	}
 	var routing map[string]json.RawMessage
 	if err := json.Unmarshal(got.body["provider"], &routing); err != nil {
 		t.Fatal(err)
@@ -177,6 +180,7 @@ func TestChat_AnInvalidMessageIsErrInvalidResponse(t *testing.T) {
 	replace := func(old, with string) string { return strings.Replace(chatAnswers, old, with, 1) }
 	for name, reply := range map[string]string{
 		"free text":               chatEnvelope("I think this is a long."),
+		"object then prose":       chatEnvelope(chatAnswers + " Hope this helps."),
 		"fenced json":             chatEnvelope("```json\n" + chatAnswers + "\n```"),
 		"json array":              chatEnvelope("[1,2]"),
 		"empty content":           chatEnvelope(""),

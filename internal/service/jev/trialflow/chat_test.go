@@ -189,7 +189,9 @@ func TestChatArm_DefaultCapsHoldItBackAndSaySo(t *testing.T) {
 	if caller.calls() != 0 {
 		t.Errorf("the chat arm was called %d times under the default caps, want 0", caller.calls())
 	}
-	if got := e.skipReasons("chat"); len(got) != 1 || got[0] != jevtrial.SkipDailyCapOverall {
-		t.Errorf("chat skips = %v, want [%s]", got, jevtrial.SkipDailyCapOverall)
+	// The reservation is about 0.1 USD, right at the overall cap (0.10) and above the arm's
+	// (0.05): which of the two holds it back depends on the body's exact size.
+	if got := e.skipReasons("chat"); len(got) != 1 || (got[0] != jevtrial.SkipDailyCapOverall && got[0] != jevtrial.SkipDailyCapArm) {
+		t.Errorf("chat skips = %v, want one daily-cap skip (%s or %s)", got, jevtrial.SkipDailyCapOverall, jevtrial.SkipDailyCapArm)
 	}
 }

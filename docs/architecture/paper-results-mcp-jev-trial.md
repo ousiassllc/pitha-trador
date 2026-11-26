@@ -95,3 +95,4 @@
 | 1.0 | 2026-11-13 | 新規 | issue #1060 |
 | 1.1 | 2026-11-15 | `subscription`と`limits.codex`を追加 | issue #1081 |
 | 1.2 | 2026-11-25 | 設定の書き込みの方針を、お試しの操作者向け 6 キーは `settings_set` で変えられる、に改めた。`jev_trial_cost` の `limits.provider_keys`（キーの有無だけの bool）を追加 | issue #1220 |
+| 1.3 | 2026-11-26 | `jev.trial.arms` の許可値に `endpoint=/v1/chat/completions` と `list_price_output_usd_per_mtok` を追加（ホワイトリストのキーは増えない） | issue #1224 |

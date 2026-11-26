@@ -285,3 +285,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.131 | 2026-11-22 | §1の適用順に、Recoveryの直後の`APIErrorPage`（`middleware/apierrorpage`。ページ遷移で失敗した`/api/v1`を`pages.ErrorPage`へ差し替える）を追記し、§7の説明（Recoveryの内側・Session/Setup Guardの外側）と一致させた。ルート・応答は変更なし | issue #1200 |
 | 1.132 | 2026-11-22 | §3の`POST /ops-settings/:key`の行の「許可キーは`opsettings.Keys()`の計108キー」を、件数を外して「許可キーの一次情報は`opsettings.Keys()`」に改めた（実装は149件で、件数は増えるたびに古くなるため。`er/tables-system.md`の「計33件」も同様）。ルート・検証・応答は変更なし | issue #1205 |
 | 1.133 | 2026-11-25 | §3の`POST /settings/jev-trial`の「トライアルをオンにできる唯一の経路（MCP の書き込み許可リストに無い）」を、MCP の `settings_set` の 6 キーでもオンにでき、画面の保存も監査表に残る、に改めた（issue #1220） | モデル比較トライアル（Settings 画面） |
+| 1.134 | 2026-11-26 | §3の`POST /settings/jev-trial`のアームの行に`list_price_output_usd_per_mtok`と`endpoint=/v1/chat/completions`を追加 | issue #1224 |

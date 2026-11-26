@@ -89,7 +89,7 @@ func chatBody(model string, provider *systemone.Provider, questions map[string]s
 	if err != nil {
 		return nil, err
 	}
-	schema, err := AnswerSchema(questions)
+	schema, err := ChatAnswerSchema(questions)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,13 @@ func readChat(questions map[string]systemone.Question, respBody []byte) (Respons
 			extra[key] = raw
 		}
 	}
-	body, err := AnswersToSystemOne(strings.TrimSpace(*cr.Choices[0].Message.Content), questions, extra)
+	content := strings.TrimSpace(*cr.Choices[0].Message.Content)
+	if !json.Valid([]byte(content)) {
+		// Not one JSON value (free text, or an object followed by prose): nothing is
+		// picked out of it.
+		return Response{}, fmt.Errorf("%w: the message content is not a single JSON object", systemone.ErrInvalidResponse)
+	}
+	body, err := AnswersToSystemOne(content, questions, extra)
 	if err != nil {
 		return Response{}, err
 	}
