@@ -83,10 +83,15 @@ func TestChat_RequestIsAChatBodyWithAStructuredOutput(t *testing.T) {
 	if err := json.Unmarshal(got.body["provider"], &routing); err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]string{"only": `["openai"]`, "allow_fallbacks": "false", "data_collection": `"deny"`, "zdr": "true", "require_parameters": "true"} {
+	for key, want := range map[string]string{"only": `["openai"]`, "allow_fallbacks": "false", "data_collection": `"deny"`, "zdr": "true"} {
 		if string(routing[key]) != want {
 			t.Errorf("provider.%s = %s, want %s", key, routing[key], want)
 		}
+	}
+	// require_parameters would leave a model that does not list temperature (e.g.
+	// claude-opus-5.5, gpt-6.2-astra) without an endpoint: it is not sent.
+	if _, ok := routing["require_parameters"]; ok || len(routing) != 4 {
+		t.Errorf("provider = %v, want only, allow_fallbacks, data_collection and zdr", routing)
 	}
 }
 

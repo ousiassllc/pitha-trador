@@ -61,18 +61,6 @@ type chatResponseFormat struct {
 	JSONSchema chatJSONSchema `json:"json_schema"`
 }
 
-// chatProvider is the routing preference of a chat request: the System One one
-// (systemone.Provider) and require_parameters, which keeps OpenRouter from routing
-// to an endpoint that would ignore response_format (and answer in free text, which
-// would be billed and unreadable).
-type chatProvider struct {
-	Only              []string `json:"only,omitempty"`
-	AllowFallbacks    *bool    `json:"allow_fallbacks,omitempty"`
-	DataCollection    string   `json:"data_collection,omitempty"`
-	ZDR               *bool    `json:"zdr,omitempty"`
-	RequireParameters bool     `json:"require_parameters"`
-}
-
 type chatRequest struct {
 	Model          string             `json:"model"`
 	Messages       []chatMessage      `json:"messages"`
@@ -80,8 +68,14 @@ type chatRequest struct {
 	MaxTokens      int                `json:"max_tokens"`
 	// Temperature is always sent, 0: a comparison is reproducible only if the
 	// models do not sample. A model that does not take it ignores it.
-	Temperature float64       `json:"temperature"`
-	Provider    *chatProvider `json:"provider,omitempty"`
+	Temperature float64 `json:"temperature"`
+	// Provider is the routing preference (systemone.Provider: only, allow_fallbacks,
+	// data_collection, zdr), the same as a System One request carries; nil sends none.
+	// require_parameters is deliberately not sent: it keeps only endpoints that support
+	// every parameter of the request, and temperature is one that some of the chat models
+	// do not list (OpenRouter ignores it for them), so it would leave such a model no
+	// endpoint at all. response_format is already a soft routing preference without it.
+	Provider *systemone.Provider `json:"provider,omitempty"`
 }
 
 // chatBody is the body of the chat request that asks questions about state. A
@@ -100,19 +94,14 @@ func chatBody(model string, provider *systemone.Provider, questions map[string]s
 		return nil, err
 	}
 	req := chatRequest{
-		Model: model,
+		Model:    model,
+		Provider: provider,
 		Messages: []chatMessage{
 			{Role: "system", Content: chatPreamble},
 			{Role: "user", Content: qs + "\n" + st},
 		},
 		ResponseFormat: chatResponseFormat{Type: "json_schema", JSONSchema: chatJSONSchema{Name: chatSchemaName, Strict: true, Schema: schema}},
 		MaxTokens:      ChatMaxOutputTokens,
-	}
-	if provider != nil {
-		req.Provider = &chatProvider{
-			Only: provider.Only, AllowFallbacks: provider.AllowFallbacks, DataCollection: provider.DataCollection,
-			ZDR: provider.ZDR, RequireParameters: true,
-		}
 	}
 	body, err := json.Marshal(req)
 	if err != nil {

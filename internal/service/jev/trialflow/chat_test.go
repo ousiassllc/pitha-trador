@@ -70,10 +70,13 @@ func chatRun(t *testing.T, status int, reply string) (jevtrial.Decision, string)
 // etc. with the reported cost, and a null answer stays NULL.
 func TestChatArm_StoresTheStructuredAnswer(t *testing.T) {
 	d, sent := chatRun(t, http.StatusOK, chatReply)
-	for _, want := range []string{`"messages":[`, `"response_format":{"type":"json_schema"`, `"max_tokens":1024`, `"temperature":0`, `"data_collection":"deny"`, `"require_parameters":true`} {
+	for _, want := range []string{`"messages":[`, `"response_format":{"type":"json_schema"`, `"max_tokens":1024`, `"temperature":0`, `"data_collection":"deny"`} {
 		if !strings.Contains(sent, want) {
 			t.Errorf("the request lacks %s", want)
 		}
+	}
+	if strings.Contains(sent, "require_parameters") {
+		t.Error("require_parameters was sent: a model that does not list temperature would have no endpoint")
 	}
 	if strings.Contains(sent, `"state":`) && strings.Contains(sent, `"questions":`) {
 		t.Error("System One's {state, questions} was sent to the chat endpoint")
