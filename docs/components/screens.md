@@ -141,3 +141,4 @@
 | 1.24 | 2026-11-19 | Settings「予測モデル」の「研究用の日次評価の記録・学習・書き出し」カード（`modal-research-jobs`）に、夜間タスクの状態パネル（オフ／最終成功日／直近の失敗と短い理由）を追加。表示だけで取引・昇格には使わない | issue #1126 |
 | 1.25 | 2026-11-20 | Settings「外部連携・AI」のモデル比較トライアルのアームのカードに「API の送り先」（`/v1/systemone`〔既定〕または `/alpha/decisions`。`jev-trial-arm-endpoint`。アームごと。提供元が codex_chatgpt のアームでは保存できない）を追加 | issue #1064 |
 | 1.26 | 2026-11-22 | §2.2 の表に、実装済みで載っていなかった 4 カード（Settings「予測モデル」の `modal-research-labels`・`modal-research-fx`・`modal-research-promotion`、「外部連携・AI」の `modal-jev-prompt`）を追加し、登録簿の `modal-*` と表の `#modal-*` を一致させた。実装は変えない | issue #1171 |
+| 1.27 | 2026-11-26 | Settings「外部連携・AI」のモデル比較トライアルのアームのカードに、「API の送り先」の 3 つ目の選択肢 `/v1/chat/completions`（一般チャットモデル）と「出力の定価（USD / 100 万出力トークン）」（`jev-trial-arm-list-price-output`。チャットの送り先のときだけ・必須）を追加 | issue #1224 |

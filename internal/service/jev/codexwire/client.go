@@ -2,9 +2,6 @@ package codexwire
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -91,7 +88,10 @@ func RequestBytes(req jev.TraderRequest) (int, error) {
 // exactly as strictly as an OpenRouter answer (a missing question, a value out of
 // range or a choice that is not an option is systemone.ErrInvalidResponse).
 func (c *Client) answer(questions map[string]systemone.Question, out outcome) (trialwire.Response, error) {
-	body, err := systemOneBody(c.cfg.Model, questions, out)
+	body, err := trialwire.AnswersToSystemOne(out.message, questions, map[string]any{
+		"model": c.cfg.Model,
+		"usage": map[string]int{"input_tokens": out.usage.InputTokens, "output_tokens": out.usage.OutputTokens},
+	})
 	if err != nil {
 		return trialwire.Response{}, err
 	}
@@ -105,62 +105,4 @@ func (c *Client) answer(questions map[string]systemone.Question, out outcome) (t
 	resp.ReportedCostUSD = nil // a subscription reports no USD
 	resp.Body = out.message
 	return resp, nil
-}
-
-// systemOneBody rewrites the model's answers (out.message) as the body of a
-// System One response.
-func systemOneBody(model string, questions map[string]systemone.Question, out outcome) ([]byte, error) {
-	var given map[string]json.RawMessage
-	dec := json.NewDecoder(strings.NewReader(out.message))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&given); err != nil {
-		return nil, fmt.Errorf("%w: the final message is not a JSON object: %w", systemone.ErrInvalidResponse, err)
-	}
-	answers := map[string]any{}
-	for id, q := range questions {
-		raw, ok := given[id]
-		if !ok {
-			return nil, fmt.Errorf("%w: missing answer %q", systemone.ErrInvalidResponse, id)
-		}
-		a, err := oneAnswer(id, q, raw)
-		if err != nil {
-			return nil, err
-		}
-		answers[id] = a
-	}
-	for id := range given {
-		if _, ok := questions[id]; !ok {
-			return nil, fmt.Errorf("%w: answer %q was not asked", systemone.ErrInvalidResponse, id)
-		}
-	}
-	return json.Marshal(map[string]any{
-		"model":   model,
-		"answers": answers,
-		"usage":   map[string]int{"input_tokens": out.usage.InputTokens, "output_tokens": out.usage.OutputTokens},
-	})
-}
-
-// oneAnswer is the System One answer of raw (null: the model declined).
-func oneAnswer(id string, q systemone.Question, raw json.RawMessage) (map[string]any, error) {
-	if string(raw) == "null" {
-		return map[string]any{"type": systemone.TypeRefusal}, nil
-	}
-	switch q.Type {
-	case systemone.TypeNoul:
-		var v *float64
-		if err := json.Unmarshal(raw, &v); err != nil || v == nil {
-			return nil, fmt.Errorf("%w: answer %q is not a number", systemone.ErrInvalidResponse, id)
-		}
-		return map[string]any{"type": systemone.TypeNoul, "noul": *v}, nil
-	case systemone.TypeChoice:
-		var v struct {
-			Choice     *string  `json:"choice"`
-			Confidence *float64 `json:"confidence"`
-		}
-		if err := json.Unmarshal(raw, &v); err != nil {
-			return nil, fmt.Errorf("%w: answer %q is not a choice object", systemone.ErrInvalidResponse, id)
-		}
-		return map[string]any{"type": systemone.TypeChoice, "choice": v.Choice, "confidence": v.Confidence}, nil
-	}
-	return nil, fmt.Errorf("%w: question %q has unsupported type %q", systemone.ErrInvalidResponse, id, q.Type)
 }

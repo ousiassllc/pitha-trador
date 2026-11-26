@@ -25,6 +25,7 @@ const (
 	fieldPromptVersion  = "prompt_version"
 	fieldDailyCap       = "daily_cost_cap_usd"
 	fieldListPrice      = "list_price_usd_per_mtok"
+	fieldListPriceOut   = "list_price_output_usd_per_mtok"
 	fieldProviderOnly   = "provider_only"
 	fieldDataCollection = "data_collection"
 	fieldZDR            = "zdr"
@@ -93,6 +94,8 @@ func setField(row *view.ArmField, field, value string) bool {
 		row.DailyCap = value
 	case fieldListPrice:
 		row.ListPrice = value
+	case fieldListPriceOut:
+		row.ListPriceOutput = value
 	case fieldProviderOnly:
 		row.ProviderOnly = value
 	case fieldDataCollection:
@@ -127,6 +130,10 @@ func buildArms(rows []view.ArmField) ([]jevtrialsettings.Arm, error) {
 		if err != nil {
 			return nil, rowsError(label + " の定価は数値（USD）で入力してください")
 		}
+		priceOut, err := parseUSD(r.ListPriceOutput)
+		if err != nil {
+			return nil, rowsError(label + " の出力の定価は数値（USD）で入力してください")
+		}
 		dataCollection := r.DataCollection
 		if r.Provider != jevtrialsettings.ProviderOpenRouter && dataCollection == jevtrialsettings.DataCollectionDeny {
 			// The select always sends a value; its default is not a choice made for
@@ -135,7 +142,7 @@ func buildArms(rows []view.ArmField) ([]jevtrialsettings.Arm, error) {
 		}
 		arms = append(arms, jevtrialsettings.Arm{
 			ID: r.ID, Provider: r.Provider, Model: r.Model, PromptVersion: r.PromptVersion,
-			DailyCostCapUSD: capUSD, ListPriceUSDPerMtok: price,
+			DailyCostCapUSD: capUSD, ListPriceUSDPerMtok: price, ListPriceOutputUSDPerMtok: priceOut,
 			ProviderOnly: splitProviders(r.ProviderOnly), DataCollection: dataCollection, ZDR: r.ZDR, Endpoint: r.Endpoint,
 		})
 	}
@@ -208,7 +215,7 @@ func storedRows(st jevtrial.State) []view.ArmField {
 		arm := a.Arm
 		rows = append(rows, view.ArmField{
 			ID: arm.ID, Provider: arm.Provider, Model: arm.Model, PromptVersion: arm.PromptVersion,
-			DailyCap: number(arm.DailyCostCapUSD), ListPrice: number(arm.ListPriceUSDPerMtok),
+			DailyCap: number(arm.DailyCostCapUSD), ListPrice: number(arm.ListPriceUSDPerMtok), ListPriceOutput: number(arm.ListPriceOutputUSDPerMtok),
 			ProviderOnly: strings.Join(arm.ProviderOnly, ", "), DataCollection: arm.DataCollectionOrDefault(), ZDR: arm.ZDR, Endpoint: arm.Endpoint,
 		})
 	}

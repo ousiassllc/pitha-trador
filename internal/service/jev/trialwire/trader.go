@@ -79,12 +79,24 @@ func (c *Client) Trader(ctx context.Context, req jev.TraderRequest) (Response, t
 		return Response{}, 0, 0, err
 	}
 	start := time.Now()
-	res, requestBytes, err := c.do(ctx, buildRequest(c.model, c.provider, questions, req))
-	latency := time.Since(start)
-	if err != nil {
-		return Response{}, latency, requestBytes, err
+	resp, requestBytes, err := c.ask(ctx, questions, StateOf(req))
+	return resp, time.Since(start), requestBytes, err
+}
+
+// ask sends questions about state to the arm's endpoint and reads the answers:
+// System One's {state, questions} for an arm of the System One or the Decisions
+// path, a chat Completions request for a chat arm. state is the "state" value
+// (StateOf, or a replayed input as stored). It returns the answers and the size of
+// the request body (set on failure too, once the body was built).
+func (c *Client) ask(ctx context.Context, questions map[string]systemone.Question, state any) (Response, int, error) {
+	if c.chat {
+		return c.askChat(ctx, questions, state)
 	}
-	return mapResult(res), latency, requestBytes, nil
+	res, requestBytes, err := c.do(ctx, buildRequest(c.model, c.provider, questions, state))
+	if err != nil {
+		return Response{}, requestBytes, err
+	}
+	return mapResult(res), requestBytes, nil
 }
 
 // StateOf is the "state" of the request Trader sends for req: the same
@@ -94,9 +106,9 @@ func StateOf(req jev.TraderRequest) any {
 	return state{Market: req.State, SimilarPastCases: req.RAGContext}
 }
 
-func buildRequest(model string, provider *systemone.Provider, questions map[string]systemone.Question, req jev.TraderRequest) systemone.Request {
+func buildRequest(model string, provider *systemone.Provider, questions map[string]systemone.Question, state any) systemone.Request {
 	return systemone.Request{
-		State:     StateOf(req),
+		State:     state,
 		Model:     model,
 		Questions: questions,
 		Provider:  provider,
@@ -111,7 +123,7 @@ func RequestBytes(model string, provider *systemone.Provider, req jev.TraderRequ
 	if err != nil {
 		return 0, err
 	}
-	body, err := json.Marshal(buildRequest(model, provider, questions, req))
+	body, err := json.Marshal(buildRequest(model, provider, questions, StateOf(req)))
 	if err != nil {
 		return 0, fmt.Errorf("trialwire: encode request: %w", err)
 	}

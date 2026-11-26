@@ -46,12 +46,13 @@ func TestAppWiring_ArmEndpointIsChosenPerArm(t *testing.T) {
 		arm("default", ""),
 		arm("explicit-systemone", jevtrialsettings.EndpointSystemOne),
 		arm("decisions", jevtrialsettings.EndpointDecisions),
+		arm("chat", jevtrialsettings.EndpointChatCompletions),
 	} {
 		if _, _, _, err := callers(a).Trader(context.Background(), jev.TraderRequest{}); err == nil {
 			t.Fatalf("%s: the stub answers 500, want an error", a.ID)
 		}
 	}
-	want := []string{"/v1/systemone", "/v1/systemone", "/alpha/decisions"}
+	want := []string{"/v1/systemone", "/v1/systemone", "/alpha/decisions", "/v1/chat/completions"}
 	got := paths()
 	if len(got) != len(want) {
 		t.Fatalf("paths = %v, want %v", got, want)

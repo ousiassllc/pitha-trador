@@ -38,6 +38,9 @@ func BuildDecision(arm jevtrialsettings.Arm, liveID int64, stateBytes int, out C
 		callResult{resp: out.Response, latency: out.Latency, requestBytes: out.RequestBytes, err: out.Err}, now, secrets)
 }
 
-// ReservedUSD is what a call of requestBytes is reserved at against the daily
-// caps: the estimated input tokens at the worst-case price (see reservedUSD).
-func ReservedUSD(requestBytes int) float64 { return reservedUSD(requestBytes) }
+// ReservedUSD is what a call of arm with a request of requestBytes is reserved at
+// against the daily caps: for a stage-1 arm the estimated input tokens at the
+// worst-case price, for a chat arm input and output (see reservedUSD).
+func ReservedUSD(arm jevtrialsettings.Arm, requestBytes int) float64 {
+	return reservedUSD(arm, requestBytes)
+}

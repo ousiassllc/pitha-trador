@@ -13,7 +13,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevtrial"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -33,14 +32,14 @@ func (t *Trial) run(ctx context.Context, cfg jevtrialsettings.Settings, arm jevt
 		t.recordSkip(live.ID, arm.ID, jevtrial.SkipKeyNotSet)
 		return nil
 	}
-	reservedBytes, err := trialwire.RequestBytes(arm.Model, providerFor(arm), jev.TraderRequest{QuestionVersion: arm.PromptVersion, State: state, RAGContext: ragContext})
+	reservedBytes, err := requestBytesFor(arm, jev.TraderRequest{QuestionVersion: arm.PromptVersion, State: state, RAGContext: ragContext})
 	if err != nil {
 		t.recordSkip(live.ID, arm.ID, jevtrial.SkipCheckFailed)
 		return fmt.Errorf("jev trial: arm %q: size the request (not calling it): %w", arm.ID, err)
 	}
 	now := t.now()
 	// The reservation holds this call against the caps until its row is stored.
-	res, skip, err := t.mayCall(ctx, cfg, arm, now, reservedUSD(reservedBytes))
+	res, skip, err := t.mayCall(ctx, cfg, arm, now, reservedUSD(arm, reservedBytes))
 	defer res.release()
 	if err != nil {
 		t.recordSkip(live.ID, arm.ID, jevtrial.SkipCheckFailed)

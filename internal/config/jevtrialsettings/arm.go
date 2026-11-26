@@ -29,8 +29,10 @@ const (
 )
 
 // Values of Arm.Endpoint: the path appended to the provider's base URL. They
-// equal trialwire.DefaultEndpoint and trialwire.DecisionsEndpoint (a test in
-// internal/service/jev/trial pins that; this package cannot import the wire layer).
+// equal trialwire.DefaultEndpoint, trialwire.DecisionsEndpoint and
+// trialwire.ChatCompletionsEndpoint (a test in internal/service/jev/trialflow pins
+// that; this package cannot import the wire layer). EndpointChatCompletions is
+// declared in chat.go.
 const (
 	// EndpointSystemOne is the System One path, the same one the live Jev uses.
 	EndpointSystemOne = "/v1/systemone"
@@ -82,10 +84,15 @@ type Arm struct {
 	// ListPriceUSDPerMtok is the list price per million input tokens used to
 	// estimate a call whose response reports no cost (the estimate is stored as
 	// cost_usd). 0 or omitted: unknown (such a call is counted at
-	// WorstCaseUSDPerMtok and marked unknown). The caps count an estimated call at
-	// CountingUSDPerMtok, which is not below WorstCaseUSDPerMtok unless the route
-	// is pinned (provider_only).
+	// WorstCaseUSDPerMtok and marked unknown); a chat arm (EndpointChatCompletions)
+	// must set it. The caps count an estimated call at CountingUSDPerMtok, which
+	// is not below WorstCaseUSDPerMtok unless the route is pinned (provider_only);
+	// a chat arm is counted at ChatCountingUSDPerMtok instead.
 	ListPriceUSDPerMtok float64 `json:"list_price_usd_per_mtok,omitempty"`
+	// ListPriceOutputUSDPerMtok is the list price per million output tokens, only
+	// for an arm that calls EndpointChatCompletions (and required there; 0 and
+	// omitted are refused). Other arms price no output.
+	ListPriceOutputUSDPerMtok float64 `json:"list_price_output_usd_per_mtok,omitempty"`
 	// ProviderOnly restricts OpenRouter routing to these providers
 	// (provider.only); with it set, fallbacks are disabled.
 	ProviderOnly []string `json:"provider_only,omitempty"`
@@ -98,9 +105,10 @@ type Arm struct {
 	// replay evaluation reads it (cutoff.go); the live trial ignores it. A date
 	// must never be guessed: leave it empty until the vendor publishes it.
 	LLMCutoff string `json:"llm_cutoff,omitempty"`
-	// Endpoint is the API path this arm calls: EndpointSystemOne or
-	// EndpointDecisions; empty is EndpointSystemOne. Only an arm that calls an
-	// HTTP API has one (not ProviderCodexChatGPT). The live Jev never reads it.
+	// Endpoint is the API path this arm calls: EndpointSystemOne,
+	// EndpointDecisions or EndpointChatCompletions; empty is EndpointSystemOne. Only
+	// an arm that calls an HTTP API has one (not ProviderCodexChatGPT). The live Jev
+	// never reads it.
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
@@ -147,19 +155,20 @@ func ValidArmID(id string) bool { return armID.MatchString(id) }
 
 // Kinds of an ArmsError: which part of the arms setting is invalid.
 const (
-	ArmsErrJSON           = "json"
-	ArmsErrTooMany        = "too_many"
-	ArmsErrDuplicateID    = "duplicate_id"
-	ArmsErrID             = "id"
-	ArmsErrProvider       = "provider"
-	ArmsErrModel          = "model"
-	ArmsErrPromptVersion  = "prompt_version"
-	ArmsErrCap            = "daily_cost_cap_usd"
-	ArmsErrListPrice      = "list_price_usd_per_mtok"
-	ArmsErrProviderOnly   = "provider_only"
-	ArmsErrDataCollection = "data_collection"
-	ArmsErrLLMCutoff      = "llm_cutoff"
-	ArmsErrEndpoint       = "endpoint"
+	ArmsErrJSON            = "json"
+	ArmsErrTooMany         = "too_many"
+	ArmsErrDuplicateID     = "duplicate_id"
+	ArmsErrID              = "id"
+	ArmsErrProvider        = "provider"
+	ArmsErrModel           = "model"
+	ArmsErrPromptVersion   = "prompt_version"
+	ArmsErrCap             = "daily_cost_cap_usd"
+	ArmsErrListPrice       = "list_price_usd_per_mtok"
+	ArmsErrListPriceOutput = "list_price_output_usd_per_mtok"
+	ArmsErrProviderOnly    = "provider_only"
+	ArmsErrDataCollection  = "data_collection"
+	ArmsErrLLMCutoff       = "llm_cutoff"
+	ArmsErrEndpoint        = "endpoint"
 )
 
 // ArmsError is an invalid arms setting. Kind (an ArmsErr* constant) and ArmID
@@ -192,8 +201,8 @@ func (a Arm) Validate() error {
 	if a.Provider == ProviderCodexChatGPT && a.Endpoint != "" {
 		return armsErr(ArmsErrEndpoint, a.ID, "arm %q: a %q arm calls the Codex CLI, not an HTTP API; endpoint cannot be used", a.ID, ProviderCodexChatGPT)
 	}
-	if ep := a.Endpoint; ep != "" && ep != EndpointSystemOne && ep != EndpointDecisions {
-		return armsErr(ArmsErrEndpoint, a.ID, "arm %q: endpoint must be %q or %q", a.ID, EndpointSystemOne, EndpointDecisions)
+	if ep := a.Endpoint; ep != "" && ep != EndpointSystemOne && ep != EndpointDecisions && ep != EndpointChatCompletions {
+		return armsErr(ArmsErrEndpoint, a.ID, "arm %q: endpoint must be %q, %q or %q", a.ID, EndpointSystemOne, EndpointDecisions, EndpointChatCompletions)
 	}
 	if a.Provider == ProviderCodexChatGPT && (a.DailyCostCapUSD != 0 || a.ListPriceUSDPerMtok != 0) {
 		return armsErr(ArmsErrProvider, a.ID, "arm %q: a %q arm has no USD cost; daily_cost_cap_usd and list_price_usd_per_mtok cannot be used (the caps are the provider's call and token caps)", a.ID, ProviderCodexChatGPT)
@@ -211,6 +220,9 @@ func (a Arm) Validate() error {
 	}
 	if p := a.ListPriceUSDPerMtok; math.IsNaN(p) || math.IsInf(p, 0) || p < 0 || p > MaxListPriceUSDPerMtok {
 		return armsErr(ArmsErrListPrice, a.ID, "arm %q: list_price_usd_per_mtok must be 0〜%g", a.ID, MaxListPriceUSDPerMtok)
+	}
+	if err := a.validateChatPrices(); err != nil {
+		return err
 	}
 	if len(a.ProviderOnly) > MaxProviderOnly {
 		return armsErr(ArmsErrProviderOnly, a.ID, "arm %q: provider_only holds at most %d providers", a.ID, MaxProviderOnly)

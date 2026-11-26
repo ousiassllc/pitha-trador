@@ -1,6 +1,9 @@
 package trial
 
-import "github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
+)
 
 // reservation is the worst-case cost of one call that is about to be made or is
 // in flight. The daily caps are judged on the stored rows' counted cost, which
@@ -17,13 +20,17 @@ type reservation struct {
 	usd float64
 }
 
-// reservedUSD is what a call of requestBytes is reserved at: the estimated
-// input tokens of the request (shadow.EstimateInputTokens) at the worst-case
-// price jevtrialsettings.WorstCaseUSDPerMtok, the same price a failed call that
-// may have been billed is counted at (FailedCost). It is independent of the arm's
-// configured list price, so a low list price cannot shrink it. Output tokens are
-// not priced (see "Overshoot" in the spec).
-func reservedUSD(requestBytes int) float64 {
+// reservedUSD is what a call of arm with a request of requestBytes is reserved at.
+// A stage-1 arm: the estimated input tokens of the request (shadow.EstimateInputTokens)
+// at the worst-case price jevtrialsettings.WorstCaseUSDPerMtok, the same price a
+// failed call that may have been billed is counted at (FailedCost). It is
+// independent of the arm's configured list price, so a low list price cannot shrink
+// it. Output tokens are not priced (see "Overshoot" in the spec). A chat arm: input
+// and output, both (chatReservedUSD).
+func reservedUSD(arm jevtrialsettings.Arm, requestBytes int) float64 {
+	if arm.IsChat() {
+		return chatReservedUSD(arm, requestBytes)
+	}
 	return worstCaseUSD(shadow.EstimateInputTokens(requestBytes))
 }
 
