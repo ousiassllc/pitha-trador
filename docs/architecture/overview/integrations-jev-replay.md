@@ -25,7 +25,7 @@
 `replay_start` は、先に `replay_estimate` を取らないと開始できない。
 
 1. **見積もり**: 期間（ライブの判断の時刻）・`max_rows`（**必須**。1〜1000。古い順に数える）・アーム（既定は `jev.trial.arms` の全アーム）から、`BuildPlan` が対象の判断と呼び出し（**判断 × アーム**。アームごとの学習カットオフの規則を適用した後の数）を決め、費用の見込みを返す。
-   - **費用の見込み** `max_cost_usd` = 呼び出しごとの**予約と同じ最悪値側の単価**（リクエスト本文から推定した入力トークン × `jevtrialsettings.WorstCaseUSDPerMtok`。`trial.ReservedUSD`）の合計。`list_price_usd` は定価での目安（定価が分からないアームがあれば `null`）。
+   - **費用の見込み** `max_cost_usd` = 呼び出しごとの**予約と同じ最悪値側の単価**（リクエスト本文から推定した入力トークン × `jevtrialsettings.WorstCaseUSDPerMtok`。`trial.ReservedUSD`）の合計。`list_price_usd` は定価での目安（定価が分からないアームがあれば `null`）。チャットのアーム（`endpoint=/v1/chat/completions`）は、入力と出力の計上単価（最悪 `ChatWorstInputUSDPerMtok`=8・`ChatWorstOutputUSDPerMtok`=40 USD/百万トークン）と出力上限 `max_tokens`=1024 で数え、`list_price_usd` は `null`。
    - **`confirm_token`** = 見積もりの内容（指定・アームの設定（キーは含まない）・対象の判断の数と最大の id・呼び出し数・最悪値側の費用）のハッシュ。
 2. **開始**: `replay_start` は同じ引数と `confirm_token` を受け、トランザクションの中で**もう一度見積もり直し**、(a) `jev.replay.enabled` がオン、(b) 動いている run が無い（**同時に 1 件**）、(c) 呼び出しが 1 件以上、(d) `confirm_token` が今の見積もりと一致、をすべて確かめてから 1 行入れる。見積もりの後に判断・アーム・サイズが変わると不一致で拒否する（見積もりを経ない・上限を超える開始はできない）。MCP の書き込み許可がオフのときも拒否する。
 3. run には、開始時の見積もり（件数・呼び出し数・最悪値側の費用）・アームの設定の写し・`max_decision_id`（見積もり後に増えた判断を対象に入れない）が残る。**ランナーはこの最悪値側の費用を超えたら run を止める**（`stopped` / `run_cost_cap`）。

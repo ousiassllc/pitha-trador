@@ -27,6 +27,11 @@ const (
 	// DefaultEndpoint does not accept a model. It is an Alpha API: its shape
 	// may change.
 	DecisionsEndpoint = "/alpha/decisions"
+	// ChatCompletionsEndpoint is the chat Completions path, for a general chat model
+	// (issue #1224): the questions are sent as chat messages with a structured JSON
+	// output (chat.go) and the answer is read back from the message. It is relative
+	// to the base URL (OpenRouter's is .../api), so it is not "/api/v1/chat/completions".
+	ChatCompletionsEndpoint = "/v1/chat/completions"
 
 	defaultHTTPTimeout = 30 * time.Second
 )
@@ -55,7 +60,10 @@ type Config struct {
 
 // Client calls one trial arm's model.
 type Client struct {
-	url      string
+	url string
+	// chat is true for ChatCompletionsEndpoint: the questions go as chat messages
+	// with a structured output instead of as System One's {state, questions}.
+	chat     bool
 	apiKey   string
 	model    string
 	provider *systemone.Provider
@@ -76,7 +84,7 @@ func New(cfg Config) *Client {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: defaultHTTPTimeout}
 	}
-	return &Client{url: strings.TrimRight(base, "/") + endpoint, apiKey: cfg.APIKey, model: cfg.Model, provider: cfg.Provider, http: httpClient}
+	return &Client{url: strings.TrimRight(base, "/") + endpoint, chat: endpoint == ChatCompletionsEndpoint, apiKey: cfg.APIKey, model: cfg.Model, provider: cfg.Provider, http: httpClient}
 }
 
 // Configured reports whether an API key is set; a trial arm without one is
@@ -92,9 +100,20 @@ func (c *Client) do(ctx context.Context, req systemone.Request) (res systemone.R
 	if err != nil {
 		return systemone.Result{}, 0, fmt.Errorf("trialwire: encode request: %w", err)
 	}
+	respBody, err := c.post(ctx, body)
+	if err != nil {
+		return systemone.Result{}, len(body), err
+	}
+	res, err = systemone.DecodeTrial(req, respBody)
+	return res, len(body), err
+}
+
+// post POSTs body once and returns the response body of a 200 answer. A non-200
+// answer is a *jev.APIError (Body size-capped, Error() an excerpt).
+func (c *Client) post(ctx context.Context, body []byte) ([]byte, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
-		return systemone.Result{}, len(body), fmt.Errorf("trialwire: build request: %w", err)
+		return nil, fmt.Errorf("trialwire: build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
@@ -102,16 +121,15 @@ func (c *Client) do(ctx context.Context, req systemone.Request) (res systemone.R
 	}
 	httpResp, err := c.http.Do(httpReq)
 	if err != nil {
-		return systemone.Result{}, len(body), fmt.Errorf("trialwire: request: %w", err)
+		return nil, fmt.Errorf("trialwire: request: %w", err)
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 	respBody, err := httpbody.ReadAll(httpResp.Body, httpbody.DefaultMaxBytes)
 	if err != nil {
-		return systemone.Result{}, len(body), fmt.Errorf("trialwire: read response body: %w", err)
+		return nil, fmt.Errorf("trialwire: read response body: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		return systemone.Result{}, len(body), &jev.APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
+		return nil, &jev.APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
 	}
-	res, err = systemone.DecodeTrial(req, respBody)
-	return res, len(body), err
+	return respBody, nil
 }

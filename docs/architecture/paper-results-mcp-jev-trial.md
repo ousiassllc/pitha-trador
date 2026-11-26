@@ -75,7 +75,7 @@
 | キー | 単位 | 内容 | 許容 |
 |---|---|---|---|
 | `jev.trial.enabled` | 文字列（`text`） | お試し記録（モデル比較。issue #1220。Settings 画面の「トライアルを有効にする」）のオン・オフ。オンにすると `jev.trial.arms` のアームごとに有料の呼び出しが発生しうる。既定 `false` | `true` / `false`（`1` / `0` も可）。アームが空でもオンにできる（そのときランナーは何も呼ばない） |
-| `jev.trial.arms` | 文字列（`text`） | お試し記録のアーム（比べるモデル）の JSON 配列。追加・編集・削除・複製は配列全体を書く。応答の `value` もコンパクトな JSON 配列。既定 `[]` | 最大 8 件・id 重複不可・登録済みのプロンプト版・提供元ごとの組み合わせ（Settings 画面と同じ検証。`jevtrial.ParseArms`）。`codex_chatgpt` のアームは `jev.trial.codex.enabled` がオンのときだけ |
+| `jev.trial.arms` | 文字列（`text`） | お試し記録のアーム（比べるモデル）の JSON 配列。追加・編集・削除・複製は配列全体を書く。応答の `value` もコンパクトな JSON 配列。既定 `[]` | 最大 8 件・id 重複不可・登録済みのプロンプト版・提供元ごとの組み合わせ（Settings 画面と同じ検証。`jevtrial.ParseArms`）。`codex_chatgpt` のアームは `jev.trial.codex.enabled` がオンのときだけ。`endpoint` は省略・`/v1/systemone`・`/alpha/decisions`・`/v1/chat/completions` のどれかだけ（`/api/v1/…` や任意の URL は不可）で、`/v1/chat/completions`（一般チャットモデル。issue #1224）のアームは `list_price_usd_per_mtok`（入力）と `list_price_output_usd_per_mtok`（出力）をどちらも 0 より大きく指定する必要があり、出力の定価はそのエンドポイントでだけ使える（ホワイトリストのキーは増えない。中身の許可値が広がるだけ） |
 | `jev.trial.daily_cost_cap_usd` | 文字列（`text`） | お試し記録の全アーム合計の 1 日の費用上限（USD、JST の日）。既定 `0.1`。外す（なしにする）手段は無い | 0 より大きく 100 以下の数 |
 | `jev.trial.codex.enabled` | 文字列（`text`） | ChatGPT サブスク（Codex）のアームを動かすスイッチ。既定 `false` | `true` / `false`（`1` / `0` も可）。`codex_chatgpt` のアームが保存されている間はオフにできない |
 | `jev.trial.codex.daily_call_cap` | 回（`count`） | ChatGPT サブスクの 1 日（JST）の呼び出し回数の上限。既定 30 | 1 以上 10000 以下の整数 |
@@ -95,3 +95,4 @@
 | 1.0 | 2026-11-13 | 新規 | issue #1060 |
 | 1.1 | 2026-11-15 | `subscription`と`limits.codex`を追加 | issue #1081 |
 | 1.2 | 2026-11-25 | 設定の書き込みの方針を、お試しの操作者向け 6 キーは `settings_set` で変えられる、に改めた。`jev_trial_cost` の `limits.provider_keys`（キーの有無だけの bool）を追加 | issue #1220 |
+| 1.3 | 2026-11-26 | `jev.trial.arms` の許可値に `endpoint=/v1/chat/completions` と `list_price_output_usd_per_mtok` を追加（ホワイトリストのキーは増えない） | issue #1224 |

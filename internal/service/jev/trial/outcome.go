@@ -118,7 +118,7 @@ func fillFailure(d *jevtrial.Decision, arm jevtrialsettings.Arm, r callResult, s
 	if status != nil {
 		httpStatus = *status
 	}
-	c := FailedCost(httpStatus, r.requestBytes)
+	c := FailedCostFor(arm, httpStatus, r.requestBytes)
 	if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
 		c = SubscriptionCost()
 	}

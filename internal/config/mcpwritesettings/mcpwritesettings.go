@@ -139,7 +139,7 @@ const (
 var (
 	trialEnabledConstraint = "true / false（1 / 0 も可）。アームが空でもオンにできる（その間は何も呼ばない）"
 	trialSwitchConstraint  = "true / false（1 / 0 も可）。オフにできるのは codex_chatgpt のアームが無いときだけ"
-	trialArmsConstraint    = fmt.Sprintf("JSON 配列（空は []）。最大 %d 件・id は重複不可・prompt_version はこのビルドに登録済み。codex_chatgpt のアームは jev.trial.codex.enabled がオンのときだけ保存できる（endpoint・provider_only・USD の上限・定価は使えない）。provider_only と data_collection は openrouter 専用", jevtrialsettings.MaxArms)
+	trialArmsConstraint    = fmt.Sprintf("JSON 配列（空は []）。最大 %d 件・id は重複不可・prompt_version はこのビルドに登録済み。codex_chatgpt のアームは jev.trial.codex.enabled がオンのときだけ保存できる（endpoint・provider_only・USD の上限・定価は使えない）。provider_only と data_collection は openrouter 専用。endpoint は省略（/v1/systemone）・/alpha/decisions・/v1/chat/completions のどれかで、/v1/chat/completions（一般チャットモデル。/api/v1/… や任意の URL は不可）のアームは list_price_usd_per_mtok（入力）と list_price_output_usd_per_mtok（出力）を両方 0 より大きく指定する必要があり、出力の定価は chat の endpoint だけで使える", jevtrialsettings.MaxArms)
 	trialCapConstraint     = fmt.Sprintf("0 より大きく %g 以下の数（USD）", jevshadowsettings.MaxDailyCostCapUSD)
 )
 

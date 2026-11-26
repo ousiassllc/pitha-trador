@@ -22,15 +22,6 @@ type rawState struct {
 	SimilarPastCases rag.Context     `json:"similar_past_cases"`
 }
 
-func buildRawRequest(model string, provider *systemone.Provider, questions map[string]systemone.Question, stateJSON json.RawMessage) systemone.Request {
-	return systemone.Request{
-		State:     rawState{Market: stateJSON},
-		Model:     model,
-		Questions: questions,
-		Provider:  provider,
-	}
-}
-
 // TraderRaw is Trader for a saved input: it asks the question group of
 // questionVersion about stateJSON (a stored jev_decisions.state_json, sent as
 // is) with an empty similar-case context. Like Trader it returns the answers,
@@ -43,12 +34,8 @@ func (c *Client) TraderRaw(ctx context.Context, questionVersion string, stateJSO
 		return Response{}, 0, 0, err
 	}
 	start := time.Now()
-	res, requestBytes, err := c.do(ctx, buildRawRequest(c.model, c.provider, questions, stateJSON))
-	latency := time.Since(start)
-	if err != nil {
-		return Response{}, latency, requestBytes, err
-	}
-	return mapResult(res), latency, requestBytes, nil
+	resp, requestBytes, err := c.ask(ctx, questions, rawState{Market: stateJSON})
+	return resp, time.Since(start), requestBytes, err
 }
 
 // RawRequestBytes is the size of the request body TraderRaw would send to an
@@ -59,7 +46,7 @@ func RawRequestBytes(model string, provider *systemone.Provider, questionVersion
 	if err != nil {
 		return 0, err
 	}
-	body, err := json.Marshal(buildRawRequest(model, provider, questions, stateJSON))
+	body, err := json.Marshal(buildRequest(model, provider, questions, rawState{Market: stateJSON}))
 	if err != nil {
 		return 0, fmt.Errorf("trialwire: encode request: %w", err)
 	}

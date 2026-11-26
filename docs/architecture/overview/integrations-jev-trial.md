@@ -61,6 +61,7 @@
 |---------------|-----------|--------------------------------------|
 | `reported` | 応答の `usage.cost`（報告値。最優先） | 報告値 |
 | `list_price_estimate` | アームの定価（`list_price_usd_per_mtok`、1M 入力トークンあたり）× 入力トークン数（報告値が無ければリクエストのバイト数からの推定） | **処理先を固定していないアーム（`provider_only` なし）は、定価と `WorstCaseUSDPerMtok` の高い方**の単価 × 入力トークン数。`provider_only` で固定したアームは定価のまま |
+| `list_price_estimate`（チャットのアーム。issue #1224） | 入力トークン × `list_price_usd_per_mtok` ＋ 出力トークン × `list_price_output_usd_per_mtok`（トークンは応答の `usage.prompt_tokens` / `completion_tokens`。入力が無ければ本文の大きさからの推定。出力が無ければ 0 として推定額に入れる） | 入力トークン × チャット用の入力計上単価 ＋ 出力トークン × チャット用の出力計上単価（`Arm.ChatCountingUSDPerMtok()`。**処理先を固定していないアームは `max(定価, チャット用最悪単価)`**、固定したアームだけ設定した定価）。応答に出力トークンが無ければ出力は**出力上限トークン（`max_tokens`＝1024）**で数える（0 円にしない） |
 | `subscription` | **NULL**（ChatGPT のサブスク。USD は発生しない。issue #1081） | **0**（USD の上限には数えない。代わりにプロバイダー単位の 1 日の呼び出し回数・トークン数の上限。`overview/integrations-codex-chatgpt.md`） |
 | `unknown` | **NULL（0 ではない）** | 最悪値側の単価 `jevtrialsettings.WorstCaseUSDPerMtok`（0.24 USD/百万トークン。第 1 段階のモデルのうち最も高い Clef の定価）× 入力トークン数 |
 
@@ -68,6 +69,12 @@
 - **定価の設定に頼らない数え方**（issue #1065）: 応答が費用を報告しないとき、上限に数える単価は**設定した `list_price_usd_per_mtok` ではなく `Arm.CountingUSDPerMtok()`** で決まる。定価が無い（0・省略）なら `WorstCaseUSDPerMtok`（0.24）。定価があっても、`provider_only` で処理先を固定していないアームは `max(定価, 0.24)` で数える（処理先が呼び出しごとに替わりうるため、低い定価を書いても上限は甘くならない）。`provider_only` で固定したアームだけが、設定した定価のまま数える（処理先が分かっているので、その定価が単価）。`cost_usd`（推定額）は定価のままで、上限に数えた額は `counted_cost_usd`（`jev_trial_cost` の `list_price_estimate.counted_usd`）に別に残る。既定値（全体 0.10・アーム 0.05・最悪単価 0.24）は変えない。
 - **止まる条件の保持と失敗時の側**: 402/403 の停止はメモリにも保持し、記録の書き込みに失敗してもその日のうちは再び呼ばない（費用の上限は保存済みの行から毎回求め直すので、これは 402/403 だけの追加）。設定・停止記録・失敗カウンタの**読み取りに失敗したときは、そのアームを呼ばない**（「記録なし」を「止まっていない」と読まない）。失敗カウンタを読めないときは、低い値で上書きしないよう数えない。`error_excerpt` は 200 バイトまでで、設定済みの OpenRouter キー文字列そのもの（応答に含まれる部分一致のすべて。キーはメモリ上だけで持ち、ログにも書かない）と、`sk-…` 形のキー・`Bearer …` を伏せ字（`[redacted]`）にする（ベンダーが認証情報をエラー本文に返す場合に備える。設定済みのキーでも `sk-…` 形でもない形の認証情報までは伏せられない）。画面の保存は、無効化を先に、有効化を最後に書く（途中で失敗してもオンのまま残らない）。
 - **応答が返らなかった呼び出し**（`status='failed'`）の費用は常に `unknown`（`cost_usd` は NULL）。4xx の応答（413 を除く）と 529 は、モデルが動く前に断られ課金されない**前提**（前提であって測定ではない）で、上限には 0 円で数える（失敗回数の上限と 402/403/429/529 の停止が歯止めになる）。5xx・413・タイムアウト・通信エラー・不正な応答はモデルが動いた後かもしれず課金された可能性があるので、リクエストの推定入力トークン数 × 最悪値側の単価で数える。
+- **チャットのアーム（`endpoint=/v1/chat/completions`）の数え方**（issue #1224）: 上の入力だけの数え方は第 1 段階の意思決定モデル向けで、**一般チャットモデルは出力にも定価が付き、入力定価も 0.24 を大きく超える**（2〜8 USD/百万トークン）。そのためチャットのアームだけ、入力と出力の両方を見る。`/v1/systemone`・`/alpha/decisions` のアームの数え方と `WorstCaseUSDPerMtok`（0.24）は変えない。
+  - **定価は 2 つとも必須**: `list_price_usd_per_mtok`（入力）と `list_price_output_usd_per_mtok`（出力）。0・省略は保存できない。出力の定価は chat のエンドポイントだけで使える。
+  - **チャット用の最悪単価**（`jevtrialsettings.ChatWorstInputUSDPerMtok` = 8、`ChatWorstOutputUSDPerMtok` = 40 USD/百万トークン）: 比べる一般チャットモデルのうち公表定価が最も高いもの（`openai/gpt-6.2-astra`。`anthropic/claude-opus-5.5` は 4 / 20、`google/gemini-4-argon` は 2 / 10）。**出典: OpenRouter のモデル一覧（`GET /api/v1/models` の `pricing.prompt` / `pricing.completion`）、確認日 2026-11-26**。上限判定のための数え方で、実請求との一致は未確認。これより高いモデルを載せるときは、この定数を上げてから載せる。
+  - **失敗時**: 4xx（413 を除く）と 529 は従来どおり 0 円。それ以外（5xx・413・タイムアウト・通信エラー・不正な応答）は、そのアームの**予約相当**（推定入力トークン × 入力計上単価 ＋ 出力上限トークン × 出力計上単価）で数える。
+  - **報告費用が最優先**: 応答の `usage.cost`（出力込み）があれば `reported`。
+  - **既定の上限との関係**: チャットの 1 呼び出しの予約は、入力の推定（本文の大きさ ÷ 2 バイト/トークン。`shadow.BytesPerTokenFloor`。14 KB の本文で約 7,400 トークン）× 8 USD/M ＋ 1024 × 40 USD/M で **約 0.1 USD** になる。既定の全体上限 0.10・アーム上限 0.05 のままでは予約だけで上限に当たり、**呼ばれずに `daily_cap_overall` / `daily_cap_arm` で見送られる**（既定の上限値はコードで変えない）。チャットのアームを動かすときは、`jev.trial.daily_cost_cap_usd` とアームの `daily_cost_cap_usd` を、人が上げる。
 - 上限は**全体**（`jev.trial.daily_cost_cap_usd`、既定 0.10 USD）と**アームごと**（`Arm.daily_cost_cap_usd`、省略時 0.05 USD）の両方を判定する。どちらかが保存済みの行の `counted_cost_usd` の 1 日（JST）合計に達したら、全体なら `jev.trial.halt`（`daily_cost_cap`）、アームなら `jev.trial.halt.<arm>`（`arm_cost_cap`）を記録して止める。翌日（JST）に再開する。
 - 保存に失敗した（課金されたかもしれない）呼び出しは、失敗として日次カウンタに数え、上限の歯止めにする。
 
@@ -75,10 +82,10 @@
 
 日次上限は保存済みの行の `counted_cost_usd` 合計で判定するが、**まだ行になっていない呼び出し（最大 `maxInFlight`＝4 件）を、呼ぶ前にメモリ上で予約して上限に数える**（`trial/reserve.go`）。
 
-- **予約額**: その呼び出しのリクエスト本文の大きさ（`trialwire.RequestBytes`。実際に送る本文と同じ組み立て）から推定した入力トークン数（`shadow.EstimateInputTokens`）× `WorstCaseUSDPerMtok`。定価の設定に依らない（失敗した呼び出しを数える額と同じ）。
+- **予約額**: その呼び出しのリクエスト本文の大きさ（`trialwire.RequestBytes`。実際に送る本文と同じ組み立て）から推定した入力トークン数（`shadow.EstimateInputTokens`）× `WorstCaseUSDPerMtok`。定価の設定に依らない（失敗した呼び出しを数える額と同じ）。**チャットのアームは、実際に送るチャット本文の大きさ（`trialwire.ChatRequestBytes`。`trial.requestBytesFor` がアームのエンドポイントで選ぶ）から推定した入力トークン × 入力計上単価 ＋ 出力上限トークン（`trialwire.ChatMaxOutputTokens`＝1024）× 出力計上単価**（上の「チャットのアームの数え方」）。定価の設定だけでは小さくならない（処理先を固定していないアームはチャット用最悪単価以上）。Codex 側の予約は従来どおり System One 本文の大きさのまま（範囲外）。
 - **判定**: 保存済みの合計 ＋ 飛んでいる呼び出しの予約の合計（この呼び出しの分を含む）が、全体の上限とアームの上限を超えるなら、その呼び出しは見送る（行も停止記録も残さない。飛んでいる呼び出しが上限の内に収まる余地は残るので、停止はしない）。保存済みの合計だけで上限に達していれば、従来どおり停止を記録する。
 - **返す時**: 行を保存した（または失敗として数えた）後に予約を返す。保存と返却の間は二重に数える側に倒す。予約はメモリ上だけで、再起動で消える（再起動後は飛んでいる呼び出しが無い）。
-- **超え得る幅**: 予約は入力トークンの推定（最悪値側の単価）だけを見るので、上限を超えるのは、**応答が報告した費用（`usage.cost`。出力トークンを含む）が、予約額より大きいとき、その差の分**に限られる。1 件ごとの差は出力トークン分（トライアルの出力は短い）で、飛んでいる最大 4 件の差の合計が、全体の上限を超え得る最大の幅。アームの上限は、そのアームの飛んでいる分の差だけ超え得る（1 アームに同時に飛ぶのは最大 4 件）。幅はこれより広がらない。402 は新しい呼び出しを止めるが、飛んでいる呼び出しは打ち消さない（既存シャドーと同じ考え方）。
+- **超え得る幅**: 予約は入力トークンの推定（最悪値側の単価）だけを見るので、上限を超えるのは、**応答が報告した費用（`usage.cost`。出力トークンを含む）が、予約額より大きいとき、その差の分**に限られる。チャットのアームは予約に出力上限（`max_tokens`）分を含むので、この差は、報告費用がチャット用最悪単価での予約を超えるとき（処理先が最悪単価より高いモデルだったとき）に限られる。1 件ごとの差は出力トークン分（トライアルの出力は短い）で、飛んでいる最大 4 件の差の合計が、全体の上限を超え得る最大の幅。アームの上限は、そのアームの飛んでいる分の差だけ超え得る（1 アームに同時に飛ぶのは最大 4 件）。幅はこれより広がらない。402 は新しい呼び出しを止めるが、飛んでいる呼び出しは打ち消さない（既存シャドーと同じ考え方）。
 - **数え方の限界**: 1 日（JST）の境界をまたぐ呼び出しは、予約を、その呼び出しを許可した時点の日の上限に数える。複数プロセスで動かした場合は予約を共有しない（想定しない）。
 
 
@@ -97,7 +104,7 @@
 | `jev.trial.codex.halt` / `jev.trial.codex.login` | なし | Codex プロバイダー全体の停止記録（理由コード・再開時刻）・最後のログイン確認の状態（アプリが書く） |
 | `jev.trial.halt.<arm>` / `jev.trial.failures.<arm>` / `jev.trial.throttle.<arm>` | なし | アームごとの停止記録・失敗回数・429/529 の記録。`jev.shadow.*` とは重ならない |
 
-**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元〈openrouter・custom・codex_chatgpt から選ぶ。openrouter 以外では、送り先・データの扱い・ZDR は保存せず、データの扱いの既定値「学習に使わない提供元だけ」はハンドラが落とす。codex_chatgpt では 1 日の上限・定価も使えない〉・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR・API の送り先〈既定は /v1/systemone。/alpha/decisions を選べる。issue #1064〉）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
+**Settings 画面のアームのフォーム**: アームは 1 アーム 1 カードのフォーム（アーム名・提供元〈openrouter・custom・codex_chatgpt から選ぶ。openrouter 以外では、送り先・データの扱い・ZDR は保存せず、データの扱いの既定値「学習に使わない提供元だけ」はハンドラが落とす。codex_chatgpt では 1 日の上限・定価も使えない〉・モデル・プロンプトの版〈このビルドに登録された版から選ぶ〉・1 日の上限・定価・送り先の提供元〈カンマ区切り〉・データの扱い〈既定は学習に使わない提供元だけ〉・ZDR・API の送り先〈既定は /v1/systemone。/alpha/decisions と /v1/chat/completions（一般チャットモデル。issue #1224）を選べる〉・出力の定価〈チャットの送り先のときだけ。必須〉）で編集し、「アームを追加」「削除」で行を増減する（htmx。追加・削除は編集部分だけを差し替え、打ちかけの行は残る。保存するまでは何も書かない）。保存すると、ハンドラ（`web/handler/jevtrial`）が行（`arm-<n>-<項目>`）を`[]jevtrialsettings.Arm`に集め、`service/jevtrial.ValidateArms`（中身は、保存済みの JSON を読むときと同じ`jevtrialsettings.ValidateArms`＋登録済みのプロンプトの版）に通す。**検証の本体は 1 か所**で、必須項目・id の文字種と重複・最大 8 件・各項目の範囲・提供元名・`data_collection`の値は JSON でもフォームでも同じ厳しさ。1 つでも不正なら何も保存せず、`#jev-trial-error`に日本語の理由を出す。保存済みのアームが壊れているときは、画面は「アームなし」として扱う旨を示し、保存で置き換わる。API キーは設定の有無（設定済み／未設定）だけを出し、値は画面にも応答にも出さない。
 
 アーム（`jev.trial.arms` の要素）の形:
 
@@ -109,7 +116,8 @@
 | `prompt_version` | 登録済みの Trader プロンプト版（例 `trader-v3`） |
 | `daily_cost_cap_usd` | このアームの 1 日の上限（省略・0 は 0.05 USD） |
 | `list_price_usd_per_mtok` | 1M 入力トークンあたりの定価。0・省略は不明（応答が費用を報告しなければ `unknown`）。上限には、`provider_only` を指定していないアームなら `max(定価, 最悪単価 0.24)` で数える（低い定価を書いても上限は甘くならない） |
-| `endpoint` | 任意。このアームが呼ぶ API のパス（`/v1/systemone` または `/alpha/decisions`）。省略・空は `/v1/systemone`（ライブの Jev と同じ。既定は変えない）。`trial.NewCallers` が `trialwire.Config.Endpoint` へ渡す（アームごと。設定を変えるとキャッシュ済みのクライアントは作り直す）。`codex_chatgpt` では付けられない（HTTP API を呼ばない）。`/alpha/decisions` が実際に非 Jev モデルを受けるかは実測スパイク #1063 の結果次第で、この項目は選べるようにしただけ（実際の呼び出し・キーの投入はしない）。ライブの `jev.Client`・`JEV_*`・厳格検証は触らない（issue #1064） |
+| `list_price_output_usd_per_mtok` | 1M 出力トークンあたりの定価。**`endpoint` が `/v1/chat/completions` のアームだけ**使え、そのアームでは必須（`list_price_usd_per_mtok` も 0 より大きい値が必須）。他のアームに付けると保存できない（issue #1224） |
+| `endpoint` | 任意。このアームが呼ぶ API のパス（`/v1/systemone`・`/alpha/decisions`・`/v1/chat/completions`の 3 つだけ。**`/v1/chat/completions` は OpenRouter のホストから見た `/api/v1/chat/completions` ではない**: 基底 URL が `https://openrouter.ai/api` なので、`/api/…` を許すと `…/api/api/v1/…` になる。ホワイトリスト外の値・任意の URL は保存できない）。省略・空は `/v1/systemone`（ライブの Jev と同じ。既定は変えない）。`trial.NewCallers` が `trialwire.Config.Endpoint` へ渡す（アームごと。設定を変えるとキャッシュ済みのクライアントは作り直す）。`codex_chatgpt` では付けられない（HTTP API を呼ばない）。`/alpha/decisions` が実際に非 Jev モデルを受けるかは実測スパイク #1063 の結果次第で、この項目は選べるようにしただけ（実際の呼び出し・キーの投入はしない）。ライブの `jev.Client`・`JEV_*`・厳格検証は触らない（issue #1064） |
 | `provider_only` / `data_collection` / `zdr` | OpenRouter のルーティング指定（`provider.only`〈指定時はフォールバック無し〉・`provider.data_collection`・`provider.zdr`） |
 
 **第 1 段階のアーム案（設定例。ドキュメントにだけ書く。既定の配列は空で、アプリは何も登録しない）**:
@@ -123,6 +131,26 @@
 ```
 
 Gemini Decision 1 は定価が公表されていないため `list_price_usd_per_mtok` を省く（応答の `usage.cost` が無ければ `unknown`＝最悪値側で数える。0 円と数えない）。Clef 系の定価は 0.192〜0.24 USD/百万トークンで、上限判定は高い方（0.24）で数える。`or-clef-flash-v3` の定価 0.038 は推定額（`cost_usd`）にだけ効き、`provider_only` を付けていないので、上限には 0.24 で数える。
+
+### チャット Completions のアーム（`endpoint=/v1/chat/completions`。issue #1224）
+
+OpenRouter（と OpenAI 互換の `custom`）の**一般チャットモデル**（例: `anthropic/claude-opus-5.5`・`openai/gpt-6.2-astra`・`google/gemini-4-argon`）を送り先にするための経路。`/v1/systemone` と `/alpha/decisions` は意思決定モデル専用で、チャットモデルに投げると全件 `http_4xx` になる（2026-11-26 のお試しで 3 モデルが各 20 回失敗し、失敗上限で自動停止した）ため、別の送り先として足した。別のフィールド（`wire_format`）は足さない: **送り先のパスが形式を一意に決める**。既存の意思決定モデルの経路（`/v1/systemone`・`/alpha/decisions`）とCodex の経路は変えない。
+
+- **リクエスト**（`trialwire/chat.go`。プロトコル版 `chat-completions-v1`＝`trialwire.ChatProtocolVersion`。プロンプト版ではなく**ワイヤの版**で、Codex の `codex-exec-v1` に当たる。レイアウトを変えたら上げる）: `POST {BaseURL}/v1/chat/completions`。本文は System One の `{state, questions}` ではなく、`messages`（system: 固定の前置文、user: 質問群と状態）・`response_format`（`json_schema`、`strict: true`、スキーマ名に版を含む）・`max_tokens`＝1024（`trialwire.ChatMaxOutputTokens`。予約の出力側の材料）・`temperature: 0`（受け付けないモデルは OpenRouter が無視する）。質問は**登録済みの Trader プロンプト版**（第 1 段階は `trader-v3`）のもので、**新しいプロンプト版は作らない**。質問の文面・状態の JSON・スキーマ（質問 id が必須キー、拒否は `null`、choice は `{choice, confidence}`、noul は 0〜1 の数、`additionalProperties: false`）は Codex と共通のコード（`trialwire.QuestionsPrompt` / `StatePrompt` / `AnswerSchema`）。ただしチャットのスキーマ（`ChatAnswerSchema`）は数値の `minimum` / `maximum` を付けない（Anthropic の構造化出力は数値制約を未対応として 400 を返すので、付けると全件失敗しうる。0〜1 の範囲は質問文で示し、`systemone.DecodeTrial` が検査して範囲外は `invalid_response`）。Codex の送る内容は 1 バイトも変わらない（`codexwire` のテストが固定）。OpenRouter のアームには既存どおりルーティング指定（`provider.only` / `allow_fallbacks` / `data_collection` / `zdr`）を既存どおり載せる。**`provider.require_parameters` は送らない**（付けると、リクエストの全パラメータに対応する提供元だけが残る。`anthropic/claude-opus-5.5`・`openai/gpt-6.2-astra` は `temperature` を対応パラメータに挙げていないので、対応する提供元が 0 件になり 4xx で失敗する。OpenRouter は `response_format` を既定でも提供元選びの優先条件にするので、付けなくても対応する提供元が優先され、非対応ならパース失敗〈`invalid_response`〉か 4xx の行として残る）。`custom` には載せない。有料の呼び出しの再試行はしない。
+- **レスポンス**: `choices[0].message.content` を、質問 id をキーにした JSON オブジェクトとして読む（`trialwire.AnswersToSystemOne` が System One の答えセットに書き直し、`systemone.DecodeTrial` → `trialwire.FromResult` で検証。ライブの `systemone.Decode` は使わない）。**パース失敗・欠けた質問・聞いていない質問・範囲外・未定義の choice・`content` が無い・`model` が無い・本文が JSON でない応答は `systemone.ErrInvalidResponse`**（`failure_code=invalid_response`）。コードフェンスや自由文からの取り出しはしない。質問単位の `null` は拒否（`TypeRefusal`）で、全問拒否は `status=refused`・一部は `partial`、拒否・欠けた答えは NULL のまま（`NONE` や 0 で埋めない）。HTTP エラーの分類（402/403/413/429/529/4xx/5xx）と、キー・`Bearer`・`sk-…` の伏せ字は既存のまま。
+- **記録**: `served_model` / `served_provider` / `response_id` は応答の `model` / `provider` / `id`。トークンは `usage.prompt_tokens` / `usage.completion_tokens`、報告費用は `usage.cost`（OpenRouter のチャット Completions の現行ドキュメント。`usage: {include: true}` は廃止済みで何もしないので送らない。使用量は常に応答に入る。確認日 2026-11-26）。応答 JSON 全体を `response_json` に残す。新しい列は足さない（プロトコル版はアームの `endpoint` から分かる）。
+- **予約と費用**: 上の「チャットのアームの数え方」。`trial/run.go` の予約サイズは、チャットのアームでは**実際に送るチャット本文**の大きさ（`trial.requestBytesFor`）。リプレイ（`jevreplay`）の見積もりも同じ（`trial.RawRequestBytesFor` / `trial.ReservedUSD(arm, size)`）で、チャットのアームは出力が呼ぶ前に分からないので定価の見積もり（`ListPriceUSD`）を出さない。
+- **`max_tokens`＝1024 は未計測**: 答えのオブジェクトは 150 トークン前後だが、推論してから答えるモデルは推論トークンもここに数えられる。足りないモデルは本文が途中で切れ、`invalid_response` になる（出力の費用が上限を超えて増えるのではなく、失敗として残る）。
+
+**チャットのアームの設定例**（ドキュメントにだけ書く。上限は人が上げる。定価は 2026-11-26 の OpenRouter の公表値）:
+
+```json
+[
+  {"id": "or-gpt-6-2-astra-v3", "provider": "openrouter", "model": "openai/gpt-6.2-astra", "prompt_version": "trader-v3",
+   "endpoint": "/v1/chat/completions", "list_price_usd_per_mtok": 8, "list_price_output_usd_per_mtok": 40, "daily_cost_cap_usd": 0.5,
+   "provider_only": ["openai"]}
+]
+```
 
 ### データの扱い（`data_collection`）
 
@@ -169,3 +197,4 @@ OpenRouter への指定は、**既定で `data_collection=deny`**（プロンプ
 | 1.4 | 2026-11-15 | Settings のアーム入力を、JSON のテキストエリアから 1 アーム 1 カードのフォーム（追加・編集・削除）に変更。検証は保存済み JSON と同じ`jevtrialsettings.ValidateArms`に一本化し、1 つでも不正なら何も保存しない。提供元は openrouter・custom・codex_chatgpt から選べる（main の #1080・#1081 と合流） | issue #1066 |
 | 1.5 | 2026-11-22 | シャドーのテストの参照を、#1173 で `evalflow/` から移された実在のパス `shadowflow/shadow_isolation_test.go` に直し、「`evalflow` ディレクトリが行数の上限に達していたため」の理由の記述を外した（実装の変更は無い） | issue #1207 |
 | 1.6 | 2026-11-25 | 操作者向け 6 キーを MCP の `settings_set`／`settings_get` から読み書きできるようにした（「Settings 画面がオンにできる唯一の経路」の規則を改めた）。Settings 画面の保存も `actor=gui` で監査表に残す | issue #1220 |
+| 1.7 | 2026-11-26 | 一般チャットモデル向けの送り先 `endpoint=/v1/chat/completions` を追加。チャットのアームの数え方（入力と出力。定価 2 つ必須・チャット用最悪単価・失敗時・予約）、節「チャット Completions のアーム」、`list_price_output_usd_per_mtok`、Settings フォームの第 3 の送り先を追記 | issue #1224 |

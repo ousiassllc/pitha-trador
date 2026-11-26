@@ -16,7 +16,7 @@ import (
 
 // EstimateNotice is the fixed caveat of every estimate.
 const EstimateNotice = "件数 = 判断 ×（その判断を聞くアーム）。費用の見込み max_cost_usd は予約と同じ最悪値側の単価（入力トークンの推定 × " +
-	"jevtrialsettings.WorstCaseUSDPerMtok）で数えた額で、run はこの額を超えるところで止まる（list_price_usd は定価での目安。定価が分からないアームがあれば null）。" +
+	"jevtrialsettings.WorstCaseUSDPerMtok。チャットのアーム〈endpoint=/v1/chat/completions〉は入力と出力の計上単価と出力上限 max_tokens で数え、list_price_usd は null）で数えた額で、run はこの額を超えるところで止まる（list_price_usd は定価での目安。定価が分からないアームがあれば null）。" +
 	"お試しと同じ 1 日（JST）の費用上限（全体・アームごと）を共有し、上限に達すると新しい呼び出しを出さずに待つ（翌日に自動で続きから再開する）。" +
 	"学習カットオフが公表されている（llm_cutoff がある）アームには、その日より後の判断だけを聞く。公表されていないアームは llm_cutoff_status=unverified（未確認）で、" +
 	"その結果は参考扱い（reference_only）。送る入力は保存された入力そのままで、判断より後のデータ（過去の類似事例 RAG を含む）は足さない。" +

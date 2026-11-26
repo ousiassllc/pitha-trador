@@ -1,7 +1,6 @@
 package trial
 
 import (
-	"math"
 	"net/http"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevtrialsettings"
@@ -41,12 +40,18 @@ func SubscriptionCost() Cost { return Cost{Source: jevtrial.CostSubscription} }
 //  3. Neither: USD is nil and source unknown; the call is counted at
 //     jevtrialsettings.WorstCaseUSDPerMtok so an unpriced arm cannot slip under
 //     a cap as 0 USD.
+//
+// A chat arm (jevtrialsettings.EndpointChatCompletions) keeps rule 1 but prices
+// rules 2 and 3 on input and output tokens (chat.go).
 func AnsweredCost(arm jevtrialsettings.Arm, resp trialwire.Response, requestBytes int) Cost {
 	if arm.Provider == jevtrialsettings.ProviderCodexChatGPT {
 		return SubscriptionCost()
 	}
-	if c := resp.ReportedCostUSD; c != nil && *c >= 0 && !math.IsNaN(*c) && !math.IsInf(*c, 0) {
-		return Cost{USD: new(*c), Source: jevtrial.CostReported, CountedUSD: *c}
+	if c, ok := reportedCost(resp); ok {
+		return Cost{USD: new(c), Source: jevtrial.CostReported, CountedUSD: c}
+	}
+	if arm.IsChat() {
+		return chatAnsweredCost(arm, resp, requestBytes)
 	}
 	tokens := resp.InputTokens
 	if tokens <= 0 {
@@ -71,10 +76,26 @@ func AnsweredCost(arm jevtrialsettings.Arm, resp trialwire.Response, requestByte
 // not a valid answer set) may have been billed, so it counts at the worst-case
 // price over the estimated input tokens of the request.
 func FailedCost(status, requestBytes int) Cost {
-	if (status >= 400 && status < 500 && status != http.StatusRequestEntityTooLarge) || status == 529 {
+	if refusedBeforeRun(status) {
 		return Cost{Source: jevtrial.CostUnknown}
 	}
 	return Cost{Source: jevtrial.CostUnknown, CountedUSD: worstCaseUSD(shadow.EstimateInputTokens(requestBytes))}
+}
+
+// FailedCostFor is FailedCost for a call of arm: a chat arm's failure that may have
+// been billed is counted at its reservation (input worst case plus the output
+// limit, chatFailedCost) instead of the input-only worst case.
+func FailedCostFor(arm jevtrialsettings.Arm, status, requestBytes int) Cost {
+	if arm.IsChat() {
+		return chatFailedCost(arm, status, requestBytes)
+	}
+	return FailedCost(status, requestBytes)
+}
+
+// refusedBeforeRun reports whether an HTTP error status means the vendor refused the
+// request before running the model (assumed not billed): a 4xx other than 413, or 529.
+func refusedBeforeRun(status int) bool {
+	return (status >= 400 && status < 500 && status != http.StatusRequestEntityTooLarge) || status == 529
 }
 
 func worstCaseUSD(tokens int) float64 {

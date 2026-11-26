@@ -36,7 +36,9 @@ func armsMessage(err error) string {
 	case jevtrialsettings.ArmsErrCap:
 		return which + " の 1 日の上限は 0 より大きく " + strconv.FormatFloat(jevshadowsettings.MaxDailyCostCapUSD, 'g', -1, 64) + " USD 以下にしてください"
 	case jevtrialsettings.ArmsErrListPrice:
-		return which + " の定価は 0〜" + strconv.FormatFloat(jevtrialsettings.MaxListPriceUSDPerMtok, 'g', -1, 64) + " USD にしてください"
+		return which + " の定価は 0〜" + strconv.FormatFloat(jevtrialsettings.MaxListPriceUSDPerMtok, 'g', -1, 64) + " USD にしてください（API の送り先が /v1/chat/completions のときは 0 より大きい値が必要です）"
+	case jevtrialsettings.ArmsErrListPriceOutput:
+		return which + " の出力の定価は、API の送り先が /v1/chat/completions のときだけ、0 より大きく " + strconv.FormatFloat(jevtrialsettings.MaxListPriceUSDPerMtok, 'g', -1, 64) + " USD 以下で入力してください"
 	case jevtrialsettings.ArmsErrProviderOnly:
 		return which + " の送り先は最大 " + strconv.Itoa(jevtrialsettings.MaxProviderOnly) + " 件の提供元名（英数字と . _ - / :）で入力してください"
 	case jevtrialsettings.ArmsErrDataCollection:
@@ -44,7 +46,7 @@ func armsMessage(err error) string {
 	case jevtrialsettings.ArmsErrLLMCutoff:
 		return which + " の llm_cutoff は空（未確認）か YYYY-MM-DD の日付にしてください"
 	case jevtrialsettings.ArmsErrEndpoint:
-		return which + " の API の送り先は「既定（/v1/systemone）」か「/alpha/decisions」を選んでください（codex_chatgpt では選べません）"
+		return which + " の API の送り先は「既定（/v1/systemone）」「/alpha/decisions」「/v1/chat/completions」のどれかを選んでください（codex_chatgpt では選べません）"
 	case jevtrialsettings.ArmsErrJSON:
 		return "アームは JSON 配列（要素は id・provider・model・prompt_version など）で指定してください。" + ae.Err.Error()
 	}

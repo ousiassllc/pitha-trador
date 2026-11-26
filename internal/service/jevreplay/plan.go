@@ -134,15 +134,15 @@ func BuildPlan(ctx context.Context, q repo.Querier, in PlanInput) (Plan, error) 
 				ap.ExcludedBeforeCutoff++
 				continue
 			}
-			size, err := trialwire.RawRequestBytes(a.Model, trial.ProviderFor(a), a.PromptVersion, state)
+			size, err := trial.RawRequestBytesFor(a, a.PromptVersion, state)
 			if err != nil {
 				return Plan{}, fmt.Errorf("jevreplay: size the request of arm %q for decision %d: %w", a.ID, d.ID, err)
 			}
-			reserved := trial.ReservedUSD(size)
+			reserved := trial.ReservedUSD(a, size)
 			ap.Calls++
 			ap.MaxCostUSD += reserved
 			p.MaxCostUSD += reserved
-			if list := trial.AnsweredCost(a, trialwire.Response{}, size).USD; list != nil {
+			if list := listPriceUSD(a, size); list != nil {
 				listTotal += *list
 				if ap.ListPriceUSD == nil {
 					ap.ListPriceUSD = new(0.0)
@@ -208,4 +208,14 @@ func armIDs(arms []jevtrialsettings.Arm) []string {
 		ids[i] = a.ID
 	}
 	return ids
+}
+
+// listPriceUSD is the list-price estimate of one call of a (nil: unknown). A chat
+// arm's is unknown before the call: its cost includes the output, whose size is
+// not known until the model answers (the plan's worst case is the reservation).
+func listPriceUSD(a jevtrialsettings.Arm, requestBytes int) *float64 {
+	if a.IsChat() {
+		return nil
+	}
+	return trial.AnsweredCost(a, trialwire.Response{}, requestBytes).USD
 }
