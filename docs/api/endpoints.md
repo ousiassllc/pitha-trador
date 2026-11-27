@@ -120,7 +120,7 @@ stateDiagram-v2
 
 ## 6. WebSocket
 
-データ取得（`engine.State`等）が失敗しても、直ちには接続を閉じない（閉じるとブラウザが再接続を始め、接続自体は生きているのに「接続が切れています」が出るため。issue #266）。サーバーは最初の失敗を`slog`にWarnで記録して次のポーリングで再試行し、連続`MaxConsecutiveTransientErrors`（5）回失敗したら閉じる。回復時はInfoを記録する。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）は即座に接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。
+データ取得（`engine.State`等）が失敗しても、直ちには接続を閉じない（閉じるとブラウザが再接続を始め、接続自体は生きているのに「接続が切れています」が出るため。issue #266）。サーバーは最初の失敗を`slog`にWarnで記録して次のポーリングで再試行し、連続`MaxConsecutiveTransientErrors`（5）回失敗したら閉じる。回復時はInfoを記録する。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）は即座に接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。`/ws/symbols/{symbol}`は、銘柄コードの形式が不正（ページ・JSON API と同じ検査）なら Upgrade の前に 404 を返す（ハンドシェイクが失敗し、クライアントは 101 のあと即閉じられる接続へ再接続し続けない。issue #1231）。
 
 デスクトップ版はWindows（WebView2）のみ対応する。Wails AssetServerはWebSocketを扱えず、WebView2は`http(s)://wails.localhost/...`以外（`ws://`）をAssetServerへ回さずネットワークへ直接送るため、待ち受けが無いと接続が失敗する。そこで`cmd/desktop`は`/ws/...`のUpgradeだけを受けるループバックの別リスナー（`router.WebSocketOnly`）をランダムポートで起動し、全画面の`<meta name="ws-base">`でそのアドレス（`ws://wails.localhost:<port>`）をLitコンポーネントに伝える（`lib/ws.ts`の`resolveWsUrl`が参照）。`*.localhost`は`::1`にも解決され得るため、リスナーは`127.0.0.1`と`[::1]`の同一ポートの両方で待ち受ける（IPv6ループバックが無い環境のみIPv4のみ。`::1`側が使用中なら別ポートで再試行）。ホストは`wails.localhost`のためセッションCookie（ポートを区別しない）とHostGuardのOrigin検査（ホスト名のみ比較）はHTTPルートと同じく働き、Origin（`http://wails.localhost`）とHost（`wails.localhost:<port>`）のポート差はws-baseのホスト名に限って許可する（`shared.AcceptWebSocket`）。Windows以外のデスクトップ版（`wails://wails/`）にはこのリスナーがなく、ページ自身のオリジンではWebSocketを張れないためライブ更新は機能しない（未対応）。`cmd/server`ではmetaを出さず、従来どおりページと同じオリジンへ接続する。
 
@@ -286,3 +286,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.132 | 2026-11-22 | §3の`POST /ops-settings/:key`の行の「許可キーは`opsettings.Keys()`の計108キー」を、件数を外して「許可キーの一次情報は`opsettings.Keys()`」に改めた（実装は149件で、件数は増えるたびに古くなるため。`er/tables-system.md`の「計33件」も同様）。ルート・検証・応答は変更なし | issue #1205 |
 | 1.133 | 2026-11-25 | §3の`POST /settings/jev-trial`の「トライアルをオンにできる唯一の経路（MCP の書き込み許可リストに無い）」を、MCP の `settings_set` の 6 キーでもオンにでき、画面の保存も監査表に残る、に改めた（issue #1220） | モデル比較トライアル（Settings 画面） |
 | 1.134 | 2026-11-26 | §3の`POST /settings/jev-trial`のアームの行に`list_price_output_usd_per_mtok`と`endpoint=/v1/chat/completions`を追加 | issue #1224 |
+| 1.135 | 2026-11-27 | §6 の WebSocket の説明に、`/ws/symbols/{symbol}` が銘柄コードの形式不正を Upgrade の前に 404 で返すことを追記 | issue #1231 |
