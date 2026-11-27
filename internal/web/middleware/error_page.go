@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"log/slog"
+	"runtime/debug"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,7 @@ func respondError(c *gin.Context, render ErrorPageRenderer, status int, message 
 func renderSafely(c *gin.Context, render ErrorPageRenderer, status int, message string) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(c.Request.Context(), "middleware: error page renderer panicked", "panic", r)
+			slog.ErrorContext(c.Request.Context(), "middleware: error page renderer panicked", "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 	render(c, status, message)

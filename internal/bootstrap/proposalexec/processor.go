@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -176,7 +177,7 @@ func (p Processor) Cycle(ctx context.Context) (int, error) {
 func (p Processor) handle(ctx context.Context, pr orderproposal.Proposal) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(ctx, "proposalexec: panic while processing a proposal", "proposal_id", pr.ID, "panic", r)
+			slog.ErrorContext(ctx, "proposalexec: panic while processing a proposal", "proposal_id", pr.ID, "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 	if err := p.advance(ctx, pr); err != nil {

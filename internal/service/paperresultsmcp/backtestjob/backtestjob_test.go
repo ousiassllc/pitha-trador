@@ -1,8 +1,11 @@
 package backtestjob_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -162,6 +165,30 @@ func TestAPanicInTheReplayIsAnInternalFailure(t *testing.T) {
 		t.Fatalf("the slot stayed taken after a panic: %v", err)
 	}
 	<-done
+}
+
+// The panic is not lost (FR-SCHED-6): its value and stack reach the log.
+func TestAPanicInTheReplayIsLoggedWithItsStack(t *testing.T) {
+	var logs bytes.Buffer
+	store := &memStore{}
+	done := make(chan int64, 1)
+	m := backtestjob.New(backtestjob.Config{
+		Source: func(context.Context, string) (backtestlab.ConfigSource, error) { return panicSource{}, nil },
+		Owner:  "me", Store: func() (backtestjob.Store, error) { return store, nil },
+		OnFinish: func(id int64) { done <- id },
+		Logger:   slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	if _, err := m.Start(t.Context(), job()); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	// The channel send orders the replay's log write before this read.
+	out := logs.String()
+	for _, want := range []string{"backtest replay panicked", "panic=\"engine bug\"", "stack=", "RunConfigs"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %q:\n%s", want, out)
+		}
+	}
 }
 
 // A panic of the OnFinish hook (FR-SCHED-6) is logged, not a crash: Close still

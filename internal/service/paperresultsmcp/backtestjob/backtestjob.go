@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -277,7 +278,8 @@ func (m *Manager) write(fn func(ctx context.Context) error) {
 // run (internal), not a crashed MCP.
 func (m *Manager) replay(ctx context.Context, job Job) (out backtestrun.Outcome) {
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			m.log.Error("paper-results-mcp: backtest replay panicked", "panic", r, "stack", string(debug.Stack()))
 			out = backtestrun.Outcome{ErrorCode: backtestrun.ErrorInternal}
 		}
 	}()
