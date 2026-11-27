@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -78,6 +79,18 @@ func (r *rig) advanceUntil(cond func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 	r.t.Fatal("condition not met while advancing the clock")
+}
+
+// syncLoop returns once the feed loop, serving c, has taken a wake that was
+// pending and then handled a later notification: the wake's decision (swap or
+// not) is made by then. n must grow with every call (it is the marker's value).
+// A loop that reconnected instead would never handle the marker sent on c.
+func (r *rig) syncLoop(c *tt.EventConn, n int) {
+	r.t.Helper()
+	tt.Eventually(r.t, func() bool { return !r.feed.WakePending() })
+	_ = c.Send("p_no\x02" + strconv.Itoa(n) + "\x01p_date\x02x\x01p_cmd\x02US\x01p_ENO\x02" + strconv.Itoa(90000+n) +
+		"\x01p_MC\x0200\x01p_UU\x02sync\x01p_US\x02" + strconv.Itoa(n))
+	tt.Eventually(r.t, func() bool { return r.feed.Statuses().Operations["00/sync"] == strconv.Itoa(n) })
 }
 
 func (r *rig) restRefills() int { return r.fb.Count("CLMMfdsGetMarketPrice") }

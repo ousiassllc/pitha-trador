@@ -2,7 +2,9 @@ package adapter_test
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +69,11 @@ func TestLoginMasterEventAndLatestEndToEnd(t *testing.T) {
 // The 立花 source settings (issue #728) reach the stream: a budget of one
 // connection a day leaves the first connect alone and suspends the swap.
 func TestSourceSettingsSetTheEventConnectionBudget(t *testing.T) {
+	logs := &syncBuffer{}
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
 	clk := tt.NewManualClock(tt.AtJST(2026, 10, 8, 6, 0))
 	fb := tt.New(t, clk)
 	a := adapter.New(adapter.Config{
@@ -84,7 +91,9 @@ func TestSourceSettingsSetTheEventConnectionBudget(t *testing.T) {
 	_ = a.SetWatch(ctx, []string{"7203"})
 	fb.WaitEvent(t, 1)
 	_ = a.SetWatch(ctx, []string{"7203", "6758"})
-	time.Sleep(100 * time.Millisecond)
+	// The feed logs the suspension when it decides against the swap; that
+	// decision is final, so no reconnect can follow it.
+	tt.Eventually(t, func() bool { return strings.Contains(logs.String(), "swap suspended") })
 	if n := len(fb.Events()); n != 1 || a.Feed().ConnectionsToday() != 1 {
 		t.Errorf("connections = %d (tally %d), want the swap suspended by the budget of 1", n, a.Feed().ConnectionsToday())
 	}
