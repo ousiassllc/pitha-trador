@@ -204,3 +204,4 @@
 | 1.199 | 2026-11-25 | FR-MCP-52 に、`update_apply` が取引日の JST 9:00〜15:30 は導入せず `deferred`（`market_hours`）を返す条件を追加（`update_status` の理由にも出す。周期確認・Settings の自動導入は変えない） | issue #1222 |
 | 1.200 | 2026-11-27 | FR-SCHED-6 の常駐goroutineの例に、注文案の処理・Jev リプレイの実行・MCP のバックテスト実行を追加（実装済みの panic 回復。バックテストは実行中・最終状態の書き込み・完了フックの panic でも実行枠を解放する）。FR-MCP-19 の書き込みツール数を 18 → 20 に訂正 | issue #1233・#1226 |
 | 1.201 | 2026-11-28 | FR-MCP-3・FR-MCP-19 の「設定ツールと注文案ツールの書き込み(接続)」を「書き込みツールの書き込み(接続)」に直し、FR-MCP-19 の後半の変更の列挙（設定・注文案だけ）を `architecture/paper-results-mcp.md` §7.3 の ①〜⑭ への参照に置き換えた（実装の変更は無い） | issue #1239 |
+| 1.202 | 2026-11-28 | FR-SCHED-6 の常駐goroutineの列挙を、網羅ではなく代表例と明記し、`internal/safego` を使う側の全件は `grep -rl 'internal/safego"'` が一次情報であることを追記（実装の変更は無い） | issue #1243 |

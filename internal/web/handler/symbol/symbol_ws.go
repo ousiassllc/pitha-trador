@@ -46,9 +46,10 @@ type symbolJevUpdateMessage struct {
 // price would otherwise keep drawing fake bars.
 //
 // A symbol that fails validSymbol (the same format check the page and JSON
-// API apply) gets a plain 404 before the upgrade, so the client's WsClient
-// sees a failed handshake instead of a connection that opens (101) and is
-// closed straight away, which it would keep reconnecting to.
+// API apply) gets a plain 404 before the upgrade, so the handshake fails
+// instead of the connection opening (101) and being closed straight away.
+// The client's WsClient treats the failed handshake as a disconnect and keeps
+// reconnecting with backoff, as it does for any other close.
 func (h *SymbolHandler) WebSocket(c *gin.Context) {
 	symbol := c.Param("symbol")
 	if !validSymbol(symbol) {
