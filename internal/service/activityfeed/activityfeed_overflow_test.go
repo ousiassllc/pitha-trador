@@ -18,6 +18,19 @@ func burstJobs(svc *activityfeed.Service, n int) {
 	}
 }
 
+// waitForFlush blocks until the coalescing flush has started (its
+// QueueCounts call), polling up to a bound instead of sleeping a fixed time.
+func waitForFlush(t *testing.T, jobs *fakeJobs) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for jobs.countCalls.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the coalescing flush never ran")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // Issue #536: a full scan's job burst fills a slow subscriber's job quota,
 // but kill switch and decision events still reach it, and the dropped job
 // messages are reported with a Resync instead of vanishing silently.
@@ -33,7 +46,7 @@ func TestService_JobBurst_DoesNotCrowdOutPriorityEvents(t *testing.T) {
 	svc.ObserveDecision(context.Background(), domain.JevDecision{Symbol: "7203", Timestamp: t0, DecisionType: domain.JevDecisionTypeTrader})
 
 	// Let the coalescing flush run while the subscriber is still behind.
-	time.Sleep(100 * time.Millisecond)
+	waitForFlush(t, jobs)
 
 	var gotKill, gotDecision, gotResync bool
 	deadline := time.After(5 * time.Second)
@@ -67,7 +80,7 @@ func TestService_Resync_DeliveredAfterSlowSubscriberDrains(t *testing.T) {
 	defer cancel()
 
 	burstJobs(svc, 500)
-	time.Sleep(100 * time.Millisecond) // flush runs; buffer still full -> still lagged
+	waitForFlush(t, jobs) // flush runs; buffer still full -> still lagged
 
 	deadline := time.After(5 * time.Second)
 	for {

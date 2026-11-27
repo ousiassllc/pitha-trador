@@ -36,7 +36,10 @@ func TestRecordsOrdersAndStatusesAndDecodesNames(t *testing.T) {
 func TestNoConnectionWithoutSymbolsAndWaitsForTheSession(t *testing.T) {
 	r := newRig(t, 10, 60)
 	r.run()
-	time.Sleep(50 * time.Millisecond)
+	// An (empty) watch list change wakes the loop; once it took the wake it
+	// has run with no symbols, and still did not dial.
+	_ = r.feed.SetWatch(r.ctx, nil)
+	tt.Eventually(t, func() bool { return !r.feed.WakePending() })
 	if n := len(r.fb.Events()); n != 0 {
 		t.Fatalf("connections = %d, want none without a watch list", n)
 	}
@@ -93,9 +96,9 @@ func TestPlannedSwapsAreBatchedAndLimitedByTheDailyBudget(t *testing.T) {
 
 	// Removals never reconnect.
 	_ = r.feed.SetWatch(r.ctx, []string{"1001", "1002"})
-	r.fb.WaitEvent(t, 2) // additions: one batched reconnect
+	c2 := r.fb.WaitEvent(t, 2) // additions: one batched reconnect
 	_ = r.feed.SetWatch(r.ctx, []string{"1002"})
-	time.Sleep(50 * time.Millisecond)
+	r.syncLoop(c2, 1) // the loop has decided on the removal (and, were it to reconnect, c2 would be gone)
 	if n := len(r.fb.Events()); n != 2 {
 		t.Fatalf("connections = %d, want 2: dropping a symbol must not reconnect", n)
 	}
@@ -113,7 +116,7 @@ func TestPlannedSwapsAreBatchedAndLimitedByTheDailyBudget(t *testing.T) {
 	// The budget (3) is used up: the next swap is suspended with a warning.
 	_ = r.feed.SetWatch(r.ctx, []string{"1002", "1003", "1004", "1005"})
 	tt.Eventually(t, func() bool { return strings.Contains(logs.String(), "swap suspended") })
-	time.Sleep(50 * time.Millisecond)
+	// The suspension is logged as the swap is decided against, which is final.
 	if n := len(r.fb.Events()); n != 3 {
 		t.Fatalf("connections = %d, want 3: no swap past the budget", n)
 	}

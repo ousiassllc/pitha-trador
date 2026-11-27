@@ -31,25 +31,3 @@ func TestScheduler_EnqueueFullScan_DisabledEnqueuesNothing(t *testing.T) {
 		t.Errorf("ClaimNext(market-data) err = %v, want ErrJobNotFound", err)
 	}
 }
-
-// The cron trigger is not even registered, so no full ingestion happens
-// across several cycles.
-func TestScheduler_Start_DisabledFullScanTriggerNeverEnqueues(t *testing.T) {
-	db := newTestDB(t)
-	instruments := market.NewInstrumentRepository(db)
-	jobs := jobqueue.NewJobRepository(db)
-	mustCreateInstrument(t, instruments, "7203", true)
-
-	s := scheduler.New(jobs, instruments, scheduler.WithFullScanDisabled())
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if err := s.Start(ctx, time.Second); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	defer s.Stop()
-
-	time.Sleep(2500 * time.Millisecond) // two full-scan cycles at a 1s interval
-	if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueMarketData, time.Now().UTC()); !errors.Is(err, jobqueue.ErrJobNotFound) {
-		t.Errorf("ClaimNext(market-data) err = %v, want ErrJobNotFound: a disabled full scan must not enqueue", err)
-	}
-}

@@ -2,6 +2,7 @@ package pushfeed_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,9 @@ func TestLatest_BoardMaxAgeDecidesPushVersusREST(t *testing.T) {
 			f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 2400},
 				marketdata.Board{Symbol: "1000", CurrentPrice: 2555})
 			feed := pushfeed.New(fakeUniverse{stocks(1)}, f.client, f.wsURL(), 1)
+			var aged atomic.Int64 // how far the feed's clock has moved on
+			base := time.Now()
+			feed.SetClock(func() time.Time { return base.Add(time.Duration(aged.Load())) })
 			feed.BoardMaxAge = time.Minute // generous while waiting for the PUSH board
 			ctx, cancel := context.WithCancel(context.Background())
 			done := make(chan struct{})
@@ -44,7 +48,7 @@ func TestLatest_BoardMaxAgeDecidesPushVersusREST(t *testing.T) {
 			}
 
 			feed.BoardMaxAge = tc.maxAge
-			time.Sleep(20 * time.Millisecond) // age the board past the tight limit
+			aged.Add(int64(10 * time.Millisecond)) // age the board past the tight limit
 			before := f.boardFetches()
 			if _, err := feed.Latest(ctx, "1000"); err != nil {
 				t.Fatalf("Latest: %v", err)
