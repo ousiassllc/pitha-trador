@@ -6,6 +6,7 @@ package apierrorpage
 import (
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -71,7 +72,7 @@ func Handler(render middleware.ErrorPageRenderer) gin.HandlerFunc {
 func renderSafely(c *gin.Context, render middleware.ErrorPageRenderer, status int, msg string) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.ErrorContext(c.Request.Context(), "apierrorpage: error page renderer panicked", "panic", r)
+			slog.ErrorContext(c.Request.Context(), "apierrorpage: error page renderer panicked", "panic", r, "stack", string(debug.Stack()))
 			c.AbortWithStatus(status)
 		}
 	}()
