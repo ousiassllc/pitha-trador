@@ -224,3 +224,42 @@ func TestRunner_PaymentRequiredEndsTheRunAndRedactsTheKey(t *testing.T) {
 		t.Errorf("failed %d of %d done, want every recorded call failed", got.CallsFailed, got.CallsDone)
 	}
 }
+
+// panicStore panics in NextActive until it has been called panics times, then
+// answers like the real store.
+type panicStore struct {
+	*repo.Repository
+	calls  atomic.Int32
+	panics int32
+	resume chan struct{}
+}
+
+func (s *panicStore) NextActive(ctx context.Context) (jevreplay.Run, bool, error) {
+	n := s.calls.Add(1)
+	if n <= s.panics {
+		panic("replay store bug")
+	}
+	if n == s.panics+1 {
+		close(s.resume)
+	}
+	return s.Repository.NextActive(ctx)
+}
+
+// A panic in one cycle of the resident loop is logged and the next poll runs
+// the cycle again (FR-SCHED-6); it does not take the process down.
+func TestRunner_StartSurvivesAPanicInACycle(t *testing.T) {
+	e := newEnv(t)
+	e.enable()
+	store := &panicStore{Repository: e.store, panics: 1, resume: make(chan struct{})}
+	r := service.New(store, e.trial, e.settings, func(jevtrialsettings.Arm) service.Caller { return nil },
+		metalabelsettings.ModePaper, func() time.Time { return now }, service.WithMinInterval(0), service.WithPollInterval(5*time.Millisecond))
+	t.Cleanup(r.Close)
+
+	r.Start()
+
+	select {
+	case <-store.resume: // NextActive was called again after it panicked
+	case <-time.After(10 * time.Second):
+		t.Fatalf("NextActive called %d times, want the loop to run another cycle after the panic", store.calls.Load())
+	}
+}

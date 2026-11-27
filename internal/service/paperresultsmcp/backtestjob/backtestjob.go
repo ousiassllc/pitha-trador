@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/backtestrun"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtestlab"
 	"github.com/ousiassllc/pitha-trador/internal/version"
@@ -231,8 +232,20 @@ func (m *Manager) Close() {
 }
 
 // execute replays one run and records how it ended. It holds the run slot
-// until the final status is written (or given up on).
+// until the final status is written (or given up on), then calls OnFinish.
+// A panic in the run or in OnFinish is logged (FR-SCHED-6), never crashes the
+// process, and never leaves the slot taken.
 func (m *Manager) execute(store Store, run backtestrun.Run, job Job) {
+	safego.Run("backtest run", func() { m.record(store, run, job) })
+	if m.cfg.OnFinish != nil {
+		safego.Run("backtest on-finish hook", func() { m.cfg.OnFinish(run.ID) })
+	}
+}
+
+// record replays job and writes its rows. The deferred release frees the run
+// slot even if a write panics.
+func (m *Manager) record(store Store, run backtestrun.Run, job Job) {
+	defer m.release()
 	ctx, cancel := context.WithTimeout(m.root, m.cfg.RunTimeout)
 	defer cancel()
 
@@ -240,10 +253,6 @@ func (m *Manager) execute(store Store, run backtestrun.Run, job Job) {
 	out := m.replay(ctx, job)
 	m.write(func(ctx context.Context) error { return store.FinishBacktestRun(ctx, run.ID, out) })
 	m.log.Info("paper-results-mcp: backtest run ended", "run_id", run.ID, "error_code", out.ErrorCode)
-	m.release()
-	if m.cfg.OnFinish != nil {
-		m.cfg.OnFinish(run.ID)
-	}
 }
 
 // write runs one write of the run's own row. It does not depend on the run's

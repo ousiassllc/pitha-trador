@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevreplay"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/jevreplay"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/trialwire"
 )
@@ -118,7 +119,7 @@ func (r *Runner) Start() {
 		t := time.NewTicker(r.poll)
 		defer t.Stop()
 		for {
-			if err := r.tick(r.base); err != nil {
+			if err := safego.Try("jev replay tick", func() error { return r.tick(r.base) }); err != nil {
 				slog.Warn("jev replay: tick failed; the live decisions are unaffected", "error", err)
 			}
 			select {

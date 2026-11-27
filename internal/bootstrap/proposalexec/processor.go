@@ -27,6 +27,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/proposalstore"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -123,7 +124,8 @@ func (p Processor) paperOnly() error {
 // see the same time.
 func (p Processor) now() time.Time { return p.Execution.Config().Now() }
 
-// Run calls Cycle every interval until ctx is done.
+// Run calls Cycle every interval until ctx is done. A cycle that panics is
+// logged with its stack (FR-SCHED-6) and the next one still runs.
 func (p Processor) Run(ctx context.Context, interval time.Duration) {
 	if err := p.paperOnly(); err != nil {
 		slog.ErrorContext(ctx, "proposalexec: not running", "error", err)
@@ -135,7 +137,11 @@ func (p Processor) Run(ctx context.Context, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
-		if _, err := p.Cycle(ctx); err != nil && ctx.Err() == nil {
+		err := safego.Try("proposalexec cycle", func() error {
+			_, err := p.Cycle(ctx)
+			return err
+		})
+		if err != nil && ctx.Err() == nil {
 			slog.ErrorContext(ctx, "proposalexec: cycle failed", "error", err)
 		}
 		select {
