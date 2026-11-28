@@ -1,8 +1,11 @@
 package backtestjob_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -22,6 +25,8 @@ type memStore struct {
 	sweeps    []string
 	sweepErr  error
 	createErr error
+	// finishPanic makes FinishBacktestRun panic (a bug in the store).
+	finishPanic bool
 }
 
 func (s *memStore) CreateBacktestRun(_ context.Context, client string, req backtestrun.NewRun) (backtestrun.Run, error) {
@@ -43,6 +48,9 @@ func (s *memStore) StartBacktestRun(_ context.Context, id int64) error {
 }
 
 func (s *memStore) FinishBacktestRun(_ context.Context, id int64, out backtestrun.Outcome) error {
+	if s.finishPanic {
+		panic("store bug")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.outcomes == nil {
@@ -157,6 +165,63 @@ func TestAPanicInTheReplayIsAnInternalFailure(t *testing.T) {
 		t.Fatalf("the slot stayed taken after a panic: %v", err)
 	}
 	<-done
+}
+
+// The panic is not lost (FR-SCHED-6): its value and stack reach the log.
+func TestAPanicInTheReplayIsLoggedWithItsStack(t *testing.T) {
+	var logs bytes.Buffer
+	store := &memStore{}
+	done := make(chan int64, 1)
+	m := backtestjob.New(backtestjob.Config{
+		Source: func(context.Context, string) (backtestlab.ConfigSource, error) { return panicSource{}, nil },
+		Owner:  "me", Store: func() (backtestjob.Store, error) { return store, nil },
+		OnFinish: func(id int64) { done <- id },
+		Logger:   slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	if _, err := m.Start(t.Context(), job()); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	// The channel send orders the replay's log write before this read.
+	out := logs.String()
+	for _, want := range []string{"backtest replay panicked", "panic=\"engine bug\"", "stack=", "RunConfigs"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// A panic of the OnFinish hook (FR-SCHED-6) is logged, not a crash: Close still
+// returns and the next start finds the slot free.
+func TestAPanicInOnFinishDoesNotCrashOrHoldTheSlot(t *testing.T) {
+	store := &memStore{}
+	finished := make(chan struct{}, 2)
+	m := backtestjob.New(backtestjob.Config{
+		Source: func(context.Context, string) (backtestlab.ConfigSource, error) { return &labtest.Source{}, nil },
+		Owner:  "me", Store: func() (backtestjob.Store, error) { return store, nil },
+		OnFinish: func(int64) { finished <- struct{}{}; panic("hook bug") },
+	})
+	for range 2 {
+		if _, err := m.Start(t.Context(), job()); err != nil {
+			t.Fatalf("Start = %v (the slot stayed taken after an OnFinish panic?)", err)
+		}
+		<-finished
+	}
+	m.Close() // must not hang on wg.Wait
+}
+
+// A panic while the final status is written (FR-SCHED-6) frees the slot and the
+// wait group: the next start is not busy and Close returns.
+func TestAPanicInTheFinalWriteFreesTheSlot(t *testing.T) {
+	store := &memStore{finishPanic: true}
+	m, done := newManager(store, func(context.Context, string) (backtestlab.ConfigSource, error) { return &labtest.Source{}, nil })
+	for range 2 {
+		if _, err := m.Start(t.Context(), job()); err != nil {
+			t.Fatalf("Start = %v (the slot stayed taken after a write panic?)", err)
+		}
+		<-done
+	}
+	m.Close() // must not hang on wg.Wait
 }
 
 func TestStartIsRefusedAfterClose(t *testing.T) {

@@ -3,6 +3,7 @@ package symbol
 import (
 	"context"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
@@ -43,8 +44,18 @@ type symbolJevUpdateMessage struct {
 // `pitha-price-chart`'s live update/marker source. A snapshot already
 // pushed is not repeated: off-hours or with the scanner down the last
 // price would otherwise keep drawing fake bars.
+//
+// A symbol that fails validSymbol (the same format check the page and JSON
+// API apply) gets a plain 404 before the upgrade, so the handshake fails
+// instead of the connection opening (101) and being closed straight away.
+// The client's WsClient treats the failed handshake as a disconnect and keeps
+// reconnecting with backoff, as it does for any other close.
 func (h *SymbolHandler) WebSocket(c *gin.Context) {
 	symbol := c.Param("symbol")
+	if !validSymbol(symbol) {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
 	var lastDirection *string
 	var lastConfidence *float64
 	var lastTickAt time.Time

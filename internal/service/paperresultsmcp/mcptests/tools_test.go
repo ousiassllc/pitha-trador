@@ -122,15 +122,11 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	}
 }
 
-// No write-style tool exists outside the fixed tool sets that writingTools is drawn from: the dispatch table
-// (not just tools/list) is scanned for write/order/kill-switch-operation names
-// outside those fixed tool sets, and calling such names - or any unknown
-// name - gives the spec'd invalid_argument.
+// No write-style tool exists outside the fixed tool sets that writingTools is drawn from: the dispatch table (not just tools/list) is scanned
+// for write/order/kill-switch-operation names outside those fixed tool sets, and calling such names - or any unknown name - gives the spec'd invalid_argument.
 func TestNoWriteToolsExist(t *testing.T) {
-	forbidden := []string{"order", "cancel", "update", "set", "delete", "insert", "write", "create", "place",
-		"submit", "send", "trigger", "resolve", "reset", "clear", "operate", "enable", "disable", "toggle",
-		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
-		"secret", "secrets", "key", "login", "token", "kabu"}
+	forbidden := []string{"order", "cancel", "update", "set", "delete", "insert", "write", "create", "place", "submit", "send", "trigger", "resolve", "reset", "clear", "operate", "enable", "disable", "toggle",
+		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings", "secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
 		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) || slices.Contains(experimentTools, name) || slices.Contains(jevShadowTools, name) || slices.Contains(researchStatusTools, name) || slices.Contains(replayTools, name) || slices.Contains(exportTools, name) || slices.Contains(researchTools, name) || slices.Contains(researchNoteTools, name) || slices.Contains(updateTools, name) {
 			continue // their reach is pinned in settingstests, proposaltests, replaytests and exporttests
@@ -151,17 +147,14 @@ func TestNoWriteToolsExist(t *testing.T) {
 
 	srv := seededServer(t, nil)
 	for _, name := range []string{
-		"place_order", "cancel_order", "kill_switch_operate", "kill_switch_resolve", "kill_switch",
-		"update_settings", "set_runtime_setting", "delete_position", "insert_trade", "paper_order",
-		"execute_sql", "kabu_station_status", "kabu_api_error_guidance", "paper_performance_summary ",
-		"PAPER_TRADES", "", "../paper_trades",
+		"place_order", "cancel_order", "kill_switch_operate", "kill_switch_resolve", "kill_switch", "update_settings", "set_runtime_setting", "delete_position", "insert_trade", "paper_order",
+		"execute_sql", "kabu_station_status", "kabu_api_error_guidance", "paper_performance_summary ", "PAPER_TRADES", "", "../paper_trades",
 		// Nothing turns order proposals on from the MCP.
 		"order_proposals_enable", "order_proposal_enable", "order_proposal_set", "order_proposals_set",
 	} {
 		srv.call(t, name, map[string]any{}).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
 	}
-	srv.post(t, "Bearer "+testAPIKey, rpc("tools/call", map[string]any{})).
-		wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
+	srv.post(t, "Bearer "+testAPIKey, rpc("tools/call", map[string]any{})).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
 	for _, method := range []string{"resources/list", "prompts/list", "tools/execute", "sampling/createMessage"} {
 		r := srv.post(t, "Bearer "+testAPIKey, rpc(method, nil))
 		if !strings.Contains(string(r.body), "-32601") {

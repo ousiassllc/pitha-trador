@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
@@ -20,7 +21,7 @@ const MaxUploadBytes int64 = 4 << 30
 // PreviewPath is the upload route. It is a plain gin route rather than a huma
 // operation because huma buffers a request body in memory; the bundle is
 // streamed to a staging file instead (the body is the raw file, not
-// multipart).
+// multipart). It is still listed in openapi.json (documentPreview).
 const PreviewPath = "/api/v1/migration/preview"
 
 // Register adds every migration endpoint: the huma operations on api and
@@ -33,6 +34,49 @@ func (h *Handler) Register(api huma.API, engine *gin.Engine) {
 	huma.Post(api, "/migration/confirm", h.APIConfirm)
 	huma.Post(api, "/migration/cancel", h.APICancel)
 	engine.POST(PreviewPath, h.preview)
+	documentPreview(api)
+}
+
+// documentPreview adds `POST /migration/preview` to the OpenAPI document only
+// (no huma handler): the gin route above serves it, so the body stays
+// streamed, while openapi.json / `/swagger` still describe the request and the
+// responses of preview().
+func documentPreview(api huma.API) {
+	registry := api.OpenAPI().Components.Schemas
+	problemSchema := registry.Schema(reflect.TypeFor[huma.ErrorModel](), true, "Error")
+	problemResponse := func(status int) *huma.Response {
+		return &huma.Response{
+			Description: http.StatusText(status),
+			Content:     map[string]*huma.MediaType{"application/problem+json": {Schema: problemSchema}},
+		}
+	}
+	api.OpenAPI().AddOperation(&huma.Operation{
+		OperationID: "post-migration-preview",
+		Method:      http.MethodPost,
+		Path:        "/migration/preview",
+		Summary:     "Validate an uploaded PC migration bundle",
+		Description: "The body is the raw bundle file (not multipart), streamed to a staging file. " +
+			"Nothing in the live data changes; a previous unconfirmed preview is discarded.",
+		RequestBody: &huma.RequestBody{
+			Required: true,
+			Content: map[string]*huma.MediaType{
+				"application/octet-stream": {Schema: &huma.Schema{Type: huma.TypeString, Format: "binary"}},
+			},
+		},
+		Responses: map[string]*huma.Response{
+			"200": {
+				Description: "What the bundle holds and what it would replace",
+				Content: map[string]*huma.MediaType{
+					"application/json": {Schema: registry.Schema(reflect.TypeFor[importflow.Preview](), true, "")},
+				},
+			},
+			"403": problemResponse(http.StatusForbidden),
+			"409": problemResponse(http.StatusConflict),
+			"413": problemResponse(http.StatusRequestEntityTooLarge),
+			"422": problemResponse(http.StatusUnprocessableEntity),
+			"500": problemResponse(http.StatusInternalServerError),
+		},
+	})
 }
 
 func (h *Handler) preview(c *gin.Context) {

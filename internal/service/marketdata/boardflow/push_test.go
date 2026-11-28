@@ -39,9 +39,9 @@ func TestPushClient_Run_DeliversMessagesAndMarksFresh(t *testing.T) {
 				return
 			}
 		}
-		// Keep the connection open briefly so the client has time to read
-		// both messages before Run's ctx is canceled by the test.
-		time.Sleep(100 * time.Millisecond)
+		// Keep the connection open until the client goes away (Run's ctx is
+		// canceled by the test once it has read both messages).
+		<-conn.CloseRead(r.Context()).Done()
 	}))
 	defer server.Close()
 
@@ -57,7 +57,7 @@ func TestPushClient_Run_DeliversMessagesAndMarksFresh(t *testing.T) {
 		mu       sync.Mutex
 		received []marketdata.Board
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	done := make(chan error, 1)

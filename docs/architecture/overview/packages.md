@@ -22,7 +22,7 @@
 | `metaablation` | メタモデル（M 軸）× entry_quality 足切り（Q 軸）の 2×2 比較（#1046）。DB の**コピー**の上で、却下されたモデルを保存済みパラメータから再採点する研究用ツール。取引せず、元 DB へ書かず、モデルを昇格せず、LLM を呼ばない |
 | `opsettings` | Settings 画面が持つ、秘密でない運用設定の保存先（#708）。バックアップ・ログの保存先フォルダと Policy Engine／Fast Screener のしきい値などを `runtime_settings` に置く。設定ごとの検証・既定値は `config` 側 |
 | `orderflow` | 銘柄ごとの Order Flow Imbalance（OFI）を最良気配の更新の流れから積算し、Feature Engine が窓（短・中・長）で読めるようにする（`functional.md` §4.1）。特徴量・フィルタの入力のみ |
-| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）のほか、調整の実験・Jev プロンプトの昇格・リプレイ・研究ノート・バックテスト・仮想 Paper・学習用データセットの書き出しなど、ツールごとに定めた狭い書き込みも担う（書き込みツール 18 本の一覧は `docs/architecture/paper-results-mcp.md` §7.3）。詳細は `docs/architecture/paper-results-mcp.md` |
+| `paperresultsmcp` | Paper 結果を、リモートの Grok Bot へアプリの SQLite から返す MCP エンドポイント（#783）。許可リストの基本設定の読み書き（#806・#807）と、Paper 注文案の受付（記録のみ・#827）のほか、調整の実験・Jev プロンプトの昇格・リプレイ・研究ノート・バックテスト・仮想 Paper・学習用データセットの書き出し・自動更新の依頼など、ツールごとに定めた狭い書き込みも担う（書き込みツール 20 本の一覧は `docs/architecture/paper-results-mcp.md` §7.3）。詳細は `docs/architecture/paper-results-mcp.md` |
 | `regime` | Jev trader 判断をどの戦略の下で行うかを決める（#755）。市場指数の 1 分リターン（ボラティリティ・lag-1 自己相関）で市場レジームを分類し、Paper 比較の A/B アームへ割り当て、平均回帰レジームでは VWAP 乖離の z スコアを測る |
 | `researchfx` | 研究用の FX 1 分足の記録（#1084）。設定された通貨ペアと完了した GMO 取引日ごとに、読み取り専用アダプタ（`fx/gmo`）で BID・ASK の 1 分足を取り、分で結合して日のマーカーとともに保存する |
 | `researchindex` | 研究用の指数の 1 分値の記録（#1084）。指数コード（既定: 日経平均 101・TOPIX 151）ごとに、立花の時価の記録（#1083）に残った 1 分値を `research_index_minutes` へ写し、日のマーカーを書く |
@@ -48,6 +48,7 @@
 | `researchindex` | 研究用の指数の永続化（#1084）。`research_index_minutes`（指数コード×ザラ場の分ごとの値）・`research_index_days`（取引日ごとの確認済みマーカー。migration 000069） |
 | `researchquote` | 研究用の時価サンプルの永続化（#1083）。`research_quote_samples`（出所×銘柄×分ごとに、立花の時価と kabu の `market_snapshots` を並べて比べるための記録。migration 000060） |
 | `researchstatus` | 立花の研究用収集（`bars`・`quotes`）の現在の状態 `research_tachibana_status` の永続化。読み取り専用の MCP が「停止中・待機中・実行中・未設定」を答えられるようにする。秘密は持たない |
+| `updatecontrol` | アプリが公開する自動更新の状態 `update_control_status` と、MCP からの確認・導入の依頼 `update_control_requests` の保存（#1222。migration 000071、`er/update-tools/tables-update-control.md`）。アプリの `updater/mcpbridge` が状態を書いて依頼を実行し、`paperresultsmcp/updatetool` が状態を読んで依頼を記録する |
 | `virtualpaper` | 研究用の「仮想 Paper」の永続化（#1087）。`virtual_paper_profiles`（実 Paper との設定の差分を `variant.Params` の JSON で）・`virtual_paper_trades`・`virtual_paper_days`（プロファイル×JST 日の記録済みマーカー） |
 | `watchlistruntime` | 実行時（kabu ランキング主導）のウォッチリストの 1 日ごとの大きさ `watch_list_runtime_days` の永続化（migration 000070、#920）。立花の保存リストを持つ `repository/market` とは分けている |
 

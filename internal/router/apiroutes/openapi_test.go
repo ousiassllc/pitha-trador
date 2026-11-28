@@ -67,3 +67,37 @@ func TestNew_SchemaLinkAndFieldResolveUnderAPIPrefix(t *testing.T) {
 		t.Fatalf("GET %s = %d, want 200 (body=%s)", u.Path, schema.Code, schema.Body.String())
 	}
 }
+
+func TestNew_OpenAPIListsMigrationPreviewUpload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/openapi.json", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/openapi.json = %d: %s", rec.Code, rec.Body.String())
+	}
+	var spec struct {
+		Paths map[string]map[string]struct {
+			RequestBody struct {
+				Content map[string]json.RawMessage `json:"content"`
+			} `json:"requestBody"`
+			Responses map[string]json.RawMessage `json:"responses"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("decode openapi.json: %v", err)
+	}
+	op, ok := spec.Paths["/migration/preview"]["post"]
+	if !ok {
+		t.Fatalf("openapi paths lack POST /migration/preview (the gin upload route must be documented)")
+	}
+	if _, ok := op.RequestBody.Content["application/octet-stream"]; !ok {
+		t.Errorf("POST /migration/preview request body content = %v, want application/octet-stream", op.RequestBody.Content)
+	}
+	for _, code := range []string{"200", "403", "409", "413", "422"} {
+		if _, ok := op.Responses[code]; !ok {
+			t.Errorf("POST /migration/preview lacks a %s response", code)
+		}
+	}
+}

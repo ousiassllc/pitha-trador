@@ -71,6 +71,10 @@ type Feed struct {
 	// Settings screen's snapshot max age.
 	BoardMaxAge time.Duration
 
+	// now is the clock stamping and aging PUSH boards; nil means time.Now
+	// (replaced by tests through export_test.go).
+	now func() time.Time
+
 	boards *marketdata.BoardCache
 	watch  watchState // ranking-driven registration (watch.go)
 }
@@ -152,10 +156,17 @@ func (f *Feed) Run(ctx context.Context) {
 	}
 }
 
+func (f *Feed) clock() time.Time {
+	if f.now != nil {
+		return f.now()
+	}
+	return time.Now()
+}
+
 // onBoard stores a PUSH board in the cache and feeds its best quote to the
 // OFI tracker.
 func (f *Feed) onBoard(b marketdata.Board) {
-	now := time.Now()
+	now := f.clock()
 	f.boards.Put(b, now)
 	if f.OrderFlow != nil {
 		f.OrderFlow.Observe(b.Symbol, quote.FromBoard(b), now)
@@ -173,7 +184,7 @@ func (f *Feed) Latest(ctx context.Context, symbol string) (broker.Quote, error) 
 	if maxAge <= 0 {
 		maxAge = DefaultBoardMaxAge
 	}
-	board, ok := f.boards.Fresh(symbol, time.Now(), maxAge)
+	board, ok := f.boards.Fresh(symbol, f.clock(), maxAge)
 	if !ok {
 		var err error
 		if board, err = f.Broker.GetBoard(ctx, symbol, f.Exchange); err != nil {
